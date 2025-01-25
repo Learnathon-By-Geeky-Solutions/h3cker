@@ -14,7 +14,7 @@ export default {
       colors: {
         'custom-gray': '#E0E1DD',
         'soft-muted-blue-gray':'#778DA9',
-        'desaturated blue':'#415A77',
+        'desaturated-blue':'#415A77',
         'dark-blue-gray':'#1B263B',
         'custom-dark-blue': '#0D1B2A',
       }
