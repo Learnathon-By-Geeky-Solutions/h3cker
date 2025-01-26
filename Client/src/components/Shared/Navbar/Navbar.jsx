@@ -1,8 +1,9 @@
 import React from "react";
-import { Navbar } from "flowbite-react";
+import { Navbar,Footer } from "flowbite-react";
 
 const NaviagationBar = () => {
     return(
+      <div>
       <Navbar fluid rounded className="bg-custom-gray shadow-md p-4">
       <Navbar.Brand href="/">
         <img
@@ -33,6 +34,8 @@ const NaviagationBar = () => {
         <Navbar.Link href="/contact">Profile</Navbar.Link>
       </Navbar.Collapse>
     </Navbar>
+   
+    </div>
     )
 };
 export default NaviagationBar;
