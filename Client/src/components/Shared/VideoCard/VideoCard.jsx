@@ -1,6 +1,5 @@
-import { Card } from "flowbite-react";
+import { Button,Card } from "flowbite-react";
 import React from "react";
-import { Button } from "flowbite-react";
 const VideoCard = () => {
     return(
         <Card
