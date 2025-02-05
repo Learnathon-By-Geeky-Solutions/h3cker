@@ -5,7 +5,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Eye, EyeOff } from 'lucide-react';
 import BrandLogo from '../Brandlogo/brandlogo';
 
-
 const Signup = () => {
   const { createUser, signInWithGoogle } = useContext(AuthContext);
   const [formData, setFormData] = useState({
@@ -29,7 +28,6 @@ const Signup = () => {
 
   const navigate = useNavigate();
 
-  // useEffect hook to navigate to login page after 2 seconds
   useEffect(() => {
     if (showVerificationMessage) {
       const timer = setTimeout(() => {
@@ -39,16 +37,14 @@ const Signup = () => {
     }
   }, [showVerificationMessage, navigate]);
 
-  // Function to validate email
   const validateEmail = (email) => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
     if (!emailRegex.test(email)) {
       return 'Please enter a valid email address';
     }
     return '';
   };
 
-  // Function to validate password
   const validatePassword = (password) => {
     const errors = [];
     if (password.length < 6) errors.push('Password must be at least 6 characters');
@@ -59,7 +55,6 @@ const Signup = () => {
     return errors;
   };
 
-  // Function to handle form input changes
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -91,7 +86,6 @@ const Signup = () => {
     }
   };
 
-  // Function to handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -128,7 +122,6 @@ const Signup = () => {
     }
   };
 
-  // Function to handle Google signup
   const handleGoogleSignup = async () => {
     setError('');
     setLoading(true);
@@ -151,7 +144,6 @@ const Signup = () => {
       transition={{ duration: 0.4, ease: 'easeOut' }}
     >
       <div className="w-full max-w-md mx-auto">
-        {/* Brand Logo Component */}
         <BrandLogo className="justify-center mb-8" />
         <div className="relative bg-white bg-opacity-90 sm:backdrop-blur-md rounded-xl border border-white/40 shadow-2xl ring-2 ring-blue-100/50 p-4 sm:p-8 space-y-3">
           <h2 className="text-2xl sm:text-3xl font-semibold text-center text-gray-900">
@@ -330,7 +322,6 @@ const Signup = () => {
                 whileTap={{ scale: 0.99 }}
                 transition={{ duration: 0.2 }}
               >
-                {/* Google Icon */}
                 <svg 
                   xmlns="http://www.w3.org/2000/svg" 
                   viewBox="0 0 32 32" 
@@ -358,4 +349,4 @@ const Signup = () => {
   );
 };
 
-export default Signup;
+export default Signup
