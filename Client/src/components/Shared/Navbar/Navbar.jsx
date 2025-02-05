@@ -12,7 +12,7 @@ const NaviagationBar = () => {
           alt="Logo"
         />
         <span className="self-center whitespace-nowrap text-xl font-semibold">
-          My Website
+          H3cker
         </span>
       </Navbar.Brand>
       <div className="flex ">
