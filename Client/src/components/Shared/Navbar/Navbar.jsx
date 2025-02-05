@@ -11,7 +11,7 @@ const NavigationBar = () => {
   const handleLogout = async () => {
     try {
       await logout();
-      // Add any navigation logic here
+      // logout logic need to be added here
     } catch (error) {
       console.error("Logout error:", error);
     }

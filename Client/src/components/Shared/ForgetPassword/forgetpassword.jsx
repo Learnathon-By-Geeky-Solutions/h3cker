@@ -14,6 +14,7 @@ const ForgetPassword = () => {
 
   const emailId = useId();
 
+  // Load cooldown from cookie
   useEffect(() => {
     const loadCooldown = () => {
       const cooldownData = document.cookie
