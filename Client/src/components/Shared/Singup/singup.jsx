@@ -5,6 +5,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Eye, EyeOff } from 'lucide-react';
 import BrandLogo from '../Brandlogo/brandlogo';
 
+const ERROR_MESSAGES = {
+  'auth/email-already-in-use': 'An account with this email already exists',
+  'auth/invalid-email': 'Please enter a valid email address',
+  'auth/operation-not-allowed': 'Email/password accounts are not enabled. Please contact support.',
+  'auth/weak-password': 'Password should be at least 6 characters',
+};
+
 const Signup = () => {
   const { createUser, signInWithGoogle } = useContext(AuthContext);
   const [formData, setFormData] = useState({
@@ -19,6 +26,7 @@ const Signup = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showVerificationMessage, setShowVerificationMessage] = useState(false);
+  const [touchedFields, setTouchedFields] = useState({});
   
   const firstNameId = useId();
   const lastNameId = useId();
@@ -38,14 +46,14 @@ const Signup = () => {
   }, [showVerificationMessage, navigate]);
 
   const validateEmail = (email) => {
-    const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
-    if (!emailRegex.test(email)) {
-      return 'Please enter a valid email address';
-    }
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!email) return 'Email is required';
+    if (!emailRegex.test(email)) return 'Please enter a valid email address';
     return '';
   };
 
   const validatePassword = (password) => {
+    if (!password) return ['Password is required'];
     const errors = [];
     if (password.length < 6) errors.push('Password must be at least 6 characters');
     if (!/[A-Z]/.test(password)) errors.push('Include at least one uppercase letter');
@@ -55,48 +63,61 @@ const Signup = () => {
     return errors;
   };
 
+  const handleBlur = (e) => {
+    const { name } = e.target;
+    setTouchedFields(prev => ({ ...prev, [name]: true }));
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
     
-    if (name === 'email') {
-      const emailError = validateEmail(value);
-      if (emailError) {
-        setError(emailError);
-      } else {
-        setError('');
+    if (touchedFields[name]) {
+      if (name === 'email') {
+        const emailError = validateEmail(value);
+        if (emailError) {
+          setError(emailError);
+        } else {
+          setError('');
+        }
       }
-    }
-    
-    if (name === 'password') {
-      const passwordErrors = validatePassword(value);
-      if (passwordErrors.length > 0) {
-        setError(passwordErrors.join(', '));
-      } else {
-        setError('');
+      
+      if (name === 'password') {
+        const passwordErrors = validatePassword(value);
+        if (passwordErrors.length > 0) {
+          setError(passwordErrors.join(', '));
+        } else {
+          setError('');
+        }
       }
-    }
-    
-    if (name === 'confirmPassword') {
-      if (value !== formData.password) {
-        setError('Passwords do not match');
-      } else {
-        setError('');
+      
+      if (name === 'confirmPassword') {
+        if (value !== formData.password) {
+          setError('Passwords do not match');
+        } else {
+          setError('');
+        }
       }
     }
   };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     
+
     const emailError = validateEmail(formData.email);
+    const passwordErrors = validatePassword(formData.password);
+    
+    if (!formData.firstName || !formData.lastName) {
+      setError('All fields are required');
+      return;
+    }
+    
     if (emailError) {
       setError(emailError);
       return;
     }
     
-    const passwordErrors = validatePassword(formData.password);
     if (passwordErrors.length > 0) {
       setError(passwordErrors.join(', '));
       return;
@@ -117,7 +138,8 @@ const Signup = () => {
       );
       setShowVerificationMessage(true);
     } catch (err) {
-      setError(err.message);
+      const errorCode = err.code;
+      setError(ERROR_MESSAGES[errorCode] || 'An error occurred during signup. Please try again.');
       setLoading(false);
     }
   };
@@ -129,7 +151,8 @@ const Signup = () => {
       await signInWithGoogle();
       navigate('/');
     } catch (err) {
-      setError(err.message);
+      const errorCode = err.code;
+      setError(ERROR_MESSAGES[errorCode] || 'Failed to sign up with Google. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -182,6 +205,7 @@ const Signup = () => {
                       name="firstName"
                       value={formData.firstName}
                       onChange={handleChange}
+                      onBlur={handleBlur}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                       required
                     />
@@ -199,6 +223,7 @@ const Signup = () => {
                       name="lastName"
                       value={formData.lastName}
                       onChange={handleChange}
+                      onBlur={handleBlur}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                       required
                     />
@@ -218,6 +243,7 @@ const Signup = () => {
                     name="email"
                     value={formData.email}
                     onChange={handleChange}
+                    onBlur={handleBlur}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     required
                   />
@@ -237,6 +263,7 @@ const Signup = () => {
                       name="password"
                       value={formData.password}
                       onChange={handleChange}
+                      onBlur={handleBlur}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                       required
                     />
@@ -264,6 +291,7 @@ const Signup = () => {
                       name="confirmPassword"
                       value={formData.confirmPassword}
                       onChange={handleChange}
+                      onBlur={handleBlur}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                       required
                     />
@@ -349,4 +377,4 @@ const Signup = () => {
   );
 };
 
-export default Signup
+export default Signup;
