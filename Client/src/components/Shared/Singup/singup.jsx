@@ -73,31 +73,43 @@ const Signup = () => {
     setFormData(prev => ({ ...prev, [name]: value }));
     
     if (touchedFields[name]) {
-      if (name === 'email') {
-        const emailError = validateEmail(value);
-        if (emailError) {
-          setError(emailError);
-        } else {
-          setError('');
-        }
-      }
-      
-      if (name === 'password') {
-        const passwordErrors = validatePassword(value);
-        if (passwordErrors.length > 0) {
-          setError(passwordErrors.join(', '));
-        } else {
-          setError('');
-        }
-      }
-      
-      if (name === 'confirmPassword') {
-        if (value !== formData.password) {
-          setError('Passwords do not match');
-        } else {
-          setError('');
-        }
-      }
+      handleValidation(name, value);
+    }
+  };
+
+  const handleValidation = (name, value) => {
+    if (name === 'email') {
+      validateEmailField(value);
+    } else if (name === 'password') {
+      validatePasswordField(value);
+    } else if (name === 'confirmPassword') {
+      validateConfirmPasswordField(value);
+    }
+  };
+
+  const validateEmailField = (value) => {
+    const emailError = validateEmail(value);
+    if (emailError) {
+      setError(emailError);
+    } else {
+      setError('');
+    }
+  };
+
+  const validatePasswordField = (value) => {
+    const passwordErrors = validatePassword(value);
+    if (passwordErrors.length > 0) {
+      setError(passwordErrors.join(', '));
+    } else {
+      setError('');
+    }
+  };
+
+  const validateConfirmPasswordField = (value) => {
+    if (value !== formData.password) {
+      setError('Passwords do not match');
+    } else {
+      setError('');
     }
   };
   const handleSubmit = async (e) => {
