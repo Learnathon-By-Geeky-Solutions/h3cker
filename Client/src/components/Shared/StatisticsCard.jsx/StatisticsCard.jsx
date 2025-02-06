@@ -1,13 +1,29 @@
-import { Card } from "flowbite-react";
+import React from "react";
+import PropTypes from "prop-types";
+import StatisticsCard from "../StatisticsCard/StatisticsCard";
 
-const StatisticsCard = ({ label, value }) => {
+const StatisticsSection = ({ title, stats }) => {
   return (
-    <Card className=" text-center w-1/3">
-      <h5 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
-        {label}
-      </h5>
-      <p className="font-normal text-gray-700 dark:text-gray-400">{value}</p>
-    </Card>
+    <section>
+      <h1 className="text-4xl font-bold text-center mb-6">{title}</h1>
+      <div className="flex justify-center gap-6">
+        {stats.map((stat) => (
+          <StatisticsCard key={stat} label={stat.label} value={stat.value} />
+        ))}
+      </div>
+    </section>
   );
 };
-export default StatisticsCard;
+
+StatisticsSection.propTypes = {
+  title: PropTypes.string.isRequired,
+  stats: PropTypes.arrayOf(
+    PropTypes.shape({
+      label: PropTypes.string.isRequired,
+      value: PropTypes.oneOfType([PropTypes.string, PropTypes.number])
+        .isRequired,
+    })
+  ).isRequired,
+};
+
+export default StatisticsSection;
