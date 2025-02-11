@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../../../contexts/AuthProvider/AuthProvider';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Eye, EyeOff } from 'lucide-react';
+import { debounce } from 'lodash';
 import BrandLogo from '../Brandlogo/brandlogo';
 
 const ERROR_MESSAGES = {
@@ -10,6 +11,11 @@ const ERROR_MESSAGES = {
   'auth/invalid-email': 'Please enter a valid email address',
   'auth/operation-not-allowed': 'Email/password accounts are not enabled. Please contact support.',
   'auth/weak-password': 'Password should be at least 6 characters',
+  'auth/network-request-failed': 'Network error. Please check your connection.',
+  'auth/too-many-requests': 'Too many attempts. Please try again later.',
+  'auth/popup-closed-by-user': 'Google sign-up was cancelled. Please try again.',
+  'auth/user-disabled': 'This account has been disabled. Please contact support.',
+  'auth/invalid-credential': 'Invalid credentials provided.'
 };
 
 const Signup = () => {
@@ -46,7 +52,8 @@ const Signup = () => {
   }, [showVerificationMessage, navigate]);
 
   const validateEmail = (email) => {
-    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    const emailRegex = /^[a-zA-Z0-9](?:[a-zA-Z0-9._%+-]*[a-zA-Z0-9])?@[a-zA-Z0-9](?:[a-zA-Z0-9.-]*[a-zA-Z0-9])?(?:\.[a-zA-Z]{2,})+$/;
+
     if (!email) return 'Email is required';
     if (!emailRegex.test(email)) return 'Please enter a valid email address';
     return '';
@@ -68,12 +75,16 @@ const Signup = () => {
     setTouchedFields(prev => ({ ...prev, [name]: true }));
   };
 
+  const debouncedValidation = debounce((name, value) => {
+    handleValidation(name, value);
+  }, 300);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
     
     if (touchedFields[name]) {
-      handleValidation(name, value);
+      debouncedValidation(name, value);
     }
   };
 
@@ -112,15 +123,16 @@ const Signup = () => {
       setError('');
     }
   };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     
-
+    // Validate all fields before submission
     const emailError = validateEmail(formData.email);
     const passwordErrors = validatePassword(formData.password);
     
-    if (!formData.firstName || !formData.lastName) {
+    if (!formData.firstName.trim() || !formData.lastName.trim()) {
       setError('All fields are required');
       return;
     }
@@ -145,13 +157,14 @@ const Signup = () => {
       await createUser(
         formData.email,
         formData.password,
-        formData.firstName,
-        formData.lastName
+        formData.firstName.trim(),
+        formData.lastName.trim()
       );
       setShowVerificationMessage(true);
     } catch (err) {
       const errorCode = err.code;
       setError(ERROR_MESSAGES[errorCode] || 'An error occurred during signup. Please try again.');
+    } finally {
       setLoading(false);
     }
   };
@@ -345,7 +358,7 @@ const Signup = () => {
 
               <div className="relative my-4 sm:my-6">
                 <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-300" />
+                <div className="w-full border-t border-gray-300" />
                 </div>
                 <div className="relative flex justify-center text-sm">
                   <span className="px-2 bg-white text-gray-500">
