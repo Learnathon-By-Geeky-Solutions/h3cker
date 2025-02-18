@@ -3,7 +3,20 @@ import { Link, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../../../contexts/AuthProvider/AuthProvider';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Eye, EyeOff } from 'lucide-react';
+import { debounce } from 'lodash';
 import BrandLogo from '../Brandlogo/brandlogo';
+
+const ERROR_MESSAGES = {
+  'auth/email-already-in-use': 'An account with this email already exists',
+  'auth/invalid-email': 'Please enter a valid email address',
+  'auth/operation-not-allowed': 'Email/password accounts are not enabled. Please contact support.',
+  'auth/weak-password': 'Password should be at least 6 characters',
+  'auth/network-request-failed': 'Network error. Please check your connection.',
+  'auth/too-many-requests': 'Too many attempts. Please try again later.',
+  'auth/popup-closed-by-user': 'Google sign-up was cancelled. Please try again.',
+  'auth/user-disabled': 'This account has been disabled. Please contact support.',
+  'auth/invalid-credential': 'Invalid credentials provided.'
+};
 
 const Signup = () => {
   const { createUser, signInWithGoogle } = useContext(AuthContext);
@@ -19,6 +32,7 @@ const Signup = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showVerificationMessage, setShowVerificationMessage] = useState(false);
+  const [touchedFields, setTouchedFields] = useState({});
   
   const firstNameId = useId();
   const lastNameId = useId();
@@ -38,14 +52,15 @@ const Signup = () => {
   }, [showVerificationMessage, navigate]);
 
   const validateEmail = (email) => {
-    const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
-    if (!emailRegex.test(email)) {
-      return 'Please enter a valid email address';
-    }
+    const emailRegex = /^[a-zA-Z0-9](?:[a-zA-Z0-9._%+-]*[a-zA-Z0-9])?@[a-zA-Z0-9](?:[a-zA-Z0-9.-]*[a-zA-Z0-9])?(?:\.[a-zA-Z]{2,})+$/;
+
+    if (!email) return 'Email is required';
+    if (!emailRegex.test(email)) return 'Please enter a valid email address';
     return '';
   };
 
   const validatePassword = (password) => {
+    if (!password) return ['Password is required'];
     const errors = [];
     if (password.length < 6) errors.push('Password must be at least 6 characters');
     if (!/[A-Z]/.test(password)) errors.push('Include at least one uppercase letter');
@@ -55,34 +70,57 @@ const Signup = () => {
     return errors;
   };
 
+  const handleBlur = (e) => {
+    const { name } = e.target;
+    setTouchedFields(prev => ({ ...prev, [name]: true }));
+  };
+
+  const debouncedValidation = debounce((name, value) => {
+    handleValidation(name, value);
+  }, 300);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
     
+    if (touchedFields[name]) {
+      debouncedValidation(name, value);
+    }
+  };
+
+  const handleValidation = (name, value) => {
     if (name === 'email') {
-      const emailError = validateEmail(value);
-      if (emailError) {
-        setError(emailError);
-      } else {
-        setError('');
-      }
+      validateEmailField(value);
+    } else if (name === 'password') {
+      validatePasswordField(value);
+    } else if (name === 'confirmPassword') {
+      validateConfirmPasswordField(value);
     }
-    
-    if (name === 'password') {
-      const passwordErrors = validatePassword(value);
-      if (passwordErrors.length > 0) {
-        setError(passwordErrors.join(', '));
-      } else {
-        setError('');
-      }
+  };
+
+  const validateEmailField = (value) => {
+    const emailError = validateEmail(value);
+    if (emailError) {
+      setError(emailError);
+    } else {
+      setError('');
     }
-    
-    if (name === 'confirmPassword') {
-      if (value !== formData.password) {
-        setError('Passwords do not match');
-      } else {
-        setError('');
-      }
+  };
+
+  const validatePasswordField = (value) => {
+    const passwordErrors = validatePassword(value);
+    if (passwordErrors.length > 0) {
+      setError(passwordErrors.join(', '));
+    } else {
+      setError('');
+    }
+  };
+
+  const validateConfirmPasswordField = (value) => {
+    if (value !== formData.password) {
+      setError('Passwords do not match');
+    } else {
+      setError('');
     }
   };
 
@@ -90,13 +128,20 @@ const Signup = () => {
     e.preventDefault();
     setError('');
     
+    // Validate all fields before submission
     const emailError = validateEmail(formData.email);
+    const passwordErrors = validatePassword(formData.password);
+    
+    if (!formData.firstName.trim() || !formData.lastName.trim()) {
+      setError('All fields are required');
+      return;
+    }
+    
     if (emailError) {
       setError(emailError);
       return;
     }
     
-    const passwordErrors = validatePassword(formData.password);
     if (passwordErrors.length > 0) {
       setError(passwordErrors.join(', '));
       return;
@@ -112,12 +157,14 @@ const Signup = () => {
       await createUser(
         formData.email,
         formData.password,
-        formData.firstName,
-        formData.lastName
+        formData.firstName.trim(),
+        formData.lastName.trim()
       );
       setShowVerificationMessage(true);
     } catch (err) {
-      setError(err.message);
+      const errorCode = err.code;
+      setError(ERROR_MESSAGES[errorCode] || 'An error occurred during signup. Please try again.');
+    } finally {
       setLoading(false);
     }
   };
@@ -129,7 +176,8 @@ const Signup = () => {
       await signInWithGoogle();
       navigate('/');
     } catch (err) {
-      setError(err.message);
+      const errorCode = err.code;
+      setError(ERROR_MESSAGES[errorCode] || 'Failed to sign up with Google. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -182,6 +230,7 @@ const Signup = () => {
                       name="firstName"
                       value={formData.firstName}
                       onChange={handleChange}
+                      onBlur={handleBlur}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                       required
                     />
@@ -199,6 +248,7 @@ const Signup = () => {
                       name="lastName"
                       value={formData.lastName}
                       onChange={handleChange}
+                      onBlur={handleBlur}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                       required
                     />
@@ -218,6 +268,7 @@ const Signup = () => {
                     name="email"
                     value={formData.email}
                     onChange={handleChange}
+                    onBlur={handleBlur}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     required
                   />
@@ -237,6 +288,7 @@ const Signup = () => {
                       name="password"
                       value={formData.password}
                       onChange={handleChange}
+                      onBlur={handleBlur}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                       required
                     />
@@ -264,6 +316,7 @@ const Signup = () => {
                       name="confirmPassword"
                       value={formData.confirmPassword}
                       onChange={handleChange}
+                      onBlur={handleBlur}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                       required
                     />
@@ -305,7 +358,7 @@ const Signup = () => {
 
               <div className="relative my-4 sm:my-6">
                 <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-300" />
+                <div className="w-full border-t border-gray-300" />
                 </div>
                 <div className="relative flex justify-center text-sm">
                   <span className="px-2 bg-white text-gray-500">
@@ -349,4 +402,4 @@ const Signup = () => {
   );
 };
 
-export default Signup
+export default Signup;
