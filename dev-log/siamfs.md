@@ -160,3 +160,4 @@ Date: February 05, 2025
 - Implemented proper route protection
 - Added form validation patterns
 - Created user feedback system
+now based on the previous and  I need to add a session out token limit of one day for login home and other necessary like max device login update data in all devices giving all necessary files and a pic of directories for existing files just give the code that needs to add and which part where added comment out properly oke and for new files give full code also make it simple and if you are creating new component where to add mention that and I think my authprovider login and token service files code oke just need to create some new components
