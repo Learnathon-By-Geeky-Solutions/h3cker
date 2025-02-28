@@ -3,8 +3,57 @@ import { Link, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../../../contexts/AuthProvider/AuthProvider';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Eye, EyeOff } from 'lucide-react';
-import { debounce } from 'lodash';
 import BrandLogo from '../Brandlogo/brandlogo';
+import PropTypes from 'prop-types';
+
+// ErrorMessage component similar to the one in Login
+const ErrorMessage = ({ error }) => {
+  if (!error) return null;
+  
+  // Determine error styling based on content
+  const isWarning = error.includes('verify');
+  const isDeviceLimit = error.includes('device limit');
+  
+  let bgColor = 'bg-red-50 border border-red-200';
+  let textColor = 'text-red-600';
+  
+  if (isWarning) {
+    bgColor = 'bg-yellow-50 border border-yellow-200';
+    textColor = 'text-yellow-800';
+  } else if (isDeviceLimit) {
+    bgColor = 'bg-orange-50 border border-orange-200';
+    textColor = 'text-orange-800';
+  }
+  
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95, y: -10 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.95, y: -10 }}
+      transition={{
+        duration: 0.3,
+        ease: [0.4, 0, 0.2, 1],
+      }}
+      className={`p-3 rounded-md ${bgColor}`}
+    >
+      <p className={`text-sm ${textColor}`}>
+        {error}
+      </p>
+      {isDeviceLimit && (
+        <Link 
+          to="/manage-devices" 
+          className="block mt-2 text-sm font-medium text-blue-600 hover:text-blue-500"
+        >
+          Manage my devices
+        </Link>
+      )}
+    </motion.div>
+  );
+};
+
+ErrorMessage.propTypes = {
+  error: PropTypes.string,
+};
 
 const ERROR_MESSAGES = {
   'auth/email-already-in-use': 'An account with this email already exists',
@@ -15,11 +64,12 @@ const ERROR_MESSAGES = {
   'auth/too-many-requests': 'Too many attempts. Please try again later.',
   'auth/popup-closed-by-user': 'Google sign-up was cancelled. Please try again.',
   'auth/user-disabled': 'This account has been disabled. Please contact support.',
-  'auth/invalid-credential': 'Invalid credentials provided.'
+  'auth/invalid-credential': 'Invalid credentials provided.',
+  'MAX_DEVICES_REACHED': 'You\'ve reached the maximum device limit. Please log out from another device to continue.'
 };
 
 const Signup = () => {
-  const { createUser, signInWithGoogle } = useContext(AuthContext);
+  const { createUser, signInWithGoogle, maxDevices } = useContext(AuthContext);
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -75,9 +125,26 @@ const Signup = () => {
     setTouchedFields(prev => ({ ...prev, [name]: true }));
   };
 
-  const debouncedValidation = debounce((name, value) => {
-    handleValidation(name, value);
-  }, 300);
+  // Custom debounce implementation to replace lodash
+  const debounce = (func, delay) => {
+    let timeoutId;
+    return (...args) => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      timeoutId = setTimeout(() => {
+        func(...args);
+      }, delay);
+    };
+  };
+
+  // Memoize the debounced function to keep a consistent reference
+  const debouncedValidation = React.useCallback(
+    debounce((name, value) => {
+      handleValidation(name, value);
+    }, 300),
+    []
+  );
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -162,7 +229,7 @@ const Signup = () => {
       );
       setShowVerificationMessage(true);
     } catch (err) {
-      const errorCode = err.code;
+      const errorCode = err.code || err.message;
       setError(ERROR_MESSAGES[errorCode] || 'An error occurred during signup. Please try again.');
     } finally {
       setLoading(false);
@@ -176,8 +243,12 @@ const Signup = () => {
       await signInWithGoogle();
       navigate('/');
     } catch (err) {
-      const errorCode = err.code;
-      setError(ERROR_MESSAGES[errorCode] || 'Failed to sign up with Google. Please try again.');
+      const errorCode = err.code || err.message;
+      if (errorCode === 'MAX_DEVICES_REACHED') {
+        setError(`You've reached the maximum device limit (${maxDevices}). Please log out from another device to continue.`);
+      } else {
+        setError(ERROR_MESSAGES[errorCode] || 'Failed to sign up with Google. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -331,17 +402,7 @@ const Signup = () => {
                 </div>
 
                 <AnimatePresence mode="wait">
-                  {error && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -20 }}
-                      transition={{ duration: 0.2 }}
-                      className="p-3 rounded-md bg-red-50 border border-red-200"
-                    >
-                      <p className="text-red-600 text-sm">{error}</p>
-                    </motion.div>
-                  )}
+                  {error && <ErrorMessage error={error} />}
                 </AnimatePresence>
 
                 <motion.button

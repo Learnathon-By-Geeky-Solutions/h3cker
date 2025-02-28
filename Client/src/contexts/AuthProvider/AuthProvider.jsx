@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useState, useEffect, useMemo, useCallback } from 'react';
 import { auth, db } from "../../firebase/firebase.config";
 import {
   createUserWithEmailAndPassword,
@@ -13,9 +13,10 @@ import {
   EmailAuthProvider,
   sendPasswordResetEmail
 } from 'firebase/auth';
-import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, serverTimestamp, updateDoc } from 'firebase/firestore'; // Added updateDoc
 import { Spinner } from 'flowbite-react';
 import PropTypes from 'prop-types';
+import TokenService from '../../utils/TokenService';
 
 export const AuthContext = createContext();
 const googleProvider = new GoogleAuthProvider();
@@ -26,6 +27,9 @@ const DEFAULT_AVATAR = 'https://flowbite.com/docs/images/people/profile-picture-
 const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [deviceError] = useState(null); // Added for device limit errors
+  const [sessionExpiring, setSessionExpiring] = useState(false);
+  const [sessionTimeRemaining, setSessionTimeRemaining] = useState(null);
 
   const createUser = async (email, password, firstName, lastName) => {
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
@@ -44,8 +48,18 @@ const AuthProvider = ({ children }) => {
       photoURL: DEFAULT_AVATAR,
       createdAt: serverTimestamp(),
       role: 'user',
-      emailVerified: false
+      emailVerified: false,
+      // Added device tracking
+      devices: [{
+        id: TokenService.getCurrentDeviceId(),
+        name: TokenService.getDeviceName(),
+        lastActive: new Date().toISOString()
+      }]
     });
+
+    // Set auth token
+    const token = await userCredential.user.getIdToken();
+    TokenService.setToken(token, userCredential.user.uid);
 
     return userCredential.user;
   };
@@ -58,9 +72,52 @@ const AuthProvider = ({ children }) => {
       throw new Error('EMAIL_NOT_VERIFIED');
     }
 
-    await setDoc(doc(db, "users", userCredential.user.uid), {
-      lastLoginAt: serverTimestamp()
-    }, { merge: true });
+    // Get user document to check devices
+    const userDocRef = doc(db, "users", userCredential.user.uid);
+    const userSnapshot = await getDoc(userDocRef);
+    const userData = userSnapshot.data() || {};
+    
+    // Get current device ID
+    const deviceId = TokenService.getCurrentDeviceId();
+    
+    // Check if this device is already registered
+    const userDevices = userData.devices || [];
+    const isExistingDevice = userDevices.some(device => device.id === deviceId);
+    
+    // If this is a new device and would exceed the limit, throw error
+    if (!isExistingDevice && userDevices.length >= TokenService.maxDevices) {
+      await signOut(auth);
+      throw new Error('MAX_DEVICES_REACHED');
+    }
+    
+    // Update or add this device
+    let updatedDevices;
+    if (isExistingDevice) {
+      updatedDevices = userDevices.map(device => 
+        device.id === deviceId 
+          ? { ...device, lastActive: new Date().toISOString() }
+          : device
+      );
+    } else {
+      updatedDevices = [
+        ...userDevices,
+        {
+          id: deviceId,
+          name: TokenService.getDeviceName(),
+          lastActive: new Date().toISOString()
+        }
+      ];
+    }
+
+    // Update user document
+    await updateDoc(userDocRef, {
+      lastLoginAt: serverTimestamp(),
+      devices: updatedDevices
+    });
+
+    // Get and store token
+    const token = await userCredential.user.getIdToken();
+    TokenService.setToken(token, userCredential.user.uid);
 
     return userCredential.user;
   };
@@ -70,8 +127,13 @@ const AuthProvider = ({ children }) => {
     const userDocRef = doc(db, "users", result.user.uid);
     const userSnapshot = await getDoc(userDocRef);
 
+    // Get current device ID
+    const deviceId = TokenService.getCurrentDeviceId();
+    
     if (!userSnapshot.exists()) {
       const nameParts = result.user.displayName?.split(" ") || ['User'];
+      
+      // First time user - create new document with this device
       await setDoc(userDocRef, {
         firstName: nameParts[0],
         lastName: nameParts.slice(1).join(" ") || '',
@@ -80,14 +142,56 @@ const AuthProvider = ({ children }) => {
         createdAt: serverTimestamp(),
         lastLoginAt: serverTimestamp(),
         role: 'user',
-        emailVerified: result.user.emailVerified
+        emailVerified: result.user.emailVerified,
+        devices: [{
+          id: deviceId,
+          name: TokenService.getDeviceName(),
+          lastActive: new Date().toISOString()
+        }]
       });
     } else {
-      await setDoc(userDocRef, { 
+      // Existing user - update devices
+      const userData = userSnapshot.data();
+      const userDevices = userData.devices || [];
+      
+      // Check if this device is already registered
+      const isExistingDevice = userDevices.some(device => device.id === deviceId);
+      
+      // If this is a new device and would exceed the limit, throw error
+      if (!isExistingDevice && userDevices.length >= TokenService.maxDevices) {
+        await signOut(auth);
+        throw new Error('MAX_DEVICES_REACHED');
+      }
+      
+      // Update or add this device
+      let updatedDevices;
+      if (isExistingDevice) {
+        updatedDevices = userDevices.map(device => 
+          device.id === deviceId 
+            ? { ...device, lastActive: new Date().toISOString() }
+            : device
+        );
+      } else {
+        updatedDevices = [
+          ...userDevices,
+          {
+            id: deviceId,
+            name: TokenService.getDeviceName(),
+            lastActive: new Date().toISOString()
+          }
+        ];
+      }
+      
+      await updateDoc(userDocRef, { 
         lastLoginAt: serverTimestamp(),
-        emailVerified: result.user.emailVerified
-      }, { merge: true });
+        emailVerified: result.user.emailVerified,
+        devices: updatedDevices
+      });
     }
+
+    // Get and store token
+    const token = await result.user.getIdToken();
+    TokenService.setToken(token, result.user.uid);
 
     return result.user;
   };
@@ -106,9 +210,119 @@ const AuthProvider = ({ children }) => {
     const credential = EmailAuthProvider.credential(email, password);
     await linkWithCredential(auth.currentUser, credential);
   };
+  const checkSession = useCallback(() => {
+    if (TokenService.isTokenExpired()) {
+      // Token is expired, log the user out
+      if (user) {
+        console.log('Session expired, logging out');
+        logout();
+      }
+      return false;
+    }
+    
+    // Get remaining time
+    const timeRemaining = TokenService.getTimeUntilExpiry();
+    setSessionTimeRemaining(timeRemaining);
+    
+    // Show warning when less than 5 minutes remaining
+    if (timeRemaining < 5 * 60 * 1000 && timeRemaining > 0) {
+      setSessionExpiring(true);
+    } else {
+      setSessionExpiring(false);
+    }
+    
+    return true;
+  }, [user]);
 
-  const logout = () => {
+  // Extend the session
+  const extendSession = useCallback(async () => {
+    if (user) {
+      try {
+        // Get a fresh token from Firebase
+        const token = await user.getIdToken(true);
+        TokenService.setToken(token, user.uid);
+        setSessionExpiring(false);
+        checkSession();
+        return true;
+      } catch (error) {
+        console.error("Failed to extend session:", error);
+        return false;
+      }
+    }
+    return false;
+  }, [user, checkSession]);
+
+  // Updated logout to clear token
+  const logout = async () => {
+    setSessionExpiring(false);
+    setSessionTimeRemaining(null);
+    TokenService.clearAuth();
     return signOut(auth);
+  };
+    // Add a session check interval
+    useEffect(() => {
+      if (!user) return;
+      
+      // Check session immediately
+      checkSession();
+      
+      // Set up periodic checks (every minute)
+      const intervalId = setInterval(() => {
+        checkSession();
+      }, 60 * 1000);
+      
+      return () => clearInterval(intervalId);
+    }, [user, checkSession]);
+  
+
+  // Remove device from user's devices list
+  const removeDevice = async (deviceId) => {
+    if (!user?.uid) return;
+    
+    try {
+      const userDocRef = doc(db, "users", user.uid);
+      const userSnapshot = await getDoc(userDocRef);
+      
+      if (userSnapshot.exists()) {
+        const userData = userSnapshot.data();
+        const updatedDevices = (userData.devices || [])
+          .filter(device => device.id !== deviceId);
+        
+        await updateDoc(userDocRef, {
+          devices: updatedDevices
+        });
+        
+        // If current device was removed, also log out
+        if (deviceId === TokenService.getCurrentDeviceId()) {
+          await logout();
+        }
+        
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error("Error removing device:", error);
+      return false;
+    }
+  };
+
+  // Get user's devices
+  const getUserDevices = async () => {
+    if (!user?.uid) return [];
+    
+    try {
+      const userDocRef = doc(db, "users", user.uid);
+      const userSnapshot = await getDoc(userDocRef);
+      
+      if (userSnapshot.exists()) {
+        const userData = userSnapshot.data();
+        return userData.devices || [];
+      }
+      return [];
+    } catch (error) {
+      console.error("Error getting devices:", error);
+      return [];
+    }
   };
 
   useEffect(() => {
@@ -116,30 +330,52 @@ const AuthProvider = ({ children }) => {
       try {
         if (currentUser) {
           const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+          
+          // Get updated token on each auth state change
+          const token = await currentUser.getIdToken();
+          TokenService.setToken(token, currentUser.uid);
+          
           setUser({ ...currentUser, ...userDoc.data() });
+          // Check session after setting user
+          checkSession();
         } else {
+          // Clear auth when user is null
+          TokenService.clearAuth();
           setUser(null);
+          setSessionExpiring(false);
+          setSessionTimeRemaining(null);
         }
       } catch (error) {
+        console.error("Auth state change error:", error);
+        TokenService.clearAuth();
         setUser(null);
       }
       setLoading(false);
     });
 
     return () => unsubscribe();
-  }, []);
-
+  }, [checkSession]);
+ 
   const value = useMemo(() => ({
     user,
     loading,
+    deviceError,
     createUser,
     login,
     logout,
     signInWithGoogle,
     linkAccounts,
     resetPassword,
-    resendVerificationEmail
-  }), [user, loading]);
+    resendVerificationEmail,
+    removeDevice,
+    getUserDevices,
+    maxDevices: TokenService.maxDevices,
+    // New session-related values
+    sessionExpiring,
+    sessionTimeRemaining,
+    extendSession,
+    checkSession
+  }), [user, loading, deviceError, sessionExpiring, sessionTimeRemaining, extendSession, checkSession]);
 
   if (loading) {
     return (
