@@ -1,7 +1,4 @@
-"""
-Django settings for backend project.
-"""
-
+""" Django settings for backend project. """
 from pathlib import Path
 from datetime import timedelta
 from dotenv import load_dotenv
@@ -15,25 +12,9 @@ load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Quick-start development settings - unsuitable for production
-SECRET_KEY = 'django-insecure-w#vc9rf7#xi*5$%z3^*z5gl@0y!e%qc6hhdr0ctg*veb5ca1^*'
-
+SECRET_KEY = os.getenv("SECRET_KEY")
 DEBUG = True
-
 ALLOWED_HOSTS = ["*"]
-
-REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-    ],
-    'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticated',
-    ],
-}
-
-SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
-}
 
 # Application definition
 INSTALLED_APPS = [
@@ -81,7 +62,6 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 
 # Database configuration
 tmpPostgres = urlparse(os.getenv("DATABASE_URL"))
-
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
@@ -93,21 +73,6 @@ DATABASES = {
     }
 }
 
-# Password validation
-AUTH_PASSWORD_VALIDATORS = [
-    {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
-    },
-]
 
 # Internationalization
 LANGUAGE_CODE = 'en-us'
