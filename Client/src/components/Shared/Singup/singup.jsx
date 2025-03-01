@@ -1,59 +1,11 @@
-import React, { useState, useContext, useId, useEffect } from 'react';
+import React, { useState, useContext, useId, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../../../contexts/AuthProvider/AuthProvider';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Eye, EyeOff } from 'lucide-react';
 import BrandLogo from '../Brandlogo/brandlogo';
-import PropTypes from 'prop-types';
+import { ErrorMessage } from '../../common/ErrorMessage';
 
-// ErrorMessage component similar to the one in Login
-const ErrorMessage = ({ error }) => {
-  if (!error) return null;
-  
-  // Determine error styling based on content
-  const isWarning = error.includes('verify');
-  const isDeviceLimit = error.includes('device limit');
-  
-  let bgColor = 'bg-red-50 border border-red-200';
-  let textColor = 'text-red-600';
-  
-  if (isWarning) {
-    bgColor = 'bg-yellow-50 border border-yellow-200';
-    textColor = 'text-yellow-800';
-  } else if (isDeviceLimit) {
-    bgColor = 'bg-orange-50 border border-orange-200';
-    textColor = 'text-orange-800';
-  }
-  
-  return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.95, y: -10 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.95, y: -10 }}
-      transition={{
-        duration: 0.3,
-        ease: [0.4, 0, 0.2, 1],
-      }}
-      className={`p-3 rounded-md ${bgColor}`}
-    >
-      <p className={`text-sm ${textColor}`}>
-        {error}
-      </p>
-      {isDeviceLimit && (
-        <Link 
-          to="/manage-devices" 
-          className="block mt-2 text-sm font-medium text-blue-600 hover:text-blue-500"
-        >
-          Manage my devices
-        </Link>
-      )}
-    </motion.div>
-  );
-};
-
-ErrorMessage.propTypes = {
-  error: PropTypes.string,
-};
 
 const ERROR_MESSAGES = {
   'auth/email-already-in-use': 'An account with this email already exists',
@@ -69,7 +21,7 @@ const ERROR_MESSAGES = {
 };
 
 const Signup = () => {
-  const { createUser, signInWithGoogle, maxDevices } = useContext(AuthContext);
+  const { createUser, signInWithGoogle, maxDevices, getGoogleAuthCache } = useContext(AuthContext);
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -83,6 +35,7 @@ const Signup = () => {
   const [loading, setLoading] = useState(false);
   const [showVerificationMessage, setShowVerificationMessage] = useState(false);
   const [touchedFields, setTouchedFields] = useState({});
+  const [cachedGoogleAccount, setCachedGoogleAccount] = useState(null);
   
   const firstNameId = useId();
   const lastNameId = useId();
@@ -91,6 +44,18 @@ const Signup = () => {
   const confirmPasswordId = useId();
 
   const navigate = useNavigate();
+
+  // Check for cached Google account on component mount
+  useEffect(() => {
+    try {
+      const cachedAuth = getGoogleAuthCache ? getGoogleAuthCache() : null;
+      if (cachedAuth?.email) {
+        setCachedGoogleAccount(cachedAuth);
+      }
+    } catch (error) {
+      console.error("Error retrieving cached Google account:", error);
+    }
+  }, [getGoogleAuthCache]);
 
   useEffect(() => {
     if (showVerificationMessage) {
@@ -125,7 +90,7 @@ const Signup = () => {
     setTouchedFields(prev => ({ ...prev, [name]: true }));
   };
 
-  // Custom debounce implementation to replace lodash
+  // Custom debounce implementation
   const debounce = (func, delay) => {
     let timeoutId;
     return (...args) => {
@@ -139,7 +104,7 @@ const Signup = () => {
   };
 
   // Memoize the debounced function to keep a consistent reference
-  const debouncedValidation = React.useCallback(
+  const debouncedValidation = useCallback(
     debounce((name, value) => {
       handleValidation(name, value);
     }, 300),
@@ -191,31 +156,39 @@ const Signup = () => {
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-    
-    // Validate all fields before submission
+  const validateAllFields = () => {
     const emailError = validateEmail(formData.email);
     const passwordErrors = validatePassword(formData.password);
     
     if (!formData.firstName.trim() || !formData.lastName.trim()) {
       setError('All fields are required');
-      return;
+      return false;
     }
     
     if (emailError) {
       setError(emailError);
-      return;
+      return false;
     }
     
     if (passwordErrors.length > 0) {
       setError(passwordErrors.join(', '));
-      return;
+      return false;
     }
 
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match');
+      return false;
+    }
+
+    return true;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    
+    // Validate all fields before submission
+    if (!validateAllFields()) {
       return;
     }
 
@@ -428,23 +401,63 @@ const Signup = () => {
                 </div>
               </div>
 
-              <motion.button
-                onClick={handleGoogleSignup}
-                disabled={loading}
-                className="w-full flex items-center justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-                whileHover={{ scale: 1.01 }}
-                whileTap={{ scale: 0.99 }}
-                transition={{ duration: 0.2 }}
-              >
-                <svg 
-                  xmlns="http://www.w3.org/2000/svg" 
-                  viewBox="0 0 32 32" 
-                  className="w-5 h-5 mr-2 fill-current"
+              {/* Cached Google Account Button */}
+              {cachedGoogleAccount ? (
+                <div className="space-y-3">
+                  <motion.button
+                    onClick={handleGoogleSignup}
+                    disabled={loading}
+                    className="w-full flex items-center justify-center py-2 px-4 border border-blue-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-blue-50 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                    whileHover={{ scale: 1.01 }}
+                    whileTap={{ scale: 0.99 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    {cachedGoogleAccount.photoURL ? (
+                      <img 
+                        src={cachedGoogleAccount.photoURL} 
+                        alt="Profile" 
+                        className="w-5 h-5 rounded-full mr-2" 
+                      />
+                    ) : (
+                      <svg 
+                        xmlns="http://www.w3.org/2000/svg" 
+                        viewBox="0 0 32 32" 
+                        className="w-5 h-5 mr-2 fill-current"
+                      >
+                        <path d="M16.318 13.714v5.484h9.078c-0.37 2.354-2.745 6.901-9.078 6.901-5.458 0-9.917-4.521-9.917-10.099s4.458-10.099 9.917-10.099c3.109 0 5.193 1.318 6.38 2.464l4.339-4.182c-2.786-2.599-6.396-4.182-10.719-4.182-8.844 0-16 7.151-16 16s7.156 16 16 16c9.234 0 15.365-6.49 15.365-15.635 0-1.052-0.115-1.854-0.255-2.651z"></path>
+                      </svg>
+                    )}
+                    Continue with {cachedGoogleAccount.displayName || cachedGoogleAccount.email}
+                  </motion.button>
+                  
+                  <div className="text-center">
+                    <button 
+                      onClick={() => setCachedGoogleAccount(null)}
+                      className="text-xs text-gray-500 hover:text-gray-700"
+                    >
+                      Use a different account
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <motion.button
+                  onClick={handleGoogleSignup}
+                  disabled={loading}
+                  className="w-full flex items-center justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                  whileHover={{ scale: 1.01 }}
+                  whileTap={{ scale: 0.99 }}
+                  transition={{ duration: 0.2 }}
                 >
-                  <path d="M16.318 13.714v5.484h9.078c-0.37 2.354-2.745 6.901-9.078 6.901-5.458 0-9.917-4.521-9.917-10.099s4.458-10.099 9.917-10.099c3.109 0 5.193 1.318 6.38 2.464l4.339-4.182c-2.786-2.599-6.396-4.182-10.719-4.182-8.844 0-16 7.151-16 16s7.156 16 16 16c9.234 0 15.365-6.49 15.365-15.635 0-1.052-0.115-1.854-0.255-2.651z"></path>
-                </svg>
-                Sign up with Google
-              </motion.button>
+                  <svg 
+                    xmlns="http://www.w3.org/2000/svg" 
+                    viewBox="0 0 32 32" 
+                    className="w-5 h-5 mr-2 fill-current"
+                  >
+                    <path d="M16.318 13.714v5.484h9.078c-0.37 2.354-2.745 6.901-9.078 6.901-5.458 0-9.917-4.521-9.917-10.099s4.458-10.099 9.917-10.099c3.109 0 5.193 1.318 6.38 2.464l4.339-4.182c-2.786-2.599-6.396-4.182-10.719-4.182-8.844 0-16 7.151-16 16s7.156 16 16 16c9.234 0 15.365-6.49 15.365-15.635 0-1.052-0.115-1.854-0.255-2.651z"></path>
+                  </svg>
+                  Sign up with Google
+                </motion.button>
+              )}
             </>
           )}
 
@@ -463,4 +476,4 @@ const Signup = () => {
   );
 };
 
-export default Signup;
+export default Signup

@@ -4,8 +4,7 @@ import Home from "../../components/Pages/Home/home.jsx";
 import Login from "../../components/Shared/Login/login.jsx";
 import Signup from "../../components/Shared/Singup/singup.jsx";
 import ForgetPassword from "../../components/Shared/ForgetPassword/forgetpassword.jsx";
-import AdminDashboard from "../../components/Pages/AdminDashboard/AdminDashboard.jsx";
-import PrivateRoute from "../PrivateRoute/privateroute.jsx";
+
 
 const router = createBrowserRouter([
   {
@@ -28,14 +27,6 @@ const router = createBrowserRouter([
         path: "/forgetpassword",
         element: <ForgetPassword />,
       },
-      {
-        path: "/dashboard",
-        element: (
-          <PrivateRoute>
-            <AdminDashboard />
-          </PrivateRoute>
-        ),
-      }
     ]
   }
 ]);
