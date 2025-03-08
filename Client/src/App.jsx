@@ -7,10 +7,10 @@ function App() {
   const location = useLocation();
   
   // Check if current page is an authentication page
-  const isAuthPage = location.pathname === '/login' || 
-                     location.pathname === '/signup' || 
+  const isAuthPage = location.pathname === '/login' ||
+                     location.pathname === '/signup' ||
                      location.pathname === '/forgetpassword';
-
+  
   return (
     <div className="min-h-screen bg-gray-900">
       {/* Conditionally render navbar */}

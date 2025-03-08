@@ -4,7 +4,7 @@ import { AuthContext } from '../../../contexts/AuthProvider/AuthProvider';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Eye, EyeOff } from 'lucide-react';
 import BrandLogo from '../Brandlogo/brandlogo';
-import { ErrorMessage } from '../../common/ErrorMessage';
+import { ErrorMessage } from '../../common/ErrorMessage/ErrorMessage';
 
 
 const ERROR_MESSAGES = {
