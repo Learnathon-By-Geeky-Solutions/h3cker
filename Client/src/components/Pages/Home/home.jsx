@@ -44,7 +44,7 @@ const Home = () => {
       brand: `Brand ${index % 5 + 1}`,
       engagementScore: scores[index % scores.length],
       dominantEmotion: emotions[index % emotions.length],
-      viewCount: Math.floor(Math.random() * 10000) + 1000
+      viewCount: Math.floor(Math.random() * 10000) + 1000 
     }));
   };
 
