@@ -16,7 +16,7 @@
     "framer-motion": "^12.0.8",
     "js-cookie": "^3.0.5",
     "localforage": "^1.10.0",
-    "lucide-react": "^0.474.0",
+    "lucide-react": "^0.479.0",
     "match-sorter": "^8.0.0",
     "prop-types": "^15.8.1",
     "react": "^18.3.1",
