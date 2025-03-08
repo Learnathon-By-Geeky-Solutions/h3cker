@@ -1,12 +1,10 @@
-import React, { useContext } from 'react';
+import React from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import NavigationBar from './components/Shared/Navbar/Navbar';
 import MainFooter from './components/Shared/Footer/Footer';
-import { AuthContext } from './contexts/AuthProvider/AuthProvider';
 
 function App() {
   const location = useLocation();
-  const { user } = useContext(AuthContext);
   
   // Check if current page is an authentication page
   const isAuthPage = location.pathname === '/login' || 

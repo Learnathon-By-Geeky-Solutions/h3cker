@@ -39,12 +39,12 @@ const Home = () => {
       id: index,
       title: `Ad Campaign ${index + 1}`,
       imageUrl: `/api/placeholder/400/225`, // Using a better aspect ratio for thumbnails
-      videoUrl: "https://www.youtube.com/embed/dQw4w9WgXcQ", // Example video URL
+      // Example video URL
       duration: "0:30",
       brand: `Brand ${index % 5 + 1}`,
       engagementScore: scores[index % scores.length],
       dominantEmotion: emotions[index % emotions.length],
-      viewCount: crypto.getRandomValues(new Uint32Array(1))[0] % 10000 + 1000 
+      viewCount: parseInt(cryptoRandomString({length: 4, type: 'numeric'}), 10) + 1000 
     }));
   };
 
