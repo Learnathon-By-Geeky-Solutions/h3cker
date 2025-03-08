@@ -20,6 +20,9 @@ const ERROR_MESSAGES = {
   'MAX_DEVICES_REACHED': 'You\'ve reached the maximum device limit. Please log out from another device to continue.'
 };
 
+// Defining minimum requirements to match Firebase's requirement
+const MIN_PASSWORD_LENGTH = 6;
+
 const Signup = () => {
   const { createUser, signInWithGoogle, maxDevices, getGoogleAuthCache } = useContext(AuthContext);
   const [formData, setFormData] = useState({
@@ -76,13 +79,20 @@ const Signup = () => {
 
   const validatePassword = (password) => {
     if (!password) return ['Password is required'];
-    const errors = [];
-    if (password.length < 6) errors.push('Password must be at least 6 characters');
-    if (!/[A-Z]/.test(password)) errors.push('Include at least one uppercase letter');
-    if (!/[a-z]/.test(password)) errors.push('Include at least one lowercase letter');
-    if (!/\d/.test(password)) errors.push('Include at least one number');
-    if (!/[!@#$%^&*]/.test(password)) errors.push('Include at least one special character (!@#$%^&*)');
-    return errors;
+    
+    // First check for minimum length to match Firebase's requirement
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      return [ERROR_MESSAGES['auth/weak-password']];
+    }
+    
+    // Additional requirements for UX but not blocking submission
+    const suggestions = [];
+    if (!/[A-Z]/.test(password)) suggestions.push('Consider adding an uppercase letter');
+    if (!/[a-z]/.test(password)) suggestions.push('Consider adding a lowercase letter');
+    if (!/\d/.test(password)) suggestions.push('Consider adding a number');
+    if (!/[!@#$%^&*]/.test(password)) suggestions.push('Consider adding a special character (!@#$%^&*)');
+    
+    return suggestions;
   };
 
   const handleBlur = (e) => {
@@ -141,8 +151,9 @@ const Signup = () => {
 
   const validatePasswordField = (value) => {
     const passwordErrors = validatePassword(value);
-    if (passwordErrors.length > 0) {
-      setError(passwordErrors.join(', '));
+    if (passwordErrors.length > 0 && passwordErrors[0] === ERROR_MESSAGES['auth/weak-password']) {
+      // Only show blocking error (minimum length)
+      setError(passwordErrors[0]);
     } else {
       setError('');
     }
@@ -170,8 +181,9 @@ const Signup = () => {
       return false;
     }
     
-    if (passwordErrors.length > 0) {
-      setError(passwordErrors.join(', '));
+    // Only block submission if it's the minimum length error
+    if (passwordErrors.length > 0 && passwordErrors[0] === ERROR_MESSAGES['auth/weak-password']) {
+      setError(passwordErrors[0]);
       return false;
     }
 
@@ -476,4 +488,4 @@ const Signup = () => {
   );
 };
 
-export default Signup
+export default Signup;
