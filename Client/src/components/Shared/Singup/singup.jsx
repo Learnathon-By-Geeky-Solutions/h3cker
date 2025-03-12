@@ -5,13 +5,19 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Eye, EyeOff } from 'lucide-react';
 import BrandLogo from '../Brandlogo/brandlogo';
 import { ErrorMessage } from '../../common/ErrorMessage/ErrorMessage';
+import { 
+  validatePassword, 
+  validateEmail, 
+  validateConfirmPassword,
+  PASSWORD_CONFIG,
+} from './passwordValidation';
 
-
-const ERROR_MESSAGES = {
+// Authentication error messages
+const AUTH_ERROR_MESSAGES = {
   'auth/email-already-in-use': 'An account with this email already exists',
   'auth/invalid-email': 'Please enter a valid email address',
   'auth/operation-not-allowed': 'Email/password accounts are not enabled. Please contact support.',
-  'auth/weak-password': 'Password should be at least 6 characters',
+  'auth/weak-password': `Password should be at least ${PASSWORD_CONFIG.MIN_LENGTH} characters`,
   'auth/network-request-failed': 'Network error. Please check your connection.',
   'auth/too-many-requests': 'Too many attempts. Please try again later.',
   'auth/popup-closed-by-user': 'Google sign-up was cancelled. Please try again.',
@@ -19,9 +25,6 @@ const ERROR_MESSAGES = {
   'auth/invalid-credential': 'Invalid credentials provided.',
   'MAX_DEVICES_REACHED': 'You\'ve reached the maximum device limit. Please log out from another device to continue.'
 };
-
-// Defining minimum requirements to match Firebase's requirement
-const MIN_PASSWORD_LENGTH = 6;
 
 const Signup = () => {
   const { createUser, signInWithGoogle, maxDevices, getGoogleAuthCache } = useContext(AuthContext);
@@ -68,32 +71,6 @@ const Signup = () => {
       return () => clearTimeout(timer);
     }
   }, [showVerificationMessage, navigate]);
-
-  const validateEmail = (email) => {
-    const emailRegex = /^[a-zA-Z0-9](?:[a-zA-Z0-9._%+-]*[a-zA-Z0-9])?@[a-zA-Z0-9](?:[a-zA-Z0-9.-]*[a-zA-Z0-9])?(?:\.[a-zA-Z]{2,})+$/;
-
-    if (!email) return 'Email is required';
-    if (!emailRegex.test(email)) return 'Please enter a valid email address';
-    return '';
-  };
-
-  const validatePassword = (password) => {
-    if (!password) return ['Password is required'];
-    
-    // First check for minimum length to match Firebase's requirement
-    if (password.length < MIN_PASSWORD_LENGTH) {
-      return [ERROR_MESSAGES['auth/weak-password']];
-    }
-    
-    // Additional requirements for UX but not blocking submission
-    const suggestions = [];
-    if (!/[A-Z]/.test(password)) suggestions.push('Consider adding an uppercase letter');
-    if (!/[a-z]/.test(password)) suggestions.push('Consider adding a lowercase letter');
-    if (!/\d/.test(password)) suggestions.push('Consider adding a number');
-    if (!/[!@#$%^&*]/.test(password)) suggestions.push('Consider adding a special character (!@#$%^&*)');
-    
-    return suggestions;
-  };
 
   const handleBlur = (e) => {
     const { name } = e.target;
@@ -151,8 +128,8 @@ const Signup = () => {
 
   const validatePasswordField = (value) => {
     const passwordErrors = validatePassword(value);
-    if (passwordErrors.length > 0 && passwordErrors[0] === ERROR_MESSAGES['auth/weak-password']) {
-      // Only show blocking error (minimum length)
+    if (passwordErrors.length > 0) {
+      // Show first error as the main error
       setError(passwordErrors[0]);
     } else {
       setError('');
@@ -160,8 +137,9 @@ const Signup = () => {
   };
 
   const validateConfirmPasswordField = (value) => {
-    if (value !== formData.password) {
-      setError('Passwords do not match');
+    const confirmError = validateConfirmPassword(formData.password, value);
+    if (confirmError) {
+      setError(confirmError);
     } else {
       setError('');
     }
@@ -170,6 +148,7 @@ const Signup = () => {
   const validateAllFields = () => {
     const emailError = validateEmail(formData.email);
     const passwordErrors = validatePassword(formData.password);
+    const confirmPasswordError = validateConfirmPassword(formData.password, formData.confirmPassword);
     
     if (!formData.firstName.trim() || !formData.lastName.trim()) {
       setError('All fields are required');
@@ -181,14 +160,13 @@ const Signup = () => {
       return false;
     }
     
-    // Only block submission if it's the minimum length error
-    if (passwordErrors.length > 0 && passwordErrors[0] === ERROR_MESSAGES['auth/weak-password']) {
+    if (passwordErrors.length > 0) {
       setError(passwordErrors[0]);
       return false;
     }
 
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
+    if (confirmPasswordError) {
+      setError(confirmPasswordError);
       return false;
     }
 
@@ -215,7 +193,7 @@ const Signup = () => {
       setShowVerificationMessage(true);
     } catch (err) {
       const errorCode = err.code || err.message;
-      setError(ERROR_MESSAGES[errorCode] || 'An error occurred during signup. Please try again.');
+      setError(AUTH_ERROR_MESSAGES[errorCode] || 'An error occurred during signup. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -232,7 +210,7 @@ const Signup = () => {
       if (errorCode === 'MAX_DEVICES_REACHED') {
         setError(`You've reached the maximum device limit (${maxDevices}). Please log out from another device to continue.`);
       } else {
-        setError(ERROR_MESSAGES[errorCode] || 'Failed to sign up with Google. Please try again.');
+        setError(AUTH_ERROR_MESSAGES[errorCode] || 'Failed to sign up with Google. Please try again.');
       }
     } finally {
       setLoading(false);
@@ -356,6 +334,10 @@ const Signup = () => {
                       {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                     </button>
                   </div>
+                  {/* Added password hint */}
+                  <p className="text-xs text-gray-500 mt-1">
+                    Must include uppercase, lowercase, number, and special character.
+                  </p>
                 </div>
 
                 <div className="space-y-1">
