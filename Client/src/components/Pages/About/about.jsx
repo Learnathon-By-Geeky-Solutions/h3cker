@@ -1,12 +1,9 @@
 import React from 'react'
-import BrandLogo from '../../Shared/Brandlogo/brandlogo'
+import UnderMaintenance from '../../common/undermaintenancepage/undermaintenancepage.jsx'
 
 const about = () => {
   return (
-    <div>
-        <BrandLogo />
-    </div>
-    
+    <UnderMaintenance pageName='About' />
   )
 }
 

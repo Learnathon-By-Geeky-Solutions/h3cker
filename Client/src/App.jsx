@@ -10,7 +10,7 @@ function App() {
   const isAuthPage = location.pathname === '/login' || 
                      location.pathname === '/signup' || 
                      location.pathname === '/forgetpassword';
-
+  
   return (
     <div className="min-h-screen bg-gray-900">
       {/* Conditionally render navbar */}

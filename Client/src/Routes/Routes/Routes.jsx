@@ -5,7 +5,8 @@ import Home from "../../components/Pages/Home/home.jsx";
 import Login from "../../components/Shared/Login/login.jsx";
 import Signup from "../../components/Shared/Singup/singup.jsx";
 import ForgetPassword from "../../components/Shared/ForgetPassword/forgetpassword.jsx";
-import about from "../../components/Pages/About/about.jsx";
+import About from "../../components/Pages/About/about.jsx";
+import Profile from "../../components/Pages/Profile/Profile.jsx";
 
 
 
@@ -32,8 +33,12 @@ const router = createBrowserRouter([
       },
       {
         path: "/about",
-        element: <about />,
+        element: <About />,
       },
+      {
+        path: "/profile",
+        element: <Profile />,
+      }
 
     ]
   }
