@@ -126,7 +126,6 @@ const AdCard = ({ ad }) => {
                   <span className="text-gray-300">Brand: {ad.brand}</span>
                   <span className="text-gray-300">Length: {ad.duration}</span>
                   <span className="text-gray-300">Dominant Emotion: {ad.dominantEmotion}</span>
-                  <span className="text-gray-300">Views: {ad.viewCount.toLocaleString()}</span>
                 </div>
               </div>
             </div>
