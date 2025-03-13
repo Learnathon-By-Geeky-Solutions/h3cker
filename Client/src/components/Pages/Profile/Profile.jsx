@@ -203,13 +203,12 @@ const Profile = () => {
     <div className="min-h-screen w-full flex flex-col items-center py-6 px-4 bg-gray-900 relative">
       {/* Background blur elements */}
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0">
-        <div className="absolute top-10 -left-40 w-96 h-96 bg-blue-700 opacity-20 rounded-full filter blur-3xl"></div>
-        <div className="absolute bottom-10 -right-40 w-96 h-96 bg-purple-600 opacity-20 rounded-full filter blur-3xl"></div>
+        <div className="absolute top-10 -left-40 w-96 h-96 bg-blue-700 opacity-20 rounded-full filter blur-3xl" />
+        <div className="absolute bottom-10 -right-40 w-96 h-96 bg-purple-600 opacity-20 rounded-full filter blur-3xl" />
       </div>
       
       <div className="container max-w-3xl z-10">
         <h1 className="text-2xl md:text-3xl font-bold mb-6 text-center text-white">Your Profile</h1>
-        
         {/* Toast notification */}
         {toast.show && (
           <Toast className="mb-6 mx-auto max-w-lg">

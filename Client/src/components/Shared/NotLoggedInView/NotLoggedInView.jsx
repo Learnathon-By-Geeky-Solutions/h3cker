@@ -40,8 +40,8 @@ const NotLoggedInView = () => {
   return (
     <div className="h-screen w-full flex flex-col items-center justify-center relative overflow-hidden">
       {/* Background elements */}
-      <div className="absolute top-10 -left-40 w-96 h-96 bg-blue-700 opacity-20 rounded-full filter blur-3xl"></div>
-      <div className="absolute bottom-10 -right-40 w-96 h-96 bg-purple-600 opacity-20 rounded-full filter blur-3xl"></div>
+      <div className="absolute top-10 -left-40 w-96 h-96 bg-blue-700 opacity-20 rounded-full filter blur-3xl" />
+      <div className="absolute bottom-10 -right-40 w-96 h-96 bg-purple-600 opacity-20 rounded-full filter blur-3xl" />
       
       <div className="max-w-3xl text-center z-10 px-4">
         <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold mb-4 leading-tight text-white">
@@ -55,9 +55,9 @@ const NotLoggedInView = () => {
           className="relative group px-8 py-4 bg-blue-600 text-white text-lg font-semibold rounded-full overflow-hidden shadow-lg"
           type="button"
         >
-          <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-blue-500 to-blue-700 rounded-full shadow-md"></span>
-          <span className="absolute inset-0 w-full h-full bg-white/15 rounded-full blur-[2px]"></span>
-          <span className="absolute inset-0 w-full h-full bg-blue-600 rounded-full transform transition-transform group-hover:scale-105"></span>
+          <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-blue-500 to-blue-700 rounded-full shadow-md" />
+          <span className="absolute inset-0 w-full h-full bg-white/15 rounded-full blur-[2px]" />
+          <span className="absolute inset-0 w-full h-full bg-blue-600 rounded-full transform transition-transform group-hover:scale-105" />
           <span className="relative flex items-center justify-center">
             Get Started <ChevronRight className="ml-2" size={20} />
           </span>

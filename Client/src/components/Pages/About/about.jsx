@@ -1,10 +1,10 @@
 import React from 'react'
-import UnderMaintenance from '../../common/undermaintenancepage/undermaintenancepage.jsx'
+import PageUnderConstruction from '../../common/PageUnderConstruction/PageUnderConstruction'
 
-const about = () => {
+const About = () => {
   return (
-    <UnderMaintenance pageName='About' />
+    <PageUnderConstruction pageName='About' />
   )
 }
 
-export default about
+export default About

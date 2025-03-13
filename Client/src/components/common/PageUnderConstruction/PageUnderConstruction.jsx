@@ -71,6 +71,7 @@ const PageUnderConstruction = ({ pageName = "This page" }) => {
     </div>
   );
 };
+
 PageUnderConstruction.propTypes = {
   pageName: PropTypes.string,
 };

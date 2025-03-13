@@ -3,25 +3,26 @@ import { Outlet, useLocation } from 'react-router-dom';
 import NavigationBar from './components/Shared/Navbar/Navbar';
 import MainFooter from './components/Shared/Footer/Footer';
 
+
+const AUTH_ROUTES = ['/login', '/signup', '/forgetpassword'];
+
 function App() {
   const location = useLocation();
   
-  // Check if current page is an authentication page
-  const isAuthPage = location.pathname === '/login' || 
-                     location.pathname === '/signup' || 
-                     location.pathname === '/forgetpassword';
+  // Check if current page is an authentication page using the predefined list
+  const isAuthPage = AUTH_ROUTES.includes(location.pathname);
   
   return (
     <div className="min-h-screen bg-gray-900">
-      {/* Conditionally render navbar */}
+      {/* navbar */}
       {!isAuthPage && <NavigationBar />}
       
       {/* Main content */}
       <main className={`${!isAuthPage ? 'pt-16' : ''}`}>
-        <Outlet /> {/* The actual page content will be rendered here */}
+        <Outlet /> 
       </main>
       
-      {/* Conditionally render footer */}
+      {/* footer */}
       {!isAuthPage && <MainFooter />}
     </div>
   );
