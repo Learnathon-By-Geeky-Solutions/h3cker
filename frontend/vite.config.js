@@ -10,22 +10,12 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: 'dist',
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          // Grouping React libraries into a separate chunk
-          react: ['react', 'react-dom'],
-          // Example: Grouping Material UI libraries
-          'material-ui': ['@mui/material', '@mui/icons-material'],
-        },
-      },
-    },
+    outDir: 'dist', 
   },
   server: {
-    port: 3000,
+    port: 3000, 
   },
   preview: {
-    port: 4173,
+    port: 4173, 
   },
 });
