@@ -10,7 +10,7 @@ import {
   validateEmail, 
   validateConfirmPassword,
   PASSWORD_CONFIG,
-} from './passwordValidation';
+} from './PasswordValidation';
 
 // Authentication error messages
 const AUTH_ERROR_MESSAGES = {
