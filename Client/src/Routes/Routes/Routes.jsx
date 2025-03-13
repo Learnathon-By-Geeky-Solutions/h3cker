@@ -1,11 +1,12 @@
 // In your Routes.jsx file
 import { createBrowserRouter } from "react-router-dom";
 import App from "../../App";
-import Home from "../../components/Pages/Home/home.jsx";
-import Login from "../../components/Shared/Login/login.jsx";
-import Signup from "../../components/Shared/Singup/singup.jsx";
+import Home from "../../components/Pages/Home/Home.jsx";
+import Login from "../../components/Shared/Login/Login.jsx";
+import Signup from "../../components/Shared/Singup/Singup.jsx";
 import ForgetPassword from "../../components/Shared/ForgetPassword/forgetpassword.jsx";
-import about from "../../components/Pages/About/about.jsx";
+import About from "../../components/Pages/About/about.jsx";
+import Profile from "../../components/Pages/Profile/Profile.jsx";
 
 
 
@@ -32,8 +33,12 @@ const router = createBrowserRouter([
       },
       {
         path: "/about",
-        element: <about />,
+        element: <About />,
       },
+      {
+        path: "/profile",
+        element: <Profile />,
+      }
 
     ]
   }

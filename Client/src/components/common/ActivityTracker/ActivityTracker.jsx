@@ -1,5 +1,5 @@
 import { useContext, useEffect } from 'react';
-import { AuthContext } from '../../contexts/AuthProvider/AuthProvider';
+import { AuthContext } from '../../../contexts/AuthProvider/AuthProvider';
 
 /**
  * Component that tracks user activity and automatically extends the session

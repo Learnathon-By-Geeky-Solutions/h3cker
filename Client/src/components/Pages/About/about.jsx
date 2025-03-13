@@ -1,13 +1,10 @@
 import React from 'react'
-import BrandLogo from '../../Shared/Brandlogo/brandlogo'
+import PageUnderConstruction from '../../common/PageUnderConstruction/PageUnderConstruction'
 
-const about = () => {
+const About = () => {
   return (
-    <div>
-        <BrandLogo />
-    </div>
-    
+    <PageUnderConstruction pageName='About' />
   )
 }
 
-export default about
+export default About
