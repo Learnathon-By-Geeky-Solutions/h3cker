@@ -5,7 +5,7 @@ import Home from "../../components/Pages/Home/Home.jsx";
 import Login from "../../components/Shared/Login/Login.jsx";
 import Signup from "../../components/Shared/Singup/Singup.jsx";
 import ForgetPassword from "../../components/Shared/ForgetPassword/forgetpassword.jsx";
-import About from "../../components/Pages/About/about.jsx";
+import About from "../../components/Pages/About/About.jsx";
 import Profile from "../../components/Pages/Profile/Profile.jsx";
 
 
