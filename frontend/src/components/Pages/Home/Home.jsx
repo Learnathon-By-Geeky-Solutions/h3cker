@@ -1,8 +1,8 @@
 import React, { useContext } from 'react';
 import { AuthContext } from "../../../contexts/AuthProvider/AuthProvider";
 import { Activity, BarChart2, PieChart, Eye } from 'lucide-react';
-import NotLoggedInView from '../../Shared/NotLoggedInView/NotLoggedInView';
-import LoggedInView from '../../Shared/LoggedInView/LoggedInView';
+const NotLoggedInView = React.lazy(() => import('../../Shared/NotLoggedInView/NotLoggedInView'));
+const LoggedInView = React.lazy(() => import('../../Shared/LoggedInView/LoggedInView'));
 
 /*
 ├── Home.jsx               # Main component file
