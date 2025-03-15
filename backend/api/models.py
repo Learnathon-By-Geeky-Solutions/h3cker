@@ -68,6 +68,13 @@ class ViewerProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='viewer_profile')
     onboarding_completed = models.BooleanField(default=False)
     preferences = models.JSONField(default=dict, blank=True)
+    birthday = models.DateField(null=True, blank=True)
+    gender = models.CharField(max_length=50, blank=True)
+    country = models.CharField(max_length=100, blank=True)
+    city = models.CharField(max_length=100, blank=True)
+    education_level = models.CharField(max_length=100, blank=True)
+    occupation = models.CharField(max_length=100, blank=True)
+    content_preferences = models.JSONField(default=dict, blank=True)
     
     class Meta:
         db_table = 'viewer_profiles'
