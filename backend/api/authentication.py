@@ -1,7 +1,9 @@
 from rest_framework import authentication
 from rest_framework import exceptions
-from firebase_admin import auth
+from firebase_admin import auth, firestore
 from django.contrib.auth.models import User
+
+db = firestore.client()
 
 class FirebaseAuthentication(authentication.BaseAuthentication):
     def authenticate(self, request):
@@ -25,13 +27,26 @@ class FirebaseAuthentication(authentication.BaseAuthentication):
             try:
                 user = User.objects.get(username=uid)
             except User.DoesNotExist:
-                # Create Django user from Firebase user info
+                # Fetch additional user data from Firestore
+                user_ref = db.collection('users').document(uid)
+                user_doc = user_ref.get()
+                
+                if user_doc.exists:
+                    user_data = user_doc.to_dict()
+                    first_name = user_data.get('firstName', '')
+                    last_name = user_data.get('lastName', '')
+                else:
+                    first_name = ''
+                    last_name = ''
+                
+                # Create Django user from Firebase and Firestore data
                 firebase_user = auth.get_user(uid)
                 email = firebase_user.email or f"{uid}@firebase.com"
                 user = User.objects.create_user(
                     username=uid,
                     email=email,
-                    first_name=firebase_user.display_name or "",
+                    first_name=first_name,
+                    last_name=last_name,
                 )
                 
             return (user, None)
