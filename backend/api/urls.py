@@ -1,6 +1,7 @@
 from django.urls import path
-from .views import sample_view
+from .views import TestAuthView
 
 urlpatterns = [
-    path('hello/', sample_view),
+    path('auth-test/', TestAuthView.as_view(), name='auth-test'),
+    # ...other URLs
 ]

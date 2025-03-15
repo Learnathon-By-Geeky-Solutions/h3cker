@@ -1,9 +1,17 @@
-from django.shortcuts import render
-
-# Create your views here.
-from rest_framework.decorators import api_view
+from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
 
-@api_view(['GET'])
-def sample_view(request):
-    return Response({"message": "Hello from REST!"})
+class TestAuthView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        return Response({
+            "success": True,
+            "message": "Authentication successful!",
+            "user": {
+                "id": request.user.id,
+                "username": request.user.username,
+                "email": request.user.email
+            }
+        })
