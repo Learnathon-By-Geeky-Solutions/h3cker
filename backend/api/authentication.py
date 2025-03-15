@@ -1,7 +1,7 @@
 from rest_framework import authentication
 from rest_framework import exceptions
 from firebase_admin import auth, firestore
-from django.contrib.auth.models import User
+from .models import User  # Import custom User model
 
 db = firestore.client()
 
@@ -25,7 +25,7 @@ class FirebaseAuthentication(authentication.BaseAuthentication):
             
             # Get or create user
             try:
-                user = User.objects.get(username=uid)
+                user = User.objects.get(firebase_uid=uid)
             except User.DoesNotExist:
                 # Fetch additional user data from Firestore
                 user_ref = db.collection('users').document(uid)
@@ -35,19 +35,32 @@ class FirebaseAuthentication(authentication.BaseAuthentication):
                     user_data = user_doc.to_dict()
                     first_name = user_data.get('firstName', '')
                     last_name = user_data.get('lastName', '')
+                    email = user_data.get('email', '')
+                    role = user_data.get('role', 'user')  # Default to regular user
                 else:
+                    # Fallback to Firebase Auth data
+                    firebase_user = auth.get_user(uid)
                     first_name = ''
                     last_name = ''
+                    email = firebase_user.email or f"{uid}@example.com"
+                    role = 'user'  # Default role
                 
-                # Create Django user from Firebase and Firestore data
-                firebase_user = auth.get_user(uid)
-                email = firebase_user.email or f"{uid}@firebase.com"
+                # Create user in our database
                 user = User.objects.create_user(
-                    username=uid,
+                    firebase_uid=uid,
                     email=email,
                     first_name=first_name,
                     last_name=last_name,
+                    role=role
                 )
+                
+                # Create relevant profile based on role
+                if role == 'company':
+                    from .models import CompanyProfile
+                    CompanyProfile.objects.create(user=user)
+                elif role == 'user':
+                    from .models import ViewerProfile
+                    ViewerProfile.objects.create(user=user)
                 
             return (user, None)
         except Exception as e:
