@@ -1,96 +1,75 @@
-# api/views.py
-from rest_framework import viewsets
-from rest_framework.decorators import action
+from rest_framework import status
+from rest_framework.views import APIView
 from rest_framework.response import Response
-from .models import (
-    Role, CustomUser, Company, Payment, CoinTransaction, SurveyResponse, Video, Emotion, ShareLink, AnalyticsReport
-)
-from .serializers import (
-    RoleSerializer, CustomUserSerializer, CompanySerializer, PaymentSerializer, CoinTransactionSerializer, 
-    SurveyResponseSerializer, VideoSerializer, EmotionSerializer, ShareLinkSerializer, AnalyticsReportSerializer,
-    VideoDetailSerializer, CompanyDetailSerializer, CustomUserDetailSerializer
-)
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from firebase_admin import auth
+from django.contrib.auth import login
+from .models import ViewerProfile, User
+from .serializers import OnboardingSerializer
+from django.http import HttpResponseRedirect
 
-class RoleViewSet(viewsets.ModelViewSet):
-    queryset = Role.objects.all()
-    serializer_class = RoleSerializer
-    # Removed permission_classes
+class TestAuthView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        return Response({
+            "success": True,
+            "message": "Authentication successful!",
+            "user": {
+                "id": request.user.id,
+                "username": request.user.username,
+                "email": request.user.email
+            }
+        })
 
-class CustomUserViewSet(viewsets.ModelViewSet):
-    queryset = CustomUser.objects.all()
-    serializer_class = CustomUserSerializer
+class OnboardingAPIView(APIView):
+    permission_classes = [IsAuthenticated]
     
-    # Removed permission_classes
-    def get_serializer_class(self):
-        if self.action == 'retrieve':
-            return CustomUserDetailSerializer
-        return CustomUserSerializer
+    def post(self, request):
+        viewer_profile, created = ViewerProfile.objects.get_or_create(user=request.user)
+        
+        serializer = OnboardingSerializer(viewer_profile, data=request.data, partial=True)
+        
+        if serializer.is_valid():
+            serializer.validated_data['onboarding_completed'] = True
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-class CompanyViewSet(viewsets.ModelViewSet):
-    queryset = Company.objects.all()
-    serializer_class = CompanySerializer
+class SetFirebaseTokenView(APIView):
+    permission_classes = [AllowAny]
     
-    # Removed permission_classes
-    def get_serializer_class(self):
-        if self.action == 'retrieve':
-            return CompanyDetailSerializer
-        return CompanySerializer
-
-class PaymentViewSet(viewsets.ModelViewSet):
-    queryset = Payment.objects.all()
-    serializer_class = PaymentSerializer
+    def get(self, request):
+        # Show a simple form to submit a token
+        return Response({
+            "message": "Please POST your Firebase token to authenticate with the API browser"
+        })
     
-    # Removed permission_classes
-    def get_queryset(self):
-        return Payment.objects.filter(user=self.request.user)
-
-class CoinTransactionViewSet(viewsets.ModelViewSet):
-    queryset = CoinTransaction.objects.all()
-    serializer_class = CoinTransactionSerializer
-    
-    # Removed permission_classes
-    def get_queryset(self):
-        return CoinTransaction.objects.filter(user=self.request.user)
-
-class SurveyResponseViewSet(viewsets.ModelViewSet):
-    queryset = SurveyResponse.objects.all()
-    serializer_class = SurveyResponseSerializer
-    
-    # Removed permission_classes
-    def get_queryset(self):
-        return SurveyResponse.objects.filter(user=self.request.user)
-
-class VideoViewSet(viewsets.ModelViewSet):
-    queryset = Video.objects.all()
-    serializer_class = VideoSerializer
-    
-    # Removed permission_classes
-    def get_serializer_class(self):
-        if self.action == 'retrieve':
-            return VideoDetailSerializer
-        return VideoSerializer
-    
-    @action(detail=True, methods=['post'])
-    def generate_share_link(self, request, pk=None):
-        # Add your share link generation logic here
-        pass
-
-class EmotionViewSet(viewsets.ModelViewSet):
-    queryset = Emotion.objects.all()
-    serializer_class = EmotionSerializer
-    
-    # Removed permission_classes
-    def get_queryset(self):
-        return Emotion.objects.filter(user=self.request.user)
-
-class ShareLinkViewSet(viewsets.ModelViewSet):
-    queryset = ShareLink.objects.all()
-    serializer_class = ShareLinkSerializer
-    
-    # Removed permission_classes
-
-class AnalyticsReportViewSet(viewsets.ModelViewSet):
-    queryset = AnalyticsReport.objects.all()
-    serializer_class = AnalyticsReportSerializer
-    
-    # Removed permission_classes
+    def post(self, request):
+        token = request.data.get('token')
+        
+        if not token:
+            return Response({"error": "Token is required"}, status=400)
+        
+        try:
+            # Verify the Firebase token
+            decoded_token = auth.verify_id_token(token)
+            uid = decoded_token["uid"]
+            
+            # Get the corresponding Django user
+            try:
+                user = User.objects.get(firebase_uid=uid)
+                
+                # Log the user in for the DRF session
+                login(request, user)
+                
+                return Response({
+                    "success": True,
+                    "message": "Authenticated successfully. You can now use the API browser.",
+                })
+            except User.DoesNotExist:
+                return Response({"error": "User not found in Django database"}, status=404)
+                
+        except Exception as e:
+            return Response({"error": f"Invalid token: {str(e)}"}, status=400)
