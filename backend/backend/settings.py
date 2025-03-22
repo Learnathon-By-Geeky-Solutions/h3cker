@@ -15,7 +15,7 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG =os.getenv("DEBUG", "False").lower() == "true"
-ENVIRONMENT = os.getenv("ENV")
+ENVIRONMENT = os.getenv("ENVIRONMENT")
 
 if ENVIRONMENT == 'PROD':
     ALLOWED_HOSTS = [
@@ -36,12 +36,13 @@ INSTALLED_APPS = [
     "api",
     "rest_framework",
     "corsheaders",
+    "django_extensions" # Can remove this for PRODUCTION
 ]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
-    "corsheaders.middleware.CorsMiddleware",  # Add this line BEFORE CommonMiddleware
+    "corsheaders.middleware.CorsMiddleware",  
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -134,6 +135,10 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
 
 STATIC_URL = "static/"
+
+# Media files configuration
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field

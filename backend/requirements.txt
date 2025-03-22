@@ -9,3 +9,5 @@ sqlparse
 psycopg2-binary
 python-dotenv
 firebase-admin
+django-extensions
+azure-storage-blob
