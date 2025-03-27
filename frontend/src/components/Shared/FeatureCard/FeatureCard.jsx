@@ -7,8 +7,8 @@ const FeatureCard = ({ icon, title, description }) => {
       <div className="flex justify-center mb-4 text-blue-400">
         {icon}
       </div>
-      <h3 className="text-xl font-bold mb-2 text-white">{title}</h3>
-      <p className="text-gray-300">{description}</p>
+      <h3 className="text-xl font-bold mb-2 text-white text-center">{title}</h3>
+      <p className="text-gray-300 text-center">{description}</p>
     </div>
   );
 };
