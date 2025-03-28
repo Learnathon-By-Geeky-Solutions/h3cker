@@ -414,10 +414,10 @@ const UploadVideo = () => {
           Upload Another
         </Button>
         <Button
-          href="/dashboard/videos"
+          href="/dashboard"
           color="blue"
         >
-          Go to My Videos
+          Go to Dashboard
         </Button>
       </div>
     </div>
