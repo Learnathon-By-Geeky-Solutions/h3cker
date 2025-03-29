@@ -136,10 +136,6 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 
-# Media files configuration
-MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
@@ -156,7 +152,7 @@ else:
     CORS_ALLOW_ALL_ORIGINS = True  # Development only
     CORS_ALLOW_CREDENTIALS = True
 
-# Add this near the end of the file
+
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'api.authentication.FirebaseAuthentication',

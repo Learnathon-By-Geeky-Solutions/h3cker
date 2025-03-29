@@ -29,6 +29,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     
     firebase_uid = models.CharField(max_length=128, unique=True)
     email = models.EmailField(unique=True)
+    phone_number = models.CharField(max_length=20, blank=True, null=True)
     first_name = models.CharField(max_length=30, blank=True)
     last_name = models.CharField(max_length=30, blank=True)
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='user')
