@@ -1,4 +1,3 @@
-// In your Routes.jsx file
 import { createBrowserRouter } from "react-router-dom";
 import App from "../../App";
 import Home from "../../components/Pages/Home/Home.jsx";
@@ -7,8 +6,9 @@ import Signup from "../../components/Shared/Singup/Singup.jsx";
 import ForgetPassword from "../../components/Shared/ForgetPassword/forgetpassword.jsx";
 import About from "../../components/Pages/About/About.jsx";
 import Profile from "../../components/Pages/Profile/Profile.jsx";
-
-
+import Dashboard from "../../components/Pages/Dashboard/Dashboard.jsx";
+import UploadVideo from "../../components/Pages/Dashboard/UploadVideo.jsx";
+import PrivateRoute from "../PrivateRoute/Privateroute.jsx";
 
 const router = createBrowserRouter([
   {
@@ -37,9 +37,16 @@ const router = createBrowserRouter([
       },
       {
         path: "/profile",
-        element: <Profile />,
+        element: <PrivateRoute><Profile /></PrivateRoute>,
+      },
+      {
+        path: "/dashboard",
+        element: <PrivateRoute><Dashboard /></PrivateRoute>
+      },
+      {
+        path: "/dashboard/upload",
+        element: <PrivateRoute><UploadVideo /></PrivateRoute>
       }
-
     ]
   }
 ]);
