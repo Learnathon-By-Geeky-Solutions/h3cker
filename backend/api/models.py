@@ -82,3 +82,17 @@ class ViewerProfile(models.Model):
     
     def __str__(self):
         return f"{self.user.email}'s profile"
+
+class Video(models.Model):
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    category = models.CharField(max_length=100, blank=True)
+    visibility = models.CharField(max_length=20, default='private')
+    video_url = models.URLField()
+    thumbnail_url = models.URLField(blank=True)
+    upload_date = models.DateTimeField(auto_now_add=True)
+    uploader = models.ForeignKey(User, on_delete=models.CASCADE, related_name='videos')
+    class Meta:
+        db_table = 'videos'
+    def __str__(self):
+        return self.title

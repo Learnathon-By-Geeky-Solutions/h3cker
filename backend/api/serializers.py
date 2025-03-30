@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import ViewerProfile, User
+from .models import ViewerProfile, User, Video
 
 
 class OnboardingSerializer(serializers.ModelSerializer):
@@ -23,5 +23,10 @@ class UserBasicSerializer(serializers.ModelSerializer):
         fields = ["id", "email", "first_name", "last_name"]
 
 class FirebaseTokenSerializer(serializers.Serializer):
-    """Minimal serializer for Firebase token input."""
-    token = serializers.CharField()
+        token = serializers.CharField()
+
+class VideoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Video
+        fields = ['id', 'title', 'description', 'category', 'visibility', 'video_url', 'thumbnail_url', 'upload_date', 'uploader']
+        read_only_fields = ['id', 'upload_date', 'uploader']
