@@ -53,8 +53,23 @@ class VideoFeedSerializer(serializers.ModelSerializer):
     class Meta:
         model = Video
         fields = [
+            "id",
             "title",
+            "description",
+            "thumbnail_url",
+            "upload_date",
+        ]
+
+
+class VideoDetailSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Video
+        fields = [
+            "id",
+            "title",
+            "description",
             "category",
+            "visibility",
             "video_url",
             "thumbnail_url",
             "upload_date",

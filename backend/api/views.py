@@ -7,7 +7,7 @@ from firebase_admin import auth
 from django.contrib.auth import login
 from django.utils import timezone
 from .models import ViewerProfile, User, Video
-from .serializers import OnboardingSerializer, FirebaseTokenSerializer, VideoSerializer, VideoFeedSerializer
+from .serializers import OnboardingSerializer, FirebaseTokenSerializer, VideoSerializer, VideoFeedSerializer, VideoDetailSerializer 
 from azure.storage.blob import generate_blob_sas, BlobSasPermissions
 
 class TestAuthView(generics.RetrieveAPIView):
@@ -67,6 +67,13 @@ class VideoFeedView(generics.ListAPIView):
     queryset = Video.objects.all()
     serializer_class = VideoFeedSerializer
     permission_classes = [AllowAny]
+
+
+class VideoDetailView(generics.RetrieveAPIView): 
+    queryset = Video.objects.all()
+    serializer_class = VideoDetailSerializer
+    permission_classes = [AllowAny]
+
 
 class UploadVideoView(generics.CreateAPIView):
     permission_classes = [IsAuthenticated]
