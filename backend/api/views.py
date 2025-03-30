@@ -67,63 +67,85 @@ class UploadVideoView(generics.CreateAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = VideoSerializer
 
+    def perform_create(self, serializer, video_view_url, thumbnail_view_url):
+        """Save the video instance with generated URLs and uploader."""
+        serializer.save(
+            uploader=self.request.user,
+            video_url=video_view_url,
+            thumbnail_url=thumbnail_view_url
+        )
+
     def create(self, request, *args, **kwargs):
+
         filename = request.data.get('filename')
-        content_type = request.data.get('content_type')
-        title = request.data.get('title')
-        description = request.data.get('description')
-        category = request.data.get('category')
-        visibility = request.data.get('visibility')
 
-        if not filename or not content_type:
-            return Response({"error": "Filename and content_type are required"}, status=status.HTTP_400_BAD_REQUEST)
+        if not filename: 
+            return Response({"error": "Filename is required"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Azure Storage Account details from environment variables
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
         account_name = os.environ.get('AZURE_STORAGE_ACCOUNT_NAME')
         account_key = os.environ.get('AZURE_STORAGE_ACCOUNT_KEY')
         video_container_name = os.environ.get('AZURE_VIDEO_CONTAINER_NAME')
         thumbnail_container_name = os.environ.get('AZURE_THUMBNAIL_CONTAINER_NAME')
 
-        # Generate SAS token for video
-        video_blob_name = filename
-        video_sas_token = generate_blob_sas(
-            account_name=account_name,
-            container_name=video_container_name,
-            blob_name=video_blob_name,
-            account_key=account_key,
-            permission=BlobSasPermissions(write=True),
-            expiry=timezone.now() + timezone.timedelta(hours=1)
-        )
-        video_url_with_sas = f"https://{account_name}.blob.core.windows.net/{video_container_name}/{video_blob_name}?{video_sas_token}"
+        try:
+            # Generate upload (write) SAS token for video
+            video_blob_name = filename
+            video_upload_sas_token = generate_blob_sas(
+                account_name=account_name,
+                container_name=video_container_name,
+                blob_name=video_blob_name,
+                account_key=account_key,
+                permission=BlobSasPermissions(write=True, create=True, add=True),
+                expiry=timezone.now() + timezone.timedelta(hours=1)
+            )
+            video_upload_url = f"https://{account_name}.blob.core.windows.net/{video_container_name}/{video_blob_name}?{video_upload_sas_token}"
+            
+            # Generate read SAS token for video
+            video_view_sas_token = generate_blob_sas(
+                account_name=account_name,
+                container_name=video_container_name,
+                blob_name=video_blob_name,
+                account_key=account_key,
+                permission=BlobSasPermissions(read=True),
+                expiry=timezone.now() + timezone.timedelta(days=60)  # Valid for 60 days
+            )
+            video_view_url = f"https://{account_name}.blob.core.windows.net/{video_container_name}/{video_blob_name}?{video_view_sas_token}"
 
-        # Generate SAS token for thumbnail
-        thumbnail_blob_name = filename
-        thumbnail_sas_token = generate_blob_sas(
-            account_name=account_name,
-            container_name=thumbnail_container_name,
-            blob_name=thumbnail_blob_name,
-            account_key=account_key,
-            permission=BlobSasPermissions(write=True),
-            expiry=timezone.now() + timezone.timedelta(hours=1)
-        )
-        thumbnail_url_with_sas = f"https://{account_name}.blob.core.windows.net/{thumbnail_container_name}/{thumbnail_blob_name}?{thumbnail_sas_token}"
-        
-        # Create and save video metadata
-        video = Video(
-            title=title,
-            description=description,
-            category=category,
-            visibility=visibility,
-            video_url=video_url_with_sas,
-            thumbnail_url=thumbnail_url_with_sas,
-            uploader=request.user  # Associate with the logged-in user
-        )
-        video.save()
+            # Generate upload (write) SAS token for thumbnail
+            thumbnail_blob_name = f"thumb_{filename}"
+            thumbnail_upload_sas_token = generate_blob_sas(
+                account_name=account_name,
+                container_name=thumbnail_container_name,
+                blob_name=thumbnail_blob_name,
+                account_key=account_key,
+                permission=BlobSasPermissions(write=True, create=True, add=True),
+                expiry=timezone.now() + timezone.timedelta(hours=1)
+            )
+            thumbnail_upload_url = f"https://{account_name}.blob.core.windows.net/{thumbnail_container_name}/{thumbnail_blob_name}?{thumbnail_upload_sas_token}"
+            
+            # Generate read SAS token for thumbnail
+            thumbnail_view_sas_token = generate_blob_sas(
+                account_name=account_name,
+                container_name=thumbnail_container_name,
+                blob_name=thumbnail_blob_name,
+                account_key=account_key,
+                permission=BlobSasPermissions(read=True),
+                expiry=timezone.now() + timezone.timedelta(days=60)  # Valid for 60 days
+            )
 
-        return Response({
-            "video_sas_url": video_url_with_sas,
-            "thumbnail_sas_url": thumbnail_url_with_sas,
-            "video_blob_name": video_blob_name,
-            "thumbnail_blob_name": thumbnail_blob_name,
-            "message": "SAS token generated successfully"
-        }, status=status.HTTP_201_CREATED)
+            thumbnail_view_url = f"https://{account_name}.blob.core.windows.net/{thumbnail_container_name}/{thumbnail_blob_name}?{thumbnail_view_sas_token}"
+
+            self.perform_create(serializer, video_view_url, thumbnail_view_url)
+
+            return Response({
+                "video_upload_url": video_upload_url,
+                "thumbnail_upload_url": thumbnail_upload_url,
+                "message": "SAS tokens generated successfully"
+            }, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            return Response({"error": f"Failed to generate SAS tokens: {str(e)}"}, 
+                          status=status.HTTP_500_INTERNAL_SERVER_ERROR)

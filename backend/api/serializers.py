@@ -22,11 +22,29 @@ class UserBasicSerializer(serializers.ModelSerializer):
         model = User
         fields = ["id", "email", "first_name", "last_name"]
 
+
 class FirebaseTokenSerializer(serializers.Serializer):
-        token = serializers.CharField()
+    token = serializers.CharField()
+
 
 class VideoSerializer(serializers.ModelSerializer):
     class Meta:
         model = Video
-        fields = ['id', 'title', 'description', 'category', 'visibility', 'video_url', 'thumbnail_url', 'upload_date', 'uploader']
-        read_only_fields = ['id', 'upload_date', 'uploader']
+        fields = [
+            "id",
+            "title",
+            "description",
+            "category",
+            "visibility",
+            "video_url",
+            "thumbnail_url",
+            "upload_date",
+            "uploader",
+        ]
+        read_only_fields = [
+            "id",
+            "upload_date",
+            "uploader",
+            "video_url",
+            "thumbnail_url",
+        ]
