@@ -7,7 +7,7 @@ from firebase_admin import auth
 from django.contrib.auth import login
 from django.utils import timezone
 from .models import ViewerProfile, User, Video
-from .serializers import OnboardingSerializer, FirebaseTokenSerializer, VideoSerializer
+from .serializers import OnboardingSerializer, FirebaseTokenSerializer, VideoSerializer, VideoFeedSerializer
 from azure.storage.blob import generate_blob_sas, BlobSasPermissions
 
 class TestAuthView(generics.RetrieveAPIView):
@@ -62,6 +62,11 @@ class SetFirebaseTokenView(generics.CreateAPIView):
                 return Response({"error": "User not found in Django database"}, status=404)
         except Exception as e:
             return Response({"error": f"Invalid token: {str(e)}"}, status=400)
+
+class VideoFeedView(generics.ListAPIView):
+    queryset = Video.objects.all()
+    serializer_class = VideoFeedSerializer
+    permission_classes = [AllowAny]
 
 class UploadVideoView(generics.CreateAPIView):
     permission_classes = [IsAuthenticated]
