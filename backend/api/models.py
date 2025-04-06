@@ -29,6 +29,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     
     firebase_uid = models.CharField(max_length=128, unique=True)
     email = models.EmailField(unique=True)
+    phone_number = models.CharField(max_length=20, blank=True, null=True)
     first_name = models.CharField(max_length=30, blank=True)
     last_name = models.CharField(max_length=30, blank=True)
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='user')
@@ -81,3 +82,17 @@ class ViewerProfile(models.Model):
     
     def __str__(self):
         return f"{self.user.email}'s profile"
+
+class Video(models.Model):
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    category = models.CharField(max_length=100, blank=True)
+    visibility = models.CharField(max_length=20, default='private')
+    video_url = models.URLField()
+    thumbnail_url = models.URLField(blank=True)
+    upload_date = models.DateTimeField(auto_now_add=True)
+    uploader = models.ForeignKey(User, on_delete=models.CASCADE, related_name='videos')
+    class Meta:
+        db_table = 'videos'
+    def __str__(self):
+        return self.title
