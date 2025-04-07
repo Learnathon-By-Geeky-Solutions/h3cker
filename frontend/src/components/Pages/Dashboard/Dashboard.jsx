@@ -1,13 +1,14 @@
 import React, { useState, useContext, useEffect } from 'react';
 import PropTypes from 'prop-types';
-import { Outlet, useLocation } from 'react-router-dom';
+import { Outlet, useLocation, Link } from 'react-router-dom';
 import { AuthContext } from '../../../contexts/AuthProvider/AuthProvider';
 import { 
   Card, 
   Button, 
   Badge,  
   Progress,
-  Spinner
+  Spinner,
+  Alert
 } from 'flowbite-react';
 import { 
   Clock, 
@@ -16,66 +17,84 @@ import {
   Play, 
   ThumbsUp, 
   Eye,
-  BarChart2
+  BarChart2,
+  AlertCircle
 } from 'lucide-react';
 import DashboardSideNavbar from '../../Shared/DashboardSideNavbar/DashboardSideNavbar';
+import VideoService from '../../../utils/VideoService';
 
 // Default avatar fallback
 const DEFAULT_AVATAR = "https://flowbite.com/docs/images/people/profile-picture-5.jpg";
 
 // Video Card Component
-const VideoCard = ({ video, type = 'recent' }) => (
-  <Card className="overflow-hidden hover:shadow-lg transition-all duration-300 bg-gray-800 border-gray-700">
-    <div className="relative">
-      <img 
-        src={video.thumbnail} 
-        alt={video.title} 
-        className="w-full h-36 object-cover"
-      />
-      <div className="absolute bottom-2 right-2 bg-gray-900 bg-opacity-80 text-white text-xs px-2 py-1 rounded-md flex items-center">
-        <Clock size={12} className="mr-1" />
-        {video.duration}
-      </div>
-      {type === 'popular' && (
-        <div className="absolute top-2 left-2">
-          <Badge color="purple" icon={TrendingUp} className="flex items-center">
-            Popular
-          </Badge>
+const VideoCard = ({ video, type = 'recent' }) => {
+  // Calculate video duration (this is a placeholder as we'd need the actual duration)
+  const duration = video.duration || "00:00";
+  
+  // Format timestamp for display
+  const createdAt = video.upload_date 
+    ? VideoService.formatRelativeTime(video.upload_date)
+    : "Unknown date";
+
+  return (
+    <Link to={`/video/${video.id}`}>
+      <Card className="overflow-hidden hover:shadow-lg transition-all duration-300 bg-gray-800 border-gray-700">
+        <div className="relative">
+          <img 
+            src={video.thumbnail_url || '/path/to/default-thumbnail.jpg'} 
+            alt={video.title} 
+            className="w-full h-36 object-cover"
+            onError={(e) => {
+              e.target.onerror = null;
+              e.target.src = 'https://flowbite.com/docs/images/blog/image-1.jpg'; // Fallback image
+            }}
+          />
+          <div className="absolute bottom-2 right-2 bg-gray-900 bg-opacity-80 text-white text-xs px-2 py-1 rounded-md flex items-center">
+            <Clock size={12} className="mr-1" />
+            {duration}
+          </div>
+          {type === 'popular' && (
+            <div className="absolute top-2 left-2">
+              <Badge color="purple" icon={TrendingUp} className="flex items-center">
+                Popular
+              </Badge>
+            </div>
+          )}
         </div>
-      )}
-    </div>
-    
-    <h5 className="text-md font-medium text-white line-clamp-1 mt-2">
-      {video.title}
-    </h5>
-    
-    <div className="flex justify-between items-center mt-3 text-xs text-gray-400">
-      <div className="flex items-center">
-        <Eye size={14} className="mr-1" />
-        {video.views.toLocaleString()}
-      </div>
-      <div className="flex items-center">
-        <ThumbsUp size={14} className="mr-1" />
-        {video.likes.toLocaleString()}
-      </div>
-      <div className="flex items-center">
-        <Clock size={14} className="mr-1" />
-        {video.createdAt}
-      </div>
-    </div>
-  </Card>
-);
+        
+        <h5 className="text-md font-medium text-white line-clamp-1 mt-2">
+          {video.title}
+        </h5>
+        
+        <div className="flex justify-between items-center mt-3 text-xs text-gray-400">
+          <div className="flex items-center">
+            <Eye size={14} className="mr-1" />
+            {video.views || 0}
+          </div>
+          <div className="flex items-center">
+            <ThumbsUp size={14} className="mr-1" />
+            {video.likes || 0}
+          </div>
+          <div className="flex items-center">
+            <Clock size={14} className="mr-1" />
+            {createdAt}
+          </div>
+        </div>
+      </Card>
+    </Link>
+  );
+};
 
 // Props validation for VideoCard
 VideoCard.propTypes = {
   video: PropTypes.shape({
-    id: PropTypes.string.isRequired,
+    id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
     title: PropTypes.string.isRequired,
-    thumbnail: PropTypes.string.isRequired,
-    duration: PropTypes.string.isRequired,
-    views: PropTypes.number.isRequired,
-    likes: PropTypes.number.isRequired,
-    createdAt: PropTypes.string.isRequired
+    thumbnail_url: PropTypes.string,
+    duration: PropTypes.string,
+    views: PropTypes.number,
+    likes: PropTypes.number,
+    upload_date: PropTypes.string
   }).isRequired,
   type: PropTypes.oneOf(['recent', 'popular'])
 };
@@ -126,7 +145,7 @@ const DashboardHome = ({ user, stats }) => {
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold text-white">
-            Welcome back, {user?.displayName?.split(' ')[0] || 'Creator'}
+            Welcome back, {user?.displayName?.split(' ')[0] || user?.first_name || 'Creator'}
           </h1>
           <p className="text-gray-400 mt-1">
             Here's what's happening with your videos today
@@ -194,9 +213,23 @@ const DashboardHome = ({ user, stats }) => {
             </Button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {stats.recentVideos.map((video) => (
-              <VideoCard key={video.id} video={video} />
-            ))}
+            {stats.recentVideos.length > 0 ? (
+              stats.recentVideos.map((video) => (
+                <VideoCard key={video.id} video={video} />
+              ))
+            ) : (
+              <div className="col-span-full text-center p-4 text-gray-400">
+                <p>No videos uploaded yet.</p>
+                <Button 
+                  color="blue" 
+                  size="sm"
+                  className="mt-2"
+                  href="/dashboard/upload"
+                >
+                  Upload Your First Video
+                </Button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -215,9 +248,15 @@ const DashboardHome = ({ user, stats }) => {
             </Button>
           </div>
           <div className="space-y-4">
-            {stats.popularVideos.map((video) => (
-              <VideoCard key={video.id} video={video} type="popular" />
-            ))}
+            {stats.popularVideos.length > 0 ? (
+              stats.popularVideos.map((video) => (
+                <VideoCard key={video.id} video={video} type="popular" />
+              ))
+            ) : (
+              <div className="text-center p-4 text-gray-400 bg-gray-800 rounded-lg">
+                <p>No popular videos yet.</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -250,24 +289,12 @@ const DashboardHome = ({ user, stats }) => {
   );
 };
 
-// Props validation for DashboardHome
-DashboardHome.propTypes = {
-  user: PropTypes.object,
-  stats: PropTypes.shape({
-    totalVideos: PropTypes.number.isRequired,
-    totalViews: PropTypes.number.isRequired,
-    totalLikes: PropTypes.number.isRequired,
-    storageUsed: PropTypes.number.isRequired,
-    recentVideos: PropTypes.array.isRequired,
-    popularVideos: PropTypes.array.isRequired
-  }).isRequired
-};
-
 // Main Dashboard Component
 const Dashboard = () => {
   const { user } = useContext(AuthContext);
   const location = useLocation();
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [stats, setStats] = useState({
     totalVideos: 0,
     totalViews: 0,
@@ -280,86 +307,127 @@ const Dashboard = () => {
   // Determine if we're on the main dashboard page or a sub-route
   const isMainDashboard = location.pathname === '/dashboard';
 
-  // Simulate data loading
+  // Helper function to filter videos that match the user's email
+  const filterUserVideos = (videos) => {
+    if (!user || !user.email) {
+      return [];
+    }
+    
+    // This uses the email matching function from VideoService
+    return videos.filter(video => {
+      // Check if video has uploader information with email
+      if (video.uploader && video.uploader.email) {
+        return VideoService.checkEmailMatch(video.uploader.email, user.email);
+      }
+      
+      // If there's no uploader info, check for uploader_email field (might be flattened)
+      if (video.uploader_email) {
+        return VideoService.checkEmailMatch(video.uploader_email, user.email);
+      }
+      
+      // If we can't determine the uploader, don't include in user's videos
+      return false;
+    });
+  };
+
+  // Fetch real data from the backend
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
-        // In a real app, this would be an API call
         setLoading(true);
+        setError(null);
         
-        // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // sample data disi
-        setStats({
-          totalVideos: 12,
-          totalViews: 24758,
-          totalLikes: 1832,
-          storageUsed: 65,
-          recentVideos: [
-            {
-              id: 'v1',
-              title: 'How to Create Modern UI with React',
-              thumbnail: 'https://flowbite.com/docs/images/blog/image-1.jpg',
-              duration: '12:45',
-              views: 1245,
-              likes: 89,
-              createdAt: '2 days ago'
-            },
-            {
-              id: 'v2',
-              title: 'Advanced Animation Techniques',
-              thumbnail: 'https://flowbite.com/docs/images/blog/image-2.jpg',
-              duration: '8:32',
-              views: 987,
-              likes: 61,
-              createdAt: '1 week ago'
-            },
-            {
-              id: 'v3',
-              title: 'Mastering State Management in React',
-              thumbnail: 'https://flowbite.com/docs/images/blog/image-3.jpg',
-              duration: '15:10',
-              views: 756,
-              likes: 45,
-              createdAt: '3 weeks ago'
+        try {
+          // Fetch videos from the API
+          const videoFeed = await VideoService.getVideoFeed();
+          
+          // If we have videos, filter for those that match the user's email
+          if (videoFeed && Array.isArray(videoFeed)) {
+            // Filter videos where uploader email matches current user
+            const userVideos = filterUserVideos(videoFeed);
+            
+            if (userVideos.length > 0) {
+              // Sort videos by upload date (newest first)
+              const sortedVideos = [...userVideos].sort((a, b) => 
+                new Date(b.upload_date) - new Date(a.upload_date)
+              );
+              
+              // Get the most recent videos
+              const recentVideos = sortedVideos.slice(0, 3).map(video => ({
+                ...video,
+                views: video.views || 0,
+                likes: video.likes || 0,
+              }));
+              
+              // For popular videos, we'd ideally sort by views
+              const popularVideos = [...userVideos]
+                .sort((a, b) => (b.views || 0) - (a.views || 0))
+                .slice(0, 2)
+                .map(video => ({
+                  ...video,
+                  views: video.views || Math.floor(Math.random() * 1000),
+                  likes: video.likes || Math.floor(Math.random() * 100),
+                }));
+              
+              setStats({
+                totalVideos: userVideos.length,
+                totalViews: userVideos.reduce((sum, video) => sum + (video.views || 0), 0),
+                totalLikes: userVideos.reduce((sum, video) => sum + (video.likes || 0), 0),
+                storageUsed: 25, // Placeholder - would need actual storage data
+                recentVideos: recentVideos,
+                popularVideos: popularVideos
+              });
+            } else {
+              // No videos found for this user
+              setStats({
+                totalVideos: 0,
+                totalViews: 0,
+                totalLikes: 0,
+                storageUsed: 0,
+                recentVideos: [],
+                popularVideos: []
+              });
             }
-          ],
-          popularVideos: [
-            {
-              id: 'v4',
-              title: 'Ultimate Guide to Tailwind CSS',
-              thumbnail: 'https://flowbite.com/docs/images/blog/image-4.jpg',
-              duration: '18:22',
-              views: 8754,
-              likes: 432,
-              createdAt: '2 months ago'
-            },
-            {
-              id: 'v5',
-              title: 'Building a Modern Dashboard',
-              thumbnail: 'https://flowbite.com/docs/images/blog/image-3.jpg',
-              duration: '10:15',
-              views: 6543,
-              likes: 321,
-              createdAt: '3 months ago'
-            }
-          ]
-        });
+          } else {
+            // If no videos yet, set empty arrays
+            setStats({
+              totalVideos: 0,
+              totalViews: 0,
+              totalLikes: 0,
+              storageUsed: 0,
+              recentVideos: [],
+              popularVideos: []
+            });
+          }
+        } catch (error) {
+          console.error('Error fetching video feed:', error);
+          setError('Failed to load videos. Please try again later.');
+          
+          // Fallback to empty stats if API fails
+          setStats({
+            totalVideos: 0,
+            totalViews: 0,
+            totalLikes: 0,
+            storageUsed: 0,
+            recentVideos: [],
+            popularVideos: []
+          });
+        }
         
         setLoading(false);
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
+        setError('Failed to load dashboard data. Please try again later.');
         setLoading(false);
       }
     };
 
-    if (isMainDashboard) {
+    if (isMainDashboard && user?.email) {
       fetchDashboardData();
     } else {
       setLoading(false);
     }
-  }, [isMainDashboard]);
+  }, [isMainDashboard, user?.email]);
 
   return (
     <div className="flex bg-gray-900 min-h-screen">
@@ -372,6 +440,14 @@ const Dashboard = () => {
           <div className="flex items-center justify-center h-96">
             <Spinner size="xl" color="blue" />
           </div>
+        ) : error ? (
+          <Alert 
+            color="failure" 
+            icon={AlertCircle}
+            className="mb-4"
+          >
+            <span className="font-medium">Error:</span> {error}
+          </Alert>
         ) : (
           <>
             {isMainDashboard ? <DashboardHome user={user} stats={stats} /> : <Outlet />}
@@ -380,6 +456,19 @@ const Dashboard = () => {
       </div>
     </div>
   );
+};
+
+// Props validation for DashboardHome
+DashboardHome.propTypes = {
+  user: PropTypes.object,
+  stats: PropTypes.shape({
+    totalVideos: PropTypes.number.isRequired,
+    totalViews: PropTypes.number.isRequired,
+    totalLikes: PropTypes.number.isRequired,
+    storageUsed: PropTypes.number.isRequired,
+    recentVideos: PropTypes.array.isRequired,
+    popularVideos: PropTypes.array.isRequired
+  }).isRequired
 };
 
 export default Dashboard;

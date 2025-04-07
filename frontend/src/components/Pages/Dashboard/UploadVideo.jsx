@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import { 
   Card, 
   Button, 
@@ -9,7 +9,6 @@ import {
   FileInput,
   Spinner,
   Progress,
-  Checkbox,
   Alert
 } from 'flowbite-react';
 import { 
@@ -18,32 +17,39 @@ import {
   ImagePlus, 
   Check, 
   X, 
-  AlertCircle
+  AlertCircle,
+  Lock
 } from 'lucide-react';
+import VideoService from "../../../utils/VideoService";
+import ApiService from "../../../utils/ApiService";
+import { AuthContext } from '../../../contexts/AuthProvider/AuthProvider';
+import { BlobServiceClient } from '@azure/storage-blob';
 
 const UploadVideo = () => {
+  const { user } = useContext(AuthContext);
+  
   // Form states
   const [formState, setFormState] = useState({
     title: '',
     description: '',
     category: '',
     visibility: 'private',
-    allowComments: true,
     videoFile: null,
-    thumbnailFile: null,
-    customThumbnail: false,
+    thumbnailFile: null
   });
 
   // UI states
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadStatus, setUploadStatus] = useState(null); // 'success', 'error', null er jonno
+  const [uploadStatus, setUploadStatus] = useState(null); // 'success', 'error', null
   const [statusMessage, setStatusMessage] = useState('');
   const [videoPreview, setVideoPreview] = useState(null);
   const [thumbnailPreview, setThumbnailPreview] = useState(null);
-  const [uploadStep, setUploadStep] = useState(1); // 1: Details, 2: Upload, 3: Complete 3steps for upl
+  const [uploadStep, setUploadStep] = useState(1); // 1: Details, 2: Upload, 3: Complete
+  const [isTestingBackend, setIsTestingBackend] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState(null);
 
-  // Basic categories for testing
+  // Basic categories for testing - align with your actual backend categories
   const categories = [
     { value: 'educational', label: 'Educational' },
     { value: 'entertainment', label: 'Entertainment' },
@@ -53,10 +59,10 @@ const UploadVideo = () => {
 
   // Handle input changes
   const handleInputChange = (e) => {
-    const { id, value, type, checked } = e.target;
+    const { id, value } = e.target;
     setFormState(prev => ({
       ...prev,
-      [id]: type === 'checkbox' ? checked : value
+      [id]: value
     }));
   };
 
@@ -64,13 +70,6 @@ const UploadVideo = () => {
   const handleVideoFileChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-
-    // Only validate if it's a video file - no size limit for testing oke
-    if (!file.type.startsWith('video/')) {
-      setUploadStatus('error');
-      setStatusMessage('Please select a valid video file');
-      return;
-    }
 
     setFormState(prev => ({ ...prev, videoFile: file }));
     
@@ -81,9 +80,6 @@ const UploadVideo = () => {
     // Reset error state
     setUploadStatus(null);
     setStatusMessage('');
-    
-    // BACKEND INTEGRATION POINT: 
-    // Check server-side validation for the video file here if needed
   };
 
   // Handle file selection for thumbnail
@@ -91,35 +87,15 @@ const UploadVideo = () => {
     const file = e.target.files[0];
     if (!file) return;
 
-    // Validate image type
-    if (!file.type.startsWith('image/')) {
-      setUploadStatus('error');
-      setStatusMessage('Please select a valid image file for thumbnail');
-      return;
-    }
-
     setFormState(prev => ({ ...prev, thumbnailFile: file }));
     
     // Create thumbnail preview
     const imageURL = URL.createObjectURL(file);
     setThumbnailPreview(imageURL);
     
-    // BACKEND INTEGRATION POINT:
-    // Add thumbnail validation on the server-side if needed and handle errors
-  };
-
-  // Toggle custom thumbnail option
-  const handleToggleCustomThumbnail = () => {
-    setFormState(prev => ({ 
-      ...prev, 
-      customThumbnail: !prev.customThumbnail,
-      thumbnailFile: !prev.customThumbnail ? prev.thumbnailFile : null
-    }));
-    
-    if (thumbnailPreview && !formState.customThumbnail) {
-      URL.revokeObjectURL(thumbnailPreview);
-      setThumbnailPreview(null);
-    }
+    // Reset error state
+    setUploadStatus(null);
+    setStatusMessage('');
   };
 
   // Basic form validation
@@ -132,26 +108,114 @@ const UploadVideo = () => {
       return { valid: false, message: 'Please select a video file to upload' };
     }
     
+    if (!formState.thumbnailFile) {
+      return { valid: false, message: 'Please upload a thumbnail image' };
+    }
+    
+    if (!formState.category) {
+      return { valid: false, message: 'Please select a category for your video' };
+    }
+    
     return { valid: true };
   };
 
-  // replace with actual upload function ***Ariyan***
-  const simulateUpload = async () => {
-    // BACKEND INTEGRATION POINT:
+  // Test backend connection
+  const testBackendConnection = async () => {
+    setIsTestingBackend(true);
+    setConnectionStatus(null);
+    try {
+      const result = await VideoService.testBackendConnection();
+      setConnectionStatus({
+        success: result.success,
+        message: result.success 
+          ? 'Successfully connected to backend' 
+          : `Failed to connect: ${result.error || 'Unknown error'}`
+      });
+    } catch (error) {
+      setConnectionStatus({
+        success: false,
+        message: `Connection test failed: ${error.message}`
+      });
+    } finally {
+      setIsTestingBackend(false);
+    }
+  };
 
-    // For testing: simulate upload progress
-    return new Promise((resolve) => {
-      let progress = 0;
-      const interval = setInterval(() => {
-        progress += 5;
-        setUploadProgress(progress);
-        
-        if (progress >= 100) {
-          clearInterval(interval);
-          resolve({ success: true, message: 'Video uploaded successfully!' });
+  // Generate a unique filename that matches what backend expects
+  const generateSafeFilename = (originalFilename) => {
+    const timestamp = Date.now();
+    const fileExt = originalFilename.split('.').pop();
+    // Replace spaces and special characters, add timestamp for uniqueness
+    const safeName = originalFilename
+      .split('.')[0]
+      .replace(/[^a-z0-9]/gi, '_')
+      .toLowerCase();
+    
+    return `${safeName}_${timestamp}.${fileExt}`;
+  };
+
+  // Main upload function that integrates with your Django backend
+  const uploadToServer = async () => {
+    try {
+      // Generate safe filenames that match backend expectations
+      const videoFilename = generateSafeFilename(formState.videoFile.name);
+      const thumbnailFilename = `thumb_${videoFilename}`;
+      
+      // Step 1: Call the backend API to initiate the upload and get SAS URLs
+      const uploadData = {
+        title: formState.title,
+        description: formState.description || '',
+        category: formState.category,
+        visibility: formState.visibility,
+        filename: videoFilename  // This must match exactly what the backend expects
+      };
+      
+      setUploadProgress(10); // Show initial progress
+      console.log('Initiating video upload with data:', uploadData);
+      
+      // This calls the Django /api/upload-video/ endpoint to get SAS tokens
+      const response = await VideoService.initiateVideoUpload(uploadData);
+      
+      // Check if we got the required URLs
+      if (!response || !response.video_upload_url || !response.thumbnail_upload_url) {
+        throw new Error('Failed to get upload URLs from the server');
+      }
+      
+      console.log('Received SAS tokens. Proceeding with upload...');
+      
+      setUploadProgress(20);
+      
+      // Step 2: Upload the video file to Azure using the SAS URL
+      console.log(`Uploading video file: ${videoFilename} (${formState.videoFile.size} bytes)`);
+      await VideoService.uploadFileToBlob(
+        response.video_upload_url, 
+        formState.videoFile,
+        (progress) => {
+          // Video is 70% of total progress (20-90%)
+          setUploadProgress(20 + (progress * 0.7));
         }
-      }, 200);
-    });
+      );
+      
+      setUploadProgress(90);
+      
+      // Step 3: Upload the thumbnail to Azure
+      console.log(`Uploading thumbnail: ${thumbnailFilename} (${formState.thumbnailFile.size} bytes)`);
+      await VideoService.uploadFileToBlob(
+        response.thumbnail_upload_url, 
+        formState.thumbnailFile,
+        (progress) => {
+          // Thumbnail is final 10% of progress (90-100%)
+          setUploadProgress(90 + (progress * 0.1));
+        }
+      );
+      
+      setUploadProgress(100);
+      console.log('Upload completed successfully');
+      return { success: true, message: 'Video uploaded successfully!' };
+    } catch (error) {
+      console.error('Error during upload process:', error);
+      throw error;
+    }
   };
 
   // Handle form submission
@@ -172,12 +236,14 @@ const UploadVideo = () => {
     setUploadProgress(0);
     setUploadStep(2);
     
+    console.log('Starting upload process...');
+    console.log('API Base URL:', import.meta.env.VITE_API_BASE_URL);
+    
     try {
-      // BACKEND INTEGRATION POINT:
-      // Replace simulateUpload with actual API call
-      const result = await simulateUpload();
+      const result = await uploadToServer();
       
       if (result.success) {
+        console.log('Upload successful');
         setUploadStatus('success');
         setStatusMessage(result.message || 'Video uploaded successfully!');
         setUploadStep(3);
@@ -185,9 +251,10 @@ const UploadVideo = () => {
         throw new Error(result.message || 'Upload failed');
       }
     } catch (error) {
-      console.error('Error uploading video:', error);
+      console.error('Error uploading:', error);
       setUploadStatus('error');
       setStatusMessage(error.message || 'Failed to upload video. Please try again.');
+      setUploadStep(1);
     } finally {
       setIsUploading(false);
     }
@@ -195,18 +262,13 @@ const UploadVideo = () => {
 
   // Reset the form
   const handleReset = () => {
-    // BACKEND INTEGRATION POINT:
-    // You might need to cancel any ongoing uploads here
-    
     setFormState({
       title: '',
       description: '',
       category: '',
       visibility: 'private',
-      allowComments: true,
       videoFile: null,
-      thumbnailFile: null,
-      customThumbnail: false,
+      thumbnailFile: null
     });
     
     // Clear previews
@@ -252,8 +314,23 @@ const UploadVideo = () => {
 
   // Render status alert if any
   const renderAlert = () => {
-    if (!uploadStatus) return null;
+    if (!uploadStatus && !connectionStatus) return null;
     
+    // Connection test alert
+    if (connectionStatus) {
+      return (
+        <Alert
+          color={connectionStatus.success ? 'success' : 'failure'}
+          icon={connectionStatus.success ? Check : AlertCircle}
+          onDismiss={() => setConnectionStatus(null)}
+          className="mb-4"
+        >
+          {connectionStatus.message}
+        </Alert>
+      );
+    }
+    
+    // Upload status alert
     return (
       <Alert
         color={uploadStatus === 'success' ? 'success' : 'failure'}
@@ -313,19 +390,16 @@ const UploadVideo = () => {
     );
   };
   
-  // Render thumbnail section
+  // Render thumbnail section - now required
   const renderThumbnail = () => {
-    if (!formState.customThumbnail) {
-      return null;
-    }
-    
     if (!thumbnailPreview) {
       return (
-        <div className="flex items-center justify-center border-2 border-dashed border-gray-600 rounded-lg p-4 mt-2">
+        <div className="flex items-center justify-center border-2 border-dashed border-gray-600 rounded-lg p-4">
           <label htmlFor="thumbnail" className="cursor-pointer text-center">
             <ImagePlus className="mx-auto h-8 w-8 text-gray-400" />
             <div className="mt-2 text-sm text-gray-300">
-              <p>Upload thumbnail</p>
+              <p className="font-semibold">Upload thumbnail (required)</p>
+              <p className="text-xs text-gray-400 mt-1">JPG, PNG, WebP, etc.</p>
             </div>
             <FileInput
               id="thumbnail"
@@ -339,7 +413,7 @@ const UploadVideo = () => {
     }
     
     return (
-      <div className="relative rounded-lg overflow-hidden mt-2">
+      <div className="relative rounded-lg overflow-hidden">
         <img 
           src={thumbnailPreview} 
           alt="Thumbnail" 
@@ -428,15 +502,40 @@ const UploadVideo = () => {
     if (uploadStep === 1) {
       return (
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Debug Button - Only in development */}
+          {import.meta.env.DEV && (
+            <div className="mb-4">
+              <Button 
+                color="gray" 
+                size="sm" 
+                onClick={testBackendConnection}
+                disabled={isTestingBackend}
+                className="mb-2"
+              >
+                {isTestingBackend ? (
+                  <>
+                    <Spinner size="sm" className="mr-2" />
+                    Testing Connection...
+                  </>
+                ) : (
+                  'Test Backend Connection'
+                )}
+              </Button>
+              <p className="text-xs text-gray-400">
+                API URL: {import.meta.env.VITE_API_BASE_URL || 'Not set'}
+              </p>
+            </div>
+          )}
+
           {/* Video Upload */}
           <div>
-            <Label htmlFor="video" value="Video File" className="mb-2" />
+            <Label htmlFor="video" value="Video File (required)" className="mb-2" />
             {renderVideoUpload()}
           </div>
 
           {/* Title & Description */}
           <div>
-            <Label htmlFor="title" value="Title" className="mb-2" />
+            <Label htmlFor="title" value="Title (required)" className="mb-2" />
             <TextInput
               id="title"
               value={formState.title}
@@ -459,11 +558,12 @@ const UploadVideo = () => {
 
           {/* Category */}
           <div>
-            <Label htmlFor="category" value="Category" className="mb-2" />
+            <Label htmlFor="category" value="Category (required)" className="mb-2" />
             <Select
               id="category"
               value={formState.category}
               onChange={handleInputChange}
+              required
             >
               <option value="" disabled>Select category</option>
               {categories.map(category => (
@@ -474,17 +574,9 @@ const UploadVideo = () => {
             </Select>
           </div>
 
-          {/* Custom Thumbnail */}
+          {/* Thumbnail - Now required */}
           <div>
-            <div className="flex items-center mb-2">
-              <Checkbox
-                id="customThumbnail"
-                checked={formState.customThumbnail}
-                onChange={handleToggleCustomThumbnail}
-                className="mr-2"
-              />
-              <Label htmlFor="customThumbnail" value="Use custom thumbnail" />
-            </div>
+            <Label htmlFor="thumbnail" value="Thumbnail (required)" className="mb-2" />
             {renderThumbnail()}
           </div>
 
@@ -502,17 +594,6 @@ const UploadVideo = () => {
             </Select>
           </div>
 
-          {/* Allow Comments */}
-          <div className="flex items-center">
-            <Checkbox
-              id="allowComments"
-              checked={formState.allowComments}
-              onChange={handleInputChange}
-              className="mr-2"
-            />
-            <Label htmlFor="allowComments" value="Allow comments" />
-          </div>
-
           {/* Action Buttons */}
           <div className="flex justify-end space-x-3 pt-4 border-t border-gray-700">
             <Button
@@ -524,7 +605,7 @@ const UploadVideo = () => {
             </Button>
             <Button
               type="submit"
-              disabled={!formState.videoFile || isUploading}
+              disabled={!formState.videoFile || !formState.thumbnailFile || isUploading}
               color="blue"
             >
               <UploadIcon className="mr-2 h-5 w-5" />
