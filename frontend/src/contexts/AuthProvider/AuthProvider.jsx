@@ -427,13 +427,7 @@ const AuthProvider = ({ children }) => {
     getGoogleAuthCache: TokenService.getGoogleAuthCache
   }), [user, loading, deviceError, sessionExpiring, sessionTimeRemaining, extendSession, checkSession, googleAuthChecked]);
 
-  if (loading) {
-    return (
-      <div className="h-screen w-full flex items-center justify-center">
-        <Spinner size="xl" />
-      </div>
-    );
-  }
+
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

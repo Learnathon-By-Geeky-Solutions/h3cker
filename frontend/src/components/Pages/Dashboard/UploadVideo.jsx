@@ -1,640 +1,687 @@
 import React, { useState, useContext, useEffect } from 'react';
-import { 
-  Card, 
-  Button, 
-  Label, 
-  TextInput, 
-  Textarea, 
-  Select, 
+import {
+  Card,
+  Button,
+  Label,
+  TextInput,
+  Textarea,
+  Select,
   FileInput,
   Spinner,
   Progress,
   Alert
 } from 'flowbite-react';
-import { 
-  Upload as UploadIcon, 
+import {
+  Upload as UploadIcon,
   Video, 
   ImagePlus, 
-  Check, 
-  X, 
+  Check,
+  ArrowRight,
   AlertCircle,
-  Lock
+  ArrowLeft
 } from 'lucide-react';
 import VideoService from "../../../utils/VideoService";
-import ApiService from "../../../utils/ApiService";
 import { AuthContext } from '../../../contexts/AuthProvider/AuthProvider';
-import { BlobServiceClient } from '@azure/storage-blob';
 
 const UploadVideo = () => {
   const { user } = useContext(AuthContext);
-  
-  // Form states
-  const [formState, setFormState] = useState({
+
+  // === State Definitions ===
+  const [formData, setFormData] = useState({
     title: '',
     description: '',
     category: '',
-    visibility: 'private',
-    videoFile: null,
-    thumbnailFile: null
+    visibility: 'private'
   });
-
-  // UI states
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadStatus, setUploadStatus] = useState(null); // 'success', 'error', null
+  const [videoFile, setVideoFile] = useState(null);
+  const [thumbnailFile, setThumbnailFile] = useState(null);
+  const [generatedFilename, setGeneratedFilename] = useState('');
+  const [uploadUrls, setUploadUrls] = useState({
+    videoUrl: null,
+    thumbnailUrl: null
+  });
+  const [uploadStatus, setUploadStatus] = useState(null);
   const [statusMessage, setStatusMessage] = useState('');
-  const [videoPreview, setVideoPreview] = useState(null);
-  const [thumbnailPreview, setThumbnailPreview] = useState(null);
-  const [uploadStep, setUploadStep] = useState(1); // 1: Details, 2: Upload, 3: Complete
-  const [isTestingBackend, setIsTestingBackend] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [currentStep, setCurrentStep] = useState(1);
+  const [debugInfo, setDebugInfo] = useState(null); // For development only
+  const [videoPreviewUrl, setVideoPreviewUrl] = useState(null);
+  const [thumbnailPreviewUrl, setThumbnailPreviewUrl] = useState(null);
 
-  // Basic categories for testing - align with your actual backend categories
   const categories = [
     { value: 'educational', label: 'Educational' },
     { value: 'entertainment', label: 'Entertainment' },
     { value: 'gaming', label: 'Gaming' },
+    { value: 'music', label: 'Music' },
+    { value: 'news', label: 'News & Politics' },
+    { value: 'technology', label: 'Technology' },
+    { value: 'travel', label: 'Travel & Events' },
+    { value: 'sports', label: 'Sports' },
     { value: 'other', label: 'Other' },
   ];
 
-  // Handle input changes
+  // === Logic ===
+  useEffect(() => {
+    const currentVideoUrl = videoPreviewUrl;
+    const currentThumbnailUrl = thumbnailPreviewUrl;
+
+    return () => {
+      if (currentVideoUrl) {
+        URL.revokeObjectURL(currentVideoUrl);
+  
+      }
+      if (currentThumbnailUrl) {
+        URL.revokeObjectURL(currentThumbnailUrl);
+      }
+    };
+  }, [videoPreviewUrl, thumbnailPreviewUrl]);
+
+
   const handleInputChange = (e) => {
     const { id, value } = e.target;
-    setFormState(prev => ({
+    setFormData(prev => ({
       ...prev,
       [id]: value
     }));
   };
 
-  // Handle file selection for video
-  const handleVideoFileChange = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    setFormState(prev => ({ ...prev, videoFile: file }));
-    
-    // Create video preview
-    const videoURL = URL.createObjectURL(file);
-    setVideoPreview(videoURL);
-    
-    // Reset error state
-    setUploadStatus(null);
-    setStatusMessage('');
-  };
-
-  // Handle file selection for thumbnail
-  const handleThumbnailFileChange = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    setFormState(prev => ({ ...prev, thumbnailFile: file }));
-    
-    // Create thumbnail preview
-    const imageURL = URL.createObjectURL(file);
-    setThumbnailPreview(imageURL);
-    
-    // Reset error state
-    setUploadStatus(null);
-    setStatusMessage('');
-  };
-
-  // Basic form validation
-  const validateForm = () => {
-    if (!formState.title.trim()) {
-      return { valid: false, message: 'Please enter a title for your video' };
+  const generateAndSetFilename = () => {
+    if (!formData.title) {
+      return '';
     }
-    
-    if (!formState.videoFile) {
-      return { valid: false, message: 'Please select a video file to upload' };
-    }
-    
-    if (!formState.thumbnailFile) {
-      return { valid: false, message: 'Please upload a thumbnail image' };
-    }
-    
-    if (!formState.category) {
-      return { valid: false, message: 'Please select a category for your video' };
-    }
-    
-    return { valid: true };
-  };
-
-  // Test backend connection
-  const testBackendConnection = async () => {
-    setIsTestingBackend(true);
-    setConnectionStatus(null);
-    try {
-      const result = await VideoService.testBackendConnection();
-      setConnectionStatus({
-        success: result.success,
-        message: result.success 
-          ? 'Successfully connected to backend' 
-          : `Failed to connect: ${result.error || 'Unknown error'}`
-      });
-    } catch (error) {
-      setConnectionStatus({
-        success: false,
-        message: `Connection test failed: ${error.message}`
-      });
-    } finally {
-      setIsTestingBackend(false);
-    }
-  };
-
-  // Generate a unique filename that matches what backend expects
-  const generateSafeFilename = (originalFilename) => {
     const timestamp = Date.now();
-    const fileExt = originalFilename.split('.').pop();
-    // Replace spaces and special characters, add timestamp for uniqueness
-    const safeName = originalFilename
-      .split('.')[0]
-      .replace(/[^a-z0-9]/gi, '_')
-      .toLowerCase();
-    
-    return `${safeName}_${timestamp}.${fileExt}`;
+    const safeName = formData.title
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/gi, '_')
+      .replace(/_+/g, '_')
+      .substring(0, 50);
+    const uniqueFilename = `${safeName || 'video'}_${timestamp}_${Math.random().toString(36).substring(2, 7)}`;
+    setGeneratedFilename(uniqueFilename);
+    return uniqueFilename;
   };
 
-  // Main upload function that integrates with your Django backend
-  const uploadToServer = async () => {
-    try {
-      // Generate safe filenames that match backend expectations
-      const videoFilename = generateSafeFilename(formState.videoFile.name);
-      const thumbnailFilename = `thumb_${videoFilename}`;
-      
-      // Step 1: Call the backend API to initiate the upload and get SAS URLs
-      const uploadData = {
-        title: formState.title,
-        description: formState.description || '',
-        category: formState.category,
-        visibility: formState.visibility,
-        filename: videoFilename  // This must match exactly what the backend expects
-      };
-      
-      setUploadProgress(10); // Show initial progress
-      console.log('Initiating video upload with data:', uploadData);
-      
-      // This calls the Django /api/upload-video/ endpoint to get SAS tokens
-      const response = await VideoService.initiateVideoUpload(uploadData);
-      
-      // Check if we got the required URLs
-      if (!response || !response.video_upload_url || !response.thumbnail_upload_url) {
-        throw new Error('Failed to get upload URLs from the server');
-      }
-      
-      console.log('Received SAS tokens. Proceeding with upload...');
-      
-      setUploadProgress(20);
-      
-      // Step 2: Upload the video file to Azure using the SAS URL
-      console.log(`Uploading video file: ${videoFilename} (${formState.videoFile.size} bytes)`);
-      await VideoService.uploadFileToBlob(
-        response.video_upload_url, 
-        formState.videoFile,
-        (progress) => {
-          // Video is 70% of total progress (20-90%)
-          setUploadProgress(20 + (progress * 0.7));
-        }
-      );
-      
-      setUploadProgress(90);
-      
-      // Step 3: Upload the thumbnail to Azure
-      console.log(`Uploading thumbnail: ${thumbnailFilename} (${formState.thumbnailFile.size} bytes)`);
-      await VideoService.uploadFileToBlob(
-        response.thumbnail_upload_url, 
-        formState.thumbnailFile,
-        (progress) => {
-          // Thumbnail is final 10% of progress (90-100%)
-          setUploadProgress(90 + (progress * 0.1));
-        }
-      );
-      
-      setUploadProgress(100);
-      console.log('Upload completed successfully');
-      return { success: true, message: 'Video uploaded successfully!' };
-    } catch (error) {
-      console.error('Error during upload process:', error);
-      throw error;
+  const validateMetadataForm = () => {
+    if (!formData.title.trim()) {
+      return { valid: false, message: 'Video title is required.' };
     }
+    return { valid: true, message: '' };
   };
 
-  // Handle form submission
-  const handleSubmit = async (e) => {
+  const handleMetadataSubmit = async (e) => {
     e.preventDefault();
-    
-    // Validate form
-    const validation = validateForm();
+    const validation = validateMetadataForm();
     if (!validation.valid) {
       setUploadStatus('error');
       setStatusMessage(validation.message);
       return;
     }
-    
-    // Set UI state to uploading
-    setIsUploading(true);
-    setUploadStatus(null);
-    setUploadProgress(0);
-    setUploadStep(2);
-    
-    console.log('Starting upload process...');
-    console.log('API Base URL:', import.meta.env.VITE_API_BASE_URL);
-    
-    try {
-      const result = await uploadToServer();
-      
-      if (result.success) {
-        console.log('Upload successful');
-        setUploadStatus('success');
-        setStatusMessage(result.message || 'Video uploaded successfully!');
-        setUploadStep(3);
-      } else {
-        throw new Error(result.message || 'Upload failed');
-      }
-    } catch (error) {
-      console.error('Error uploading:', error);
+
+    const filenameToSubmit = generatedFilename || generateAndSetFilename();
+    if (!filenameToSubmit) {
+      setStatusMessage("Could not generate a filename. Please ensure title is set.");
       setUploadStatus('error');
-      setStatusMessage(error.message || 'Failed to upload video. Please try again.');
-      setUploadStep(1);
-    } finally {
-      setIsUploading(false);
+      return;
+    }
+
+    const metadataPayload = { ...formData, filename: filenameToSubmit };
+
+    setUploadStatus('pending');
+    setStatusMessage('Initializing upload...');
+    setDebugInfo(null);
+
+    try {
+  
+      const response = await VideoService.initiateVideoUpload(metadataPayload);
+
+
+      setDebugInfo(response);
+
+      if (!response?.video_upload_url || !response?.thumbnail_upload_url) {
+        throw new Error("Backend did not return valid upload URLs.");
+      }
+
+      setUploadUrls({
+        videoUrl: response.video_upload_url,
+        thumbnailUrl: response.thumbnail_upload_url
+      });
+      setCurrentStep(2);
+      setUploadStatus(null);
+      setStatusMessage('');
+
+    } catch (error) {
+      console.error('Error initiating upload:', error);
+      setUploadStatus('error');
+      setStatusMessage(error.message || 'Failed to initialize upload. Please check details and try again.');
     }
   };
 
-  // Reset the form
-  const handleReset = () => {
-    setFormState({
-      title: '',
-      description: '',
-      category: '',
-      visibility: 'private',
-      videoFile: null,
-      thumbnailFile: null
-    });
-    
-    // Clear previews
-    if (videoPreview) URL.revokeObjectURL(videoPreview);
-    if (thumbnailPreview) URL.revokeObjectURL(thumbnailPreview);
-    setVideoPreview(null);
-    setThumbnailPreview(null);
-    
-    // Reset UI states
-    setUploadProgress(0);
+  const handleVideoChange = (e) => {
+    const file = e.target.files?.[0];
+
+    if (videoPreviewUrl) {
+      URL.revokeObjectURL(videoPreviewUrl);
+     
+      setVideoPreviewUrl(null);
+    }
+
+    if (!file) {
+      setVideoFile(null);
+      return;
+    }
+    if (!file.type.startsWith('video/')) {
+      setStatusMessage('Invalid file type. Please select a video file.');
+      setUploadStatus('error');
+      e.target.value = '';
+      setVideoFile(null);
+      return;
+    }
+
+
+    setVideoFile(file);
     setUploadStatus(null);
     setStatusMessage('');
-    setUploadStep(1);
+
+    const newPreviewUrl = URL.createObjectURL(file);
+    setVideoPreviewUrl(newPreviewUrl);
+    
   };
 
-  // Render step indicator
-  const renderSteps = () => (
-    <div className="flex items-center justify-between mb-6">
-      {[
-        { step: 1, label: 'Details' },
-        { step: 2, label: 'Upload' },
-        { step: 3, label: 'Complete' }
-      ].map(({ step, label }) => (
-        <div key={step} className="flex flex-col items-center">
-          <div 
-            className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${
-              step < uploadStep ? 'bg-green-600 text-white' : 
-              step === uploadStep ? 'bg-blue-600 text-white' : 
-              'bg-gray-700 text-gray-400'
-            }`}
-          >
-            {step < uploadStep ? (
-              <Check size={16} />
-            ) : (
-              <span>{step}</span>
+  const handleThumbnailChange = (e) => {
+    const file = e.target.files?.[0];
+
+    if (thumbnailPreviewUrl) {
+      URL.revokeObjectURL(thumbnailPreviewUrl);
+   
+      setThumbnailPreviewUrl(null);
+    }
+
+    if (!file) {
+      setThumbnailFile(null);
+      return;
+    }
+    if (!file.type.startsWith('image/')) {
+      setStatusMessage('Invalid file type. Please select an image file (JPG, PNG, WEBP).');
+      setUploadStatus('error');
+      e.target.value = '';
+      setThumbnailFile(null);
+      return;
+    }
+
+    setThumbnailFile(file);
+    setUploadStatus(null);
+    setStatusMessage('');
+
+    const newPreviewUrl = URL.createObjectURL(file);
+    setThumbnailPreviewUrl(newPreviewUrl);
+
+  };
+
+  const validateFileForm = () => {
+    if (!videoFile) {
+      return { valid: false, message: 'Please select a video file to upload.' };
+    }
+    if (!thumbnailFile) {
+      return { valid: false, message: 'Please select a thumbnail image.' };
+    }
+    if (!uploadUrls.videoUrl || !uploadUrls.thumbnailUrl) {
+      return { valid: false, message: 'Upload authorization is missing. Please go back to details.' };
+    }
+    return { valid: true, message: '' };
+  };
+
+  const handleFileUpload = async (e) => {
+    e.preventDefault();
+    const validation = validateFileForm();
+    if (!validation.valid) {
+      setUploadStatus('error');
+      setStatusMessage(validation.message);
+      return;
+    }
+
+    setUploadStatus('uploading');
+    setUploadProgress(0);
+    setStatusMessage('Starting upload...');
+
+
+    if (videoPreviewUrl) {
+      URL.revokeObjectURL(videoPreviewUrl);
+     
+      setVideoPreviewUrl(null);
+    }
+    if (thumbnailPreviewUrl) {
+      URL.revokeObjectURL(thumbnailPreviewUrl);
+   
+      setThumbnailPreviewUrl(null);
+    }
+
+    try {
+
+      setStatusMessage(`Uploading video: ${videoFile.name}...`);
+      await VideoService.uploadFileToBlob(uploadUrls.videoUrl, videoFile, (progress) => {
+  
+        setUploadProgress(progress * 70); 
+        setStatusMessage(`Uploading video: ${Math.round(progress * 100)}%`);
+      });
+
+      setUploadProgress(70); 
+
+
+      setStatusMessage(`Uploading thumbnail: ${thumbnailFile.name}...`);
+      await VideoService.uploadFileToBlob(uploadUrls.thumbnailUrl, thumbnailFile, (progress) => {
+   
+        setUploadProgress(70 + (progress * 30));
+        setStatusMessage(`Uploading thumbnail: ${Math.round(progress * 100)}%`);
+      });
+    
+
+      setUploadProgress(100); // Ensure 100% at the end
+      setUploadStatus('success');
+      setStatusMessage('Video and thumbnail uploaded successfully!');
+      setCurrentStep(3);
+
+    } catch (error) {
+      console.error('File upload failed:', error);
+      setUploadStatus('error');
+      setStatusMessage(`Upload failed: ${error.message || 'An unknown error occurred during upload.'}`);
+  
+    }
+  };
+
+  const handleReset = () => {
+    setFormData({ title: '', description: '', category: '', visibility: 'private' });
+    setVideoFile(null);
+    setThumbnailFile(null);
+    setGeneratedFilename('');
+    setUploadUrls({ videoUrl: null, thumbnailUrl: null });
+    setUploadStatus(null);
+    setStatusMessage('');
+    setUploadProgress(0);
+    setCurrentStep(1);
+    setDebugInfo(null);
+
+
+    if (videoPreviewUrl) {
+        URL.revokeObjectURL(videoPreviewUrl);
+  
+    }
+    if (thumbnailPreviewUrl) {
+        URL.revokeObjectURL(thumbnailPreviewUrl);
+     
+    }
+    setVideoPreviewUrl(null);
+    setThumbnailPreviewUrl(null);
+
+
+    const videoInput = document.getElementById('video');
+    const thumbInput = document.getElementById('thumbnail');
+    if (videoInput) videoInput.value = '';
+    if (thumbInput) thumbInput.value = '';
+  };
+
+  // === Render Functions ===
+
+  const renderMetadataForm = () => (
+    <form onSubmit={handleMetadataSubmit} className="space-y-4">
+      <div>
+        <div className="mb-2 block">
+          <Label htmlFor="title" value="Video Title (required)" />
+        </div>
+        <TextInput
+          id="title"
+          value={formData.title}
+          onChange={handleInputChange}
+          onBlur={generateAndSetFilename}
+          placeholder="Enter a catchy title for your video"
+          required
+          maxLength={100}
+        />
+      </div>
+      <div>
+         <div className="mb-2 block">
+            <Label htmlFor="description" value="Description" />
+         </div>
+        <Textarea
+          id="description"
+          value={formData.description}
+          onChange={handleInputChange}
+          placeholder="Tell viewers about your video (optional)"
+          rows={4}
+          maxLength={5000}
+        />
+      </div>
+      <div>
+         <div className="mb-2 block">
+           <Label htmlFor="category" value="Category" />
+         </div>
+        <Select id="category" value={formData.category} onChange={handleInputChange}>
+          <option value="">Select a category (optional)</option>
+          {categories.map(category => (
+            <option key={category.value} value={category.value}>
+              {category.label}
+            </option>
+          ))}
+        </Select>
+      </div>
+      <div>
+        <div className="mb-2 block">
+            <Label htmlFor="visibility" value="Visibility" />
+        </div>
+        <Select id="visibility" value={formData.visibility} onChange={handleInputChange}>
+          <option value="private">Private (Only you can see)</option>
+          <option value="unlisted">Unlisted (Anyone with the link)</option>
+          <option value="public">Public (Visible to everyone)</option>
+        </Select>
+         <p className="mt-1 text-xs text-gray-400">
+              Choose who can view your video.
+         </p>
+      </div>
+      <div className="flex justify-end space-x-3 pt-5 border-t border-gray-600 mt-5">
+        <Button
+          type="button"
+          onClick={handleReset}
+          color="gray"
+          outline
+          disabled={uploadStatus === 'pending'}
+        >
+          Clear Form
+        </Button>
+        <Button
+          type="submit"
+          disabled={uploadStatus === 'pending' || !formData.title.trim()}
+          color="blue"
+          isProcessing={uploadStatus === 'pending'}
+          processingSpinner={<Spinner size="sm" />}
+        >
+          {uploadStatus === 'pending' ? 'Initializing...' : (
+            <>
+              Continue to Upload <ArrowRight className="ml-2 h-5 w-5" />
+            </>
+          )}
+        </Button>
+      </div>
+    </form>
+  );
+
+  const renderFileUploadForm = () => (
+    <form onSubmit={handleFileUpload} className="space-y-6">
+      <div className="text-center mb-6"> 
+        <h3 className="text-xl font-semibold text-white">Upload Files</h3>
+        <p className="text-gray-400 mt-1">
+          Select the video file and a thumbnail image.
+        </p>
+      </div>
+
+  
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+        <div className="flex flex-col space-y-4"> 
+          <div>
+            <div className="mb-2 block">
+              <Label htmlFor="video" value="Video File (required)" />
+            </div>
+            <FileInput
+              id="video"
+              onChange={handleVideoChange}
+              accept="video/*"
+              helperText="Select the main video file (e.g., MP4, MOV, AVI)."
+              required
+            />
+            {videoFile && (
+              <p className="mt-2 text-xs text-green-400 flex items-center">
+                <Check size={14} className="mr-1 flex-shrink-0"/>
+                <span className="truncate">
+                  Selected: {videoFile.name} ({(videoFile.size / (1024*1024)).toFixed(2)} MB)
+                </span>
+              </p>
             )}
           </div>
-          <span className="mt-2 text-xs">{label}</span>
+
+          <div className="flex-grow flex flex-col min-h-[150px]">
+            {videoPreviewUrl ? (
+              <div className="p-3 border border-gray-600 rounded-lg bg-gray-700/50 flex flex-col h-full"> 
+                <Label value="Video Preview" className="text-sm font-medium text-gray-300 mb-2 block flex-shrink-0"/>
+                <div className="relative w-full aspect-video bg-black rounded overflow-hidden flex-grow">
+                  <video
+                    src={videoPreviewUrl}
+                    controls
+                    preload="metadata"
+                    className="absolute top-0 left-0 w-full h-full object-contain" 
+                    aria-label="Video Preview"
+                  >
+                    Your browser does not support the video tag.
+                  </video>
+                 </div>
+              </div>
+            ) : (
+              <div className="p-3 border border-dashed border-gray-600 rounded-lg bg-gray-700/30 flex items-center justify-center text-gray-500 h-full">
+                 <Video className="w-10 h-10" /> 
+                 <span className="ml-2">Video preview appears here</span>
+              </div>
+            )}
+          </div>
         </div>
-      ))}
+
+        {/* === Thumbnail Column === */}
+        <div className="flex flex-col space-y-4"> 
+          <div>
+            <div className="mb-2 block">
+              <Label htmlFor="thumbnail" value="Thumbnail Image (required)" />
+            </div>
+            <FileInput
+              id="thumbnail"
+              onChange={handleThumbnailChange}
+              accept="image/jpeg, image/png, image/webp, image/gif"
+              helperText="Upload a preview image (JPG, PNG, WEBP). Ratio 16:9."
+              required
+            />
+            {thumbnailFile && (
+              <p className="mt-2 text-xs text-green-400 flex items-center">
+                 <Check size={14} className="mr-1 flex-shrink-0"/> 
+                 <span className="truncate"> 
+                   Selected: {thumbnailFile.name} ({(thumbnailFile.size / 1024).toFixed(1)} KB)
+                 </span>
+              </p>
+            )}
+          </div>
+           <div className="flex-grow flex flex-col min-h-[150px]">
+              {thumbnailPreviewUrl ? (
+                <div className="p-3 border border-gray-600 rounded-lg bg-gray-700/50 flex flex-col h-full">
+                  <Label value="Thumbnail Preview" className="text-sm font-medium text-gray-300 mb-2 block flex-shrink-0"/>
+             
+                  <div className="relative w-full aspect-video bg-black rounded overflow-hidden flex-grow"> 
+                    <img
+                      src={thumbnailPreviewUrl}
+                      alt="Thumbnail Preview"
+                      className="absolute top-0 left-0 w-full h-full object-contain"
+                    />
+                   </div>
+                </div>
+              ) : (
+                 <div className="p-3 border border-dashed border-gray-600 rounded-lg bg-gray-700/30 flex items-center justify-center text-gray-500 h-full">
+                   <ImagePlus className="w-10 h-10" />
+                   <span className="ml-2">Thumbnail preview appears here</span>
+                 </div>
+              )}
+           </div>
+        </div>
+      </div> 
+
+      <div className="flex justify-between items-center pt-5 border-t border-gray-600 mt-8"> {/* Increased top margin */}
+        <Button
+          type="button"
+          onClick={() => {
+            setCurrentStep(1);
+            setUploadStatus(null);
+            setStatusMessage('');
+          }}
+          color="gray"
+          outline
+          disabled={uploadStatus === 'uploading'}
+        >
+          <ArrowLeft className="mr-2 h-5 w-5" />
+          Back to Details
+        </Button>
+        <Button
+          type="submit"
+          disabled={!videoFile || !thumbnailFile || !uploadUrls.videoUrl || !uploadUrls.thumbnailUrl || uploadStatus === 'uploading'}
+          color="blue"
+          isProcessing={uploadStatus === 'uploading'}
+          processingSpinner={<Spinner size="sm" />}
+        >
+          {uploadStatus === 'uploading' ? 'Uploading...' : (
+            <>
+              <UploadIcon className="mr-2 h-5 w-5" /> Start Upload
+            </>
+          )}
+        </Button>
+      </div>
+    </form>
+  );
+
+  const renderUploadProgress = () => (
+    <div className="py-6">
+      <div className="text-center mb-6">
+        <h3 className="text-xl font-semibold text-white mb-2">
+          Uploading Your Files
+        </h3>
+        <p className="text-gray-400">
+           Please keep this window open until the upload completes.
+        </p>
+      </div>
+      <div className="max-w-lg mx-auto space-y-4">
+         <div>
+            <div className="flex justify-between text-sm mb-1 text-gray-300">
+              <span>Overall Progress</span>
+              <span>{Math.round(uploadProgress)}%</span>
+            </div>
+            <Progress progress={uploadProgress} size="lg" color="blue" />
+         </div>
+        <div className="flex items-center justify-center text-gray-300 mt-4">
+          <Spinner size="sm" className="mr-2" aria-label="Uploading" />
+          <span>{statusMessage || 'Processing...'}</span>
+        </div>
+      </div>
     </div>
   );
 
-  // Render status alert if any
+  const renderSuccessMessage = () => (
+    <div className="py-8 text-center">
+      <div className="w-16 h-16 rounded-full bg-green-500 text-white mx-auto flex items-center justify-center mb-5 ring-4 ring-green-500/30">
+        <Check size={32} strokeWidth={3} />
+      </div>
+      <h3 className="text-xl font-bold text-white mb-2">
+        Upload Complete!
+      </h3>
+      <p className="text-gray-400 max-w-md mx-auto mb-8">
+        Your video <span className="font-medium text-gray-300">"{formData.title}"</span> has been successfully uploaded. It may take a few moments to process before it's available.
+      </p>
+      <div className="flex flex-col sm:flex-row justify-center items-center gap-4">
+        <Button onClick={handleReset} color="gray" outline>
+          Upload Another Video
+        </Button>
+        <Button href="/dashboard/videos" color="blue">
+          View My Videos
+        </Button>
+      </div>
+    </div>
+  );
+
   const renderAlert = () => {
-    if (!uploadStatus && !connectionStatus) return null;
-    
-    // Connection test alert
-    if (connectionStatus) {
-      return (
-        <Alert
-          color={connectionStatus.success ? 'success' : 'failure'}
-          icon={connectionStatus.success ? Check : AlertCircle}
-          onDismiss={() => setConnectionStatus(null)}
-          className="mb-4"
-        >
-          {connectionStatus.message}
-        </Alert>
-      );
+    if (!statusMessage || (uploadStatus !== 'error' && uploadStatus !== 'info')) {
+      return null;
     }
-    
-    // Upload status alert
     return (
       <Alert
-        color={uploadStatus === 'success' ? 'success' : 'failure'}
-        icon={uploadStatus === 'success' ? Check : AlertCircle}
+        color={uploadStatus === 'error' ? 'failure' : 'info'}
+        icon={uploadStatus === 'error' ? AlertCircle : undefined}
         onDismiss={() => {
           setUploadStatus(null);
           setStatusMessage('');
         }}
-        className="mb-4"
+        className="mb-6"
+        rounded
       >
-        {statusMessage}
+        <p className="font-medium text-sm">{statusMessage}</p>
       </Alert>
     );
   };
 
-  // Render video upload area
-  const renderVideoUpload = () => {
-    if (!videoPreview) {
-      return (
-        <div className="flex items-center justify-center border-2 border-dashed border-gray-600 rounded-lg p-6">
-          <label htmlFor="video" className="cursor-pointer text-center">
-            <Video className="mx-auto h-12 w-12 text-gray-400" />
-            <div className="mt-2 text-sm text-gray-300">
-              <p className="font-semibold">Click to upload a video</p>
-              <p className="text-xs text-gray-400 mt-1">MP4, MOV, AVI, etc.</p>
-            </div>
-            <FileInput
-              id="video"
-              onChange={handleVideoFileChange}
-              accept="video/*"
-              className="hidden"
-            />
-          </label>
-        </div>
-      );
-    }
-    
-    return (
-      <div className="relative rounded-lg overflow-hidden bg-gray-900">
-        <video 
-          src={videoPreview} 
-          controls 
-          className="w-full h-auto max-h-64"
-        />
-        <button
-          type="button"
-          onClick={() => {
-            URL.revokeObjectURL(videoPreview);
-            setVideoPreview(null);
-            setFormState(prev => ({ ...prev, videoFile: null }));
-          }}
-          className="absolute top-2 right-2 p-1 bg-red-600 rounded-full text-white"
-        >
-          <X size={16} />
-        </button>
-      </div>
-    );
-  };
-  
-  // Render thumbnail section - now required
-  const renderThumbnail = () => {
-    if (!thumbnailPreview) {
-      return (
-        <div className="flex items-center justify-center border-2 border-dashed border-gray-600 rounded-lg p-4">
-          <label htmlFor="thumbnail" className="cursor-pointer text-center">
-            <ImagePlus className="mx-auto h-8 w-8 text-gray-400" />
-            <div className="mt-2 text-sm text-gray-300">
-              <p className="font-semibold">Upload thumbnail (required)</p>
-              <p className="text-xs text-gray-400 mt-1">JPG, PNG, WebP, etc.</p>
-            </div>
-            <FileInput
-              id="thumbnail"
-              onChange={handleThumbnailFileChange}
-              accept="image/*"
-              className="hidden"
-            />
-          </label>
-        </div>
-      );
-    }
-    
-    return (
-      <div className="relative rounded-lg overflow-hidden">
-        <img 
-          src={thumbnailPreview} 
-          alt="Thumbnail" 
-          className="w-full h-auto max-h-40 object-cover"
-        />
-        <button
-          type="button"
-          onClick={() => {
-            URL.revokeObjectURL(thumbnailPreview);
-            setThumbnailPreview(null);
-            setFormState(prev => ({ ...prev, thumbnailFile: null }));
-          }}
-          className="absolute top-2 right-2 p-1 bg-red-600 rounded-full text-white"
-        >
-          <X size={16} />
-        </button>
-      </div>
-    );
-  };
+  const renderSteps = () => (
+    <ol className="flex items-center w-full text-sm font-medium text-center text-gray-400 sm:text-base mb-8">
+        {[
+            { number: 1, label: 'Video Details' },
+            { number: 2, label: 'Upload Files' },
+            { number: 3, label: 'Complete' }
+        ].map((step, index, arr) => (
+            <li key={step.number} className={`flex items-center ${
+                currentStep === step.number ? 'text-blue-500' :
+                currentStep > step.number ? 'text-green-500' : 'text-gray-500'
+            } ${index < arr.length - 1 ? "w-full after:content-[''] after:w-full after:h-1 after:border-b after:border-gray-600 after:border-1 after:inline-block" : ''} ${index > 0 ? 'md:w-full' : ''}`}>
+                 <span className={`flex items-center justify-center ${index < arr.length - 1 ? 'after:content-["/"] sm:after:hidden after:mx-2 after:text-gray-500' : ''}`}>
+                     <div className={`flex items-center justify-center w-8 h-8 rounded-full border-2 shrink-0 mr-2 ${
+                          currentStep === step.number ? 'border-blue-500 bg-blue-900' :
+                          currentStep > step.number ? 'border-green-500 bg-green-900' :
+                          'border-gray-600 bg-gray-700'
+                     }`}>
+                        {currentStep > step.number ? <Check size={16} /> : <span>{step.number}</span>}
+                     </div>
+                    {step.label}
+                </span>
+            </li>
+        ))}
+    </ol>
+);
 
-  // Render upload progress UI
-  const renderUploadProgress = () => (
-    <div className="py-6">
-      <div className="text-center mb-6">
-        <h3 className="text-xl font-bold text-white mb-2">
-          Uploading Your Video
-        </h3>
-        <p className="text-gray-400">
-          Please wait while we upload your video
-        </p>
-      </div>
-      
-      <div className="max-w-lg mx-auto">
-        <div className="flex justify-between text-sm mb-1">
-          <span>Upload Progress</span>
-          <span>{Math.round(uploadProgress)}%</span>
-        </div>
-        <Progress
-          progress={uploadProgress}
-          size="lg"
-          color="blue"
-          className="mb-4"
-        />
-        
-        <div className="flex items-center justify-center mt-6">
-          <Spinner className="mr-2" />
-          <span>Uploading {formState.videoFile?.name}</span>
-        </div>
-      </div>
-    </div>
-  );
-
-  // Render success message
-  const renderSuccess = () => (
-    <div className="py-6 text-center">
-      <div className="w-16 h-16 rounded-full bg-green-600 mx-auto flex items-center justify-center mb-4">
-        <Check size={32} className="text-white" />
-      </div>
-      
-      <h3 className="text-xl font-bold text-white mb-2">
-        Upload Complete!
-      </h3>
-      <p className="text-gray-400 max-w-md mx-auto mb-6">
-        Your video has been uploaded successfully.
-      </p>
-      
-      <div className="flex justify-center space-x-4">
-        <Button
-          onClick={handleReset}
-          color="gray"
-        >
-          Upload Another
-        </Button>
-        <Button
-          href="/dashboard"
-          color="blue"
-        >
-          Go to Dashboard
-        </Button>
-      </div>
-    </div>
-  );
-
-  // Render content based on current step
   const renderContent = () => {
-    if (uploadStep === 1) {
-      return (
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Debug Button - Only in development */}
-          {import.meta.env.DEV && (
-            <div className="mb-4">
-              <Button 
-                color="gray" 
-                size="sm" 
-                onClick={testBackendConnection}
-                disabled={isTestingBackend}
-                className="mb-2"
-              >
-                {isTestingBackend ? (
-                  <>
-                    <Spinner size="sm" className="mr-2" />
-                    Testing Connection...
-                  </>
-                ) : (
-                  'Test Backend Connection'
-                )}
-              </Button>
-              <p className="text-xs text-gray-400">
-                API URL: {import.meta.env.VITE_API_BASE_URL || 'Not set'}
-              </p>
-            </div>
-          )}
-
-          {/* Video Upload */}
-          <div>
-            <Label htmlFor="video" value="Video File (required)" className="mb-2" />
-            {renderVideoUpload()}
-          </div>
-
-          {/* Title & Description */}
-          <div>
-            <Label htmlFor="title" value="Title (required)" className="mb-2" />
-            <TextInput
-              id="title"
-              value={formState.title}
-              onChange={handleInputChange}
-              placeholder="Video title"
-              required
-            />
-          </div>
-          
-          <div>
-            <Label htmlFor="description" value="Description (Optional)" className="mb-2" />
-            <Textarea
-              id="description"
-              value={formState.description}
-              onChange={handleInputChange}
-              placeholder="Describe your video"
-              rows={3}
-            />
-          </div>
-
-          {/* Category */}
-          <div>
-            <Label htmlFor="category" value="Category (required)" className="mb-2" />
-            <Select
-              id="category"
-              value={formState.category}
-              onChange={handleInputChange}
-              required
-            >
-              <option value="" disabled>Select category</option>
-              {categories.map(category => (
-                <option key={category.value} value={category.value}>
-                  {category.label}
-                </option>
-              ))}
-            </Select>
-          </div>
-
-          {/* Thumbnail - Now required */}
-          <div>
-            <Label htmlFor="thumbnail" value="Thumbnail (required)" className="mb-2" />
-            {renderThumbnail()}
-          </div>
-
-          {/* Privacy */}
-          <div>
-            <Label htmlFor="visibility" value="Privacy" className="mb-2" />
-            <Select
-              id="visibility"
-              value={formState.visibility}
-              onChange={handleInputChange}
-            >
-              <option value="private">Private</option>
-              <option value="unlisted">Unlisted</option>
-              <option value="public">Public</option>
-            </Select>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex justify-end space-x-3 pt-4 border-t border-gray-700">
-            <Button
-              type="button"
-              onClick={handleReset}
-              color="gray"
-            >
-              Clear
-            </Button>
-            <Button
-              type="submit"
-              disabled={!formState.videoFile || !formState.thumbnailFile || isUploading}
-              color="blue"
-            >
-              <UploadIcon className="mr-2 h-5 w-5" />
-              Upload Video
-            </Button>
-          </div>
-        </form>
-      );
-    } else if (uploadStep === 2) {
+    if (uploadStatus === 'uploading') {
       return renderUploadProgress();
-    } else {
-      return renderSuccess();
+    }
+    switch (currentStep) {
+      case 1:
+        return renderMetadataForm();
+      case 2:
+        return renderFileUploadForm();
+      case 3:
+        return renderSuccessMessage();
+      default:
+        return <p className="text-center text-gray-400">Loading...</p>;
     }
   };
+
+  const renderDebugInfo = () => {
+     if (import.meta.env.MODE !== 'development' || !debugInfo) {
+       return null;
+     }
+    return (
+      <div className="mt-6 p-4 bg-gray-900 rounded border border-gray-700 text-xs text-gray-300">
+        <h4 className="font-semibold mb-2 text-gray-200">Debug Info (Development Only)</h4>
+        <div>
+          <p className="font-medium">Backend Response (SAS URLs):</p>
+          <pre className="overflow-auto max-h-40 bg-black p-2 rounded mt-1 text-xs">
+            {JSON.stringify(debugInfo, null, 2)}
+          </pre>
+        </div>
+         <div className="mt-2">
+             <p className="font-medium">Generated Filename Hint:</p>
+             <p className="text-mono bg-black p-1 rounded mt-1 inline-block">{generatedFilename || 'Not generated yet'}</p>
+         </div>
+      </div>
+    );
+  };
+
 
   return (
-    <div className="max-w-3xl mx-auto">
-      <h1 className="text-2xl font-bold text-white mb-4">Upload Video</h1>
-      
-      {/* Progress steps */}
+    <div className="max-w-3xl mx-auto p-4 sm:p-0">
+      <h1 className="text-2xl font-bold text-white mb-6">Upload New Video</h1>
+
       {renderSteps()}
-      
-      {/* Status alert */}
       {renderAlert()}
-      
-      {/* Main Content */}
-      <Card className="bg-gray-800 border-gray-700">
+
+      <Card className="bg-gray-800 border-gray-700 shadow-lg p-6">
         {renderContent()}
       </Card>
+
+      {renderDebugInfo()}
     </div>
   );
 };
