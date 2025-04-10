@@ -15,7 +15,7 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG =os.getenv("DEBUG", "False").lower() == "true"
-ENVIRONMENT = os.getenv("ENV")
+ENVIRONMENT = os.getenv("ENVIRONMENT")
 
 if ENVIRONMENT == 'PROD':
     ALLOWED_HOSTS = [
@@ -36,12 +36,13 @@ INSTALLED_APPS = [
     "api",
     "rest_framework",
     "corsheaders",
+    "django_extensions" # Can remove this for PRODUCTION
 ]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
-    "corsheaders.middleware.CorsMiddleware",  # Add this line BEFORE CommonMiddleware
+    "corsheaders.middleware.CorsMiddleware",  
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -151,7 +152,7 @@ else:
     CORS_ALLOW_ALL_ORIGINS = True  # Development only
     CORS_ALLOW_CREDENTIALS = True
 
-# Add this near the end of the file
+
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'api.authentication.FirebaseAuthentication',

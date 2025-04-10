@@ -5,6 +5,7 @@ const TokenService = {
   currentDeviceKey: 'current_device_id',
   tokenExpiryKey: 'auth_token_expiry',
   googleAuthCacheKey: 'google_auth_cache',
+  profileUpdateTimeKey: 'profile_last_update_time',
   
   sessionDuration: 24 * 60 * 60 * 1000, // 24 hours in milliseconds
   
@@ -263,7 +264,7 @@ const TokenService = {
       // Store with expiration of 30 days
       const cacheObj = {
         data: encryptedData,
-        expiry: timestamp + (30 * 24 * 60 * 60 * 1000), // 30 days
+        expiry: timestamp + (7 * 24 * 60 * 60 * 1000), // 7 days
       };
       
       localStorage.setItem(this.googleAuthCacheKey, JSON.stringify(cacheObj));
@@ -313,6 +314,49 @@ const TokenService = {
   },
   
   /**
+   * Set the last profile update timestamp
+   * @param {string} uid - The user's ID
+   * @param {Date} timestamp - The timestamp of the update
+   */
+  setProfileUpdateTime(uid, timestamp = new Date()) {
+    if (!uid) return;
+    
+    localStorage.setItem(`${this.profileUpdateTimeKey}_${uid}`, timestamp.getTime().toString());
+  },
+  
+  /**
+   * Get the last profile update timestamp
+   * @param {string} uid - The user's ID
+   * @returns {Date|null} The timestamp of the last update or null if not found
+   */
+  getProfileUpdateTime(uid) {
+    if (!uid) return null;
+    
+    const timestamp = localStorage.getItem(`${this.profileUpdateTimeKey}_${uid}`);
+    if (!timestamp) return null;
+    
+    return new Date(parseInt(timestamp));
+  },
+  
+  /**
+   * Check if profile can be updated (based on time restriction)
+   * @param {string} uid - The user's ID
+   * @param {number} minDays - Minimum days between updates (default: 1)
+   * @returns {boolean} Whether the profile can be updated
+   */
+  canUpdateProfile(uid, minDays = 1) { // Change this value to adjust the time limit
+    if (!uid) return true;
+    
+    const lastUpdate = this.getProfileUpdateTime(uid);
+    if (!lastUpdate) return true;
+    
+    const now = new Date();
+    const daysSinceLastUpdate = (now - lastUpdate) / (1000 * 60 * 60 * 24);
+    
+    return daysSinceLastUpdate >= minDays;
+  },
+  
+  /**
    * Basic XOR encryption/decryption for simple obfuscation
    * @param {string} text - Text to encrypt/decrypt
    * @param {string} key - Key for encryption
@@ -332,10 +376,10 @@ const TokenService = {
    * Clear all authentication data from local storage
    */
   clearAuth() {
-      localStorage.removeItem(this.tokenKey);
-      localStorage.removeItem(this.tokenExpiryKey);
-      this.clearGoogleAuthCache();
-      // Don't remove device ID to maintain continuity
+    localStorage.removeItem(this.tokenKey);
+    localStorage.removeItem(this.tokenExpiryKey);
+    this.clearGoogleAuthCache();
+    // Don't remove device ID to maintain continuity
   }
 };
 

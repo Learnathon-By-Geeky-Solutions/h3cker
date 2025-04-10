@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useState, useContext, useEffect, useRef } from 'react';
 import { AuthContext } from '../../../contexts/AuthProvider/AuthProvider';
 import { updateProfile } from 'firebase/auth';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
@@ -6,51 +6,103 @@ import { db, auth } from '../../../firebase/firebase.config';
 import { Button, Card, Label, TextInput, Avatar, Spinner, Toast } from 'flowbite-react';
 import { HiUser, HiMail, HiPhotograph, HiCheck, HiExclamation } from 'react-icons/hi';
 import { Camera, Upload, X } from 'lucide-react';
+import TokenService from '../../../utils/TokenService';
+
+// Default avatar fallback
+const DEFAULT_AVATAR = "https://flowbite.com/docs/images/people/profile-picture-5.jpg";
+
+// ImgBB API key from environment variable
+const IMGBB_API_KEY = import.meta.env.VITE_IMGBB_API_KEY;
 
 const Profile = () => {
-  const { user, extendSession } = useContext(AuthContext);
+  const { user } = useContext(AuthContext);
+  const dataFetchedRef = useRef(false);
   
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState({ show: false, message: '', type: '' });
   
-  // Form fields with simple string state
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [photoURL, setPhotoURL] = useState('');
+  // Form fields with a single state object
+  const [formState, setFormState] = useState({
+    firstName: '',
+    lastName: '',
+    photoURL: '',
+    email: ''
+  });
+  
   const [isEditing, setIsEditing] = useState(false);
   const [showPhotoOptions, setShowPhotoOptions] = useState(false);
   const [uploadLoading, setUploadLoading] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [previewImage, setPreviewImage] = useState(null);
+  
+  // Last update time from Firestore for display only
+  const [lastUpdateTime, setLastUpdateTime] = useState(null);
 
-  // Load user data on component mount
+  // Load user data ONCE on component mount
   useEffect(() => {
-    if (user) {
+    // This ref prevents re-fetching and overwriting user edits
+    if (dataFetchedRef.current === false && user) {
+      console.log("Initial user data fetch");
       fetchUserData();
+      dataFetchedRef.current = true;
     }
   }, [user]);
 
   // Fetch the latest user data directly from Firestore
   const fetchUserData = async () => {
-    if (!user?.uid) return;
+    if (!user?.uid) return null;
     
     try {
+      console.log("Fetching user data from Firestore for UID:", user.uid);
       const userDocRef = doc(db, 'users', user.uid);
       const userSnapshot = await getDoc(userDocRef);
       
       if (userSnapshot.exists()) {
         const userData = userSnapshot.data();
-        setFirstName(userData.firstName || '');
-        setLastName(userData.lastName || '');
-        setPhotoURL(userData.photoURL || '');
         console.log('Fetched user data:', userData);
+        
+        // Set form state with user data
+        setFormState({
+          firstName: userData.firstName || '',
+          lastName: userData.lastName || '',
+          photoURL: userData.photoURL || DEFAULT_AVATAR,
+          email: user.email || ''
+        });
+        
+        // Set last update time if available (for display only)
+        if (userData.updatedAt) {
+          setLastUpdateTime(userData.updatedAt.toDate());
+          // Also update the TokenService with this time to keep them in sync
+          TokenService.setProfileUpdateTime(user.uid, userData.updatedAt.toDate());
+        }
+        
         return userData;
+      } else {
+        console.warn("User document doesn't exist in Firestore");
+        
+        // Fallback to auth user data if Firestore document doesn't exist
+        const names = (user.displayName || '').split(' ');
+        setFormState({
+          firstName: names[0] || '',
+          lastName: names.slice(1).join(' ') || '',
+          photoURL: user.photoURL || DEFAULT_AVATAR,
+          email: user.email || ''
+        });
       }
     } catch (error) {
       console.error('Error fetching user data:', error);
-      showToast(`Error fetching user data: ${error.message}`, 'error');
+      showToast(`Error loading profile: ${error.message}`, 'error');
     }
     return null;
+  };
+
+  // Handle input changes for all form fields
+  const handleInputChange = (e) => {
+    const { id, value } = e.target;
+    setFormState(prev => ({
+      ...prev,
+      [id]: value
+    }));
   };
 
   // Helper to show toast messages
@@ -63,76 +115,85 @@ const Profile = () => {
     setTimeout(() => setToast({ show: false, message: '', type: '' }), 3000);
   };
 
-  // Handle text input changes
-  const handleFirstNameChange = (e) => {
-    setFirstName(e.target.value);
-  };
-  
-  const handleLastNameChange = (e) => {
-    setLastName(e.target.value);
-  };
-
   // Handle save profile changes
   const handleSaveProfile = async (e) => {
     e.preventDefault();
     
-    if (!user?.uid) return;
+    if (!user?.uid) {
+      showToast("You must be logged in to update your profile", "error");
+      return;
+    }
+    
+    // Check if profile update is allowed using TokenService
+    if (!TokenService.canUpdateProfile(user.uid)) {
+      const lastUpdate = TokenService.getProfileUpdateTime(user.uid);
+      const timeRemaining = Math.ceil(24 - ((new Date() - lastUpdate) / (1000 * 60 * 60)));
+      showToast(`Profile can only be updated once per day. Please try again in ${timeRemaining} hours.`, "error");
+      return;
+    }
     
     setLoading(true);
     
     try {
+      const { firstName, lastName, photoURL } = formState;
       console.log("Updating profile with:", { firstName, lastName, photoURL });
       
-      // Update the user document in Firestore first
+      // Update the Firestore document first - similar to Google sign-in pattern
       const userDocRef = doc(db, 'users', user.uid);
+      const currentTime = new Date();
+      
       await updateDoc(userDocRef, {
         firstName,
         lastName,
         photoURL,
-        updatedAt: new Date()
+        updatedAt: currentTime
       });
       
-      // Then update the auth profile
+      console.log("Firestore document updated successfully");
+      
+      // Then update the Auth profile
       await updateProfile(auth.currentUser, {
         displayName: `${firstName} ${lastName}`.trim(),
-        photoURL
+        photoURL: photoURL
       });
       
-      // Force token refresh for changes to take effect
-      await auth.currentUser.getIdToken(true);
+      console.log("Auth profile updated successfully");
       
-      // Extend session to ensure token is valid
-      await extendSession();
+      // Force a token refresh to ensure changes propagate
+      const token = await auth.currentUser.getIdToken(true);
+      TokenService.setToken(token, user.uid);
+      
+      // Update the last update time in TokenService
+      TokenService.setProfileUpdateTime(user.uid, currentTime);
+      
+      // Update state for display
+      setLastUpdateTime(currentTime);
       
       setIsEditing(false);
       setShowPhotoOptions(false);
       
       showToast('Profile updated successfully!');
+      
+      // Reset the data fetched flag to ensure fresh data on next mount
+      dataFetchedRef.current = false;
+      
+      // For a complete reset, reload the page after a delay
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+      
     } catch (error) {
       console.error('Error updating profile:', error);
-      showToast(`Error updating profile: ${error.message}`, 'error');
+      showToast(`Failed to update profile: ${error.message}`, 'error');
     } finally {
       setLoading(false);
     }
   };
 
-  // Handle file upload to Cloudinary
+  // Handle file upload to ImgBB
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
-    if (!file || !user?.uid) return;
-    
-    // Validate file type
-    const validTypes = ['image/jpeg', 'image/png', 'image/gif'];
-    if (!validTypes.includes(file.type)) {
-      setUploadError('Please select a valid image file (JPEG, PNG, GIF)');
-      return;
-    }
-    
-    // Validate file size (max 2MB)
-    if (file.size > 2 * 1024 * 1024) {
-      setUploadError('Image size should be less than 2MB');
-      return;
-    }
+    if (!file) return;
     
     setUploadLoading(true);
     setUploadError('');
@@ -145,38 +206,41 @@ const Profile = () => {
       };
       reader.readAsDataURL(file);
       
-      // Get the Cloudinary URL from environment variables
-      const cloudinaryUrl = process.env.REACT_APP_CLOUDINARY_URL;
-      if (!cloudinaryUrl) {
-        throw new Error('Cloudinary configuration is missing');
-      }
-      
-      // Create a FormData object to send to Cloudinary
+      // Create a FormData object to send to ImgBB
       const formData = new FormData();
-      formData.append('file', file);
-      formData.append('upload_preset', process.env.REACT_APP_CLOUDINARY_UPLOAD_PRESET);
-      formData.append('folder', `profile_images/${user.uid}`);
+      formData.append('image', file);
+      formData.append('key', IMGBB_API_KEY); // Use env variable
       
-      // Upload to Cloudinary
-      const response = await fetch(cloudinaryUrl, {
+      console.log("Uploading image to ImgBB...");
+      
+      // Upload to ImgBB
+      const response = await fetch('https://api.imgbb.com/1/upload', {
         method: 'POST',
         body: formData
       });
       
       if (!response.ok) {
-        throw new Error('Failed to upload image to Cloudinary');
+        const errorText = await response.text();
+        throw new Error(`ImgBB API error: ${errorText}`);
       }
       
       const data = await response.json();
-      console.log('Image uploaded successfully:', data);
+      console.log('Image upload response:', data);
       
-      // Update the photoURL state with the secure URL from Cloudinary
-      setPhotoURL(data.secure_url);
-      
-      showToast('Image uploaded successfully. Click "Save Changes" to update your profile.');
+      if (data.success) {
+        // Update formState with the new image URL - this is critical!
+        setFormState(prev => ({
+          ...prev,
+          photoURL: data.data.url
+        }));
+        
+        showToast('Image uploaded successfully! Click "Save Changes" to update your profile.');
+      } else {
+        throw new Error(data.error?.message || 'Failed to upload image');
+      }
     } catch (error) {
       console.error('Error uploading image:', error);
-      setUploadError(`Failed to upload image: ${error.message}`);
+      setUploadError(`Upload failed: ${error.message}`);
       setPreviewImage(null);
     } finally {
       setUploadLoading(false);
@@ -184,17 +248,38 @@ const Profile = () => {
   };
 
   // Cancel editing and reset to original values
-  const handleCancelEdit = () => {
+  const handleCancelEdit = async () => {
     setIsEditing(false);
     setShowPhotoOptions(false);
     setPreviewImage(null);
-    fetchUserData(); // Reset to original values
+    setUploadError('');
+    
+    // Reset the dataFetchedRef so we can fetch fresh data
+    dataFetchedRef.current = false;
+    await fetchUserData();
+  };
+
+  // Helper to check if profile editing is allowed
+  const canEditProfile = () => {
+    return user?.uid && TokenService.canUpdateProfile(user.uid);
+  };
+
+  // Helper to get remaining time until next allowed update
+  const getTimeUntilNextUpdate = () => {
+    if (!user?.uid) return '';
+    
+    const lastUpdate = TokenService.getProfileUpdateTime(user.uid);
+    if (!lastUpdate) return '';
+    
+    const hours = Math.ceil(24 - ((new Date() - lastUpdate) / (1000 * 60 * 60)));
+    return `Profile editing will be available in ${hours} hours`;
   };
 
   if (!user) {
     return (
       <div className="h-screen w-full flex items-center justify-center bg-gray-900">
         <Spinner size="xl" color="info" />
+        <p className="ml-3 text-white">Loading user profile...</p>
       </div>
     );
   }
@@ -207,8 +292,9 @@ const Profile = () => {
         <div className="absolute bottom-10 -right-40 w-96 h-96 bg-purple-600 opacity-20 rounded-full filter blur-3xl" />
       </div>
       
-      <div className="container max-w-3xl z-10">
+      <div className="container max-w-3xl z-10 mt-16">
         <h1 className="text-2xl md:text-3xl font-bold mb-6 text-center text-white">Your Profile</h1>
+        
         {/* Toast notification */}
         {toast.show && (
           <Toast className="mb-6 mx-auto max-w-lg">
@@ -230,11 +316,15 @@ const Profile = () => {
             <div className="relative group">
               <div className="rounded-full overflow-hidden w-24 h-24 md:w-28 md:h-28 border-4 border-blue-600/30 shadow-lg shadow-blue-700/20">
                 <Avatar 
-                  img={previewImage || photoURL} 
+                  img={previewImage || formState.photoURL || DEFAULT_AVATAR} 
                   size="xl" 
                   rounded 
-                  alt={user.displayName || 'User profile picture'} 
+                  alt={`${formState.firstName || 'User'} profile picture`} 
                   className="w-full h-full object-cover"
+                  onError={(e) => {
+                    e.target.onerror = null; 
+                    e.target.src = DEFAULT_AVATAR;
+                  }}
                 />
               </div>
               
@@ -250,8 +340,10 @@ const Profile = () => {
             </div>
             
             {/* User name display */}
-            <h2 className="text-lg md:text-xl font-semibold mt-3 text-white">{`${firstName} ${lastName}`}</h2>
-            <p className="text-sm text-gray-400">{user.email}</p>
+            <h2 className="text-lg md:text-xl font-semibold mt-3 text-white">
+              {formState.firstName ? `${formState.firstName} ${formState.lastName}` : (user.displayName || 'User')}
+            </h2>
+            <p className="text-sm text-gray-400">{formState.email || user.email}</p>
             
             {/* Photo URL edit popup */}
             {showPhotoOptions && (
@@ -274,8 +366,8 @@ const Profile = () => {
                       id="photoURL"
                       type="text"
                       icon={HiPhotograph}
-                      value={photoURL}
-                      onChange={(e) => setPhotoURL(e.target.value)}
+                      value={formState.photoURL}
+                      onChange={handleInputChange}
                       placeholder="https://example.com/profile.jpg"
                       sizing="sm"
                       className="mt-1 bg-gray-700 border-gray-600 text-white"
@@ -295,13 +387,13 @@ const Profile = () => {
                         )}
                         <div className="mt-1 text-xs text-gray-300">
                           <p>{uploadLoading ? 'Uploading...' : 'Click to upload an image'}</p>
-                          <p className="text-xs text-gray-400">JPG, PNG, GIF (max 2MB)</p>
+                          <p className="text-xs text-gray-400">JPG, PNG, GIF or any other image format</p>
                         </div>
                         <input
                           id="file-upload"
                           name="file-upload"
                           type="file"
-                          accept="image/jpeg, image/png, image/gif"
+                          accept="image/*"
                           className="sr-only"
                           onChange={handleFileUpload}
                           disabled={uploadLoading}
@@ -345,22 +437,25 @@ const Profile = () => {
                     <input
                       id="firstName"
                       type="text"
-                      value={firstName}
-                      onChange={handleFirstNameChange}
+                      value={formState.firstName}
+                      onChange={handleInputChange}
                       required
-                      className="w-full bg-gray-700 border-gray-600 text-white rounded-lg text-sm px-2.5 py-2 pl-9 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full bg-gray-700 border border-gray-600 text-white rounded-lg text-sm px-2.5 py-2.5 pl-10 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm"
                     />
                   </div>
                 ) : (
-                  <TextInput
-                    id="firstName-readonly"
-                    type="text"
-                    icon={HiUser}
-                    value={firstName}
-                    disabled
-                    sizing="sm"
-                    className="mt-1 bg-gray-700 border-gray-600 text-gray-400"
-                  />
+                  <div className="mt-1 relative">
+                    <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                      <HiUser className="w-4 h-4 text-gray-400" />
+                    </div>
+                    <input
+                      id="firstName-readonly"
+                      type="text"
+                      value={formState.firstName}
+                      disabled
+                      className="w-full bg-gray-800 border border-gray-600 text-gray-400 rounded-lg text-sm px-2.5 py-2.5 pl-10 shadow-sm"
+                    />
+                  </div>
                 )}
               </div>
               <div>
@@ -373,37 +468,43 @@ const Profile = () => {
                     <input
                       id="lastName"
                       type="text"
-                      value={lastName}
-                      onChange={handleLastNameChange}
-                      className="w-full bg-gray-700 border-gray-600 text-white rounded-lg text-sm px-2.5 py-2 pl-9 focus:ring-blue-500 focus:border-blue-500"
+                      value={formState.lastName}
+                      onChange={handleInputChange}
+                      className="w-full bg-gray-700 border border-gray-600 text-white rounded-lg text-sm px-2.5 py-2.5 pl-10 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm"
                     />
                   </div>
                 ) : (
-                  <TextInput
-                    id="lastName-readonly"
-                    type="text"
-                    icon={HiUser}
-                    value={lastName}
-                    disabled
-                    sizing="sm"
-                    className="mt-1 bg-gray-700 border-gray-600 text-gray-400"
-                  />
+                  <div className="mt-1 relative">
+                    <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                      <HiUser className="w-4 h-4 text-gray-400" />
+                    </div>
+                    <input
+                      id="lastName-readonly"
+                      type="text"
+                      value={formState.lastName}
+                      disabled
+                      className="w-full bg-gray-800 border border-gray-600 text-gray-400 rounded-lg text-sm px-2.5 py-2.5 pl-10 shadow-sm"
+                    />
+                  </div>
                 )}
               </div>
             </div>
             
             <div>
               <Label htmlFor="email" value="Email Address" className="text-xs font-medium text-gray-300" />
-              <TextInput
-                id="email"
-                type="email"
-                icon={HiMail}
-                value={user.email}
-                disabled
-                readOnly
-                sizing="sm"
-                className="mt-1 bg-gray-700 border-gray-600 text-gray-400"
-              />
+              <div className="mt-1 relative">
+                <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                  <HiMail className="w-4 h-4 text-gray-400" />
+                </div>
+                <input
+                  id="email"
+                  type="email"
+                  value={formState.email || user.email || ''}
+                  disabled
+                  readOnly
+                  className="w-full bg-gray-800 border border-gray-600 text-gray-400 rounded-lg text-sm px-2.5 py-2.5 pl-10 shadow-sm"
+                />
+              </div>
               <div className="mt-1 flex items-center">
                 {user.emailVerified ? (
                   <span className="text-xs text-green-500 flex items-center">
@@ -437,41 +538,59 @@ const Profile = () => {
                       : 'N/A'}
                   </p>
                 </div>
+                {lastUpdateTime && (
+                  <div>
+                    <p className="text-xs text-gray-400">Last profile update</p>
+                    <p className="text-sm font-medium text-gray-300">
+                      {lastUpdateTime.toLocaleString()}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
             
-            <div className="flex justify-end space-x-3 pt-3">
-              {isEditing ? (
-                <>
+            <div className="flex flex-col space-y-2 pt-3">
+              {!canEditProfile() && (
+                <p className="text-xs text-amber-500">
+                  {getTimeUntilNextUpdate()}
+                </p>
+              )}
+              
+              <div className="flex justify-end space-x-3">
+                {isEditing ? (
+                  <>
+                    <Button 
+                      color="dark" 
+                      onClick={handleCancelEdit}
+                      size="sm"
+                      className="bg-gray-700 hover:bg-gray-600"
+                    >
+                      Cancel
+                    </Button>
+                    <Button 
+                      type="submit" 
+                      disabled={loading}
+                      color="blue"
+                      className="bg-blue-600 hover:bg-blue-700"
+                      size="sm"
+                    >
+                      {loading ? <Spinner size="sm" className="mr-1" /> : null}
+                      Save Changes
+                    </Button>
+                  </>
+                ) : (
                   <Button 
-                    color="dark" 
-                    onClick={handleCancelEdit}
-                    size="sm"
-                    className="bg-gray-700 hover:bg-gray-600"
-                  >
-                    Cancel
-                  </Button>
-                  <Button 
-                    type="submit" 
-                    disabled={loading}
+                    onClick={() => setIsEditing(true)}
                     color="blue"
                     className="bg-blue-600 hover:bg-blue-700"
                     size="sm"
+                    disabled={!canEditProfile()}
+                    title={!canEditProfile() ? "Profile can only be updated once per day" : ""}
                   >
-                    {loading ? <Spinner size="sm" className="mr-1" /> : null}
-                    Save Changes
+                    Edit Profile
                   </Button>
-                </>
-              ) : (
-                <Button 
-                  onClick={() => setIsEditing(true)}
-                  color="blue"
-                  className="bg-blue-600 hover:bg-blue-700"
-                  size="sm"
-                >
-                  Edit Profile
-                </Button>
-              )}
+                )}
+              </div>
             </div>
           </form>
         </Card>
