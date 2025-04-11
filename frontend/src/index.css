@@ -9,7 +9,7 @@ html, body {
 }
 
 body {
-  @apply text-black m-0 p-0 overflow-x-hidden min-h-screen;
+  @apply text-white m-0 p-0 overflow-x-hidden min-h-screen;
   font-family: 'Inter', 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

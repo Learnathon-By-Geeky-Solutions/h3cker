@@ -1,5 +1,3 @@
-// --- START OF FILE TokenService.js ---
-
 const TokenService = {
   // Key names for local storage
   tokenKey: 'auth_token',
@@ -94,7 +92,6 @@ const TokenService = {
       // Optional: Implement logic to remove the oldest device
       // userDevices.sort((a, b) => new Date(a.lastActive) - new Date(b.lastActive));
       // userDevices = userDevices.slice(1); // Remove the oldest
-      // Fall through to add the new device after removing oldest, or return false here
       return false; // Current behavior: Deny login on new device
     }
 
@@ -160,8 +157,8 @@ const TokenService = {
    * @returns {string} A name for the current device
    */
   getDeviceName() {
-    // navigator.userAgentData is experimental, provide fallbacks
-    const platform = navigator.userAgentData?.platform || navigator.platform || 'Unknown Device';
+    // Avoiding deprecated navigator.platform property
+    const platform = navigator.userAgentData?.platform || 'Unknown Device';
     const browser = this.getBrowserName();
     return `${browser} on ${platform}`;
   },
@@ -213,7 +210,6 @@ const TokenService = {
   isTokenExpired() {
       const token = this.getToken();
       if (!token) {
-          // console.log("Token expired check: No token found.");
           return true;
       }
 
@@ -232,11 +228,6 @@ const TokenService = {
        }
 
       const isExpired = Date.now() > expiryTime;
-    //   if (isExpired) {
-    //       console.log(`Token expired check: Expired at ${new Date(expiryTime).toLocaleString()}`);
-    //   } else {
-    //       console.log(`Token expiry check: Valid until ${new Date(expiryTime).toLocaleString()}`);
-    //   }
       return isExpired;
   },
 
@@ -421,12 +412,9 @@ const TokenService = {
     localStorage.removeItem(this.tokenKey);
     localStorage.removeItem(this.tokenExpiryKey);
     this.clearGoogleAuthCache(); // Clear login hints
-    // Optional: Clear user devices if you want to force re-login on all devices
-    // localStorage.removeItem(this.userDevicesKey);
     // Optional: Don't remove currentDeviceKey to potentially recognize the device later
     console.log('Authentication data cleared.');
   }
 };
 
 export default TokenService;
-// --- END OF FILE TokenService.js ---

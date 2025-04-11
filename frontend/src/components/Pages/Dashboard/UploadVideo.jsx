@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Card,
   Button,
@@ -21,12 +21,10 @@ import {
   ArrowLeft
 } from 'lucide-react';
 import VideoService from "../../../utils/VideoService";
-import { AuthContext } from '../../../contexts/AuthProvider/AuthProvider';
 
 const UploadVideo = () => {
-  const { user } = useContext(AuthContext);
+  const thumbnailCanvasRef = useRef(null);
 
-  // === State Definitions ===
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -35,6 +33,7 @@ const UploadVideo = () => {
   });
   const [videoFile, setVideoFile] = useState(null);
   const [thumbnailFile, setThumbnailFile] = useState(null);
+  const [processedThumbnailFile, setProcessedThumbnailFile] = useState(null);
   const [generatedFilename, setGeneratedFilename] = useState('');
   const [uploadUrls, setUploadUrls] = useState({
     videoUrl: null,
@@ -44,9 +43,11 @@ const UploadVideo = () => {
   const [statusMessage, setStatusMessage] = useState('');
   const [uploadProgress, setUploadProgress] = useState(0);
   const [currentStep, setCurrentStep] = useState(1);
-  const [debugInfo, setDebugInfo] = useState(null); // For development only
+  const [debugInfo, setDebugInfo] = useState(null); 
   const [videoPreviewUrl, setVideoPreviewUrl] = useState(null);
   const [thumbnailPreviewUrl, setThumbnailPreviewUrl] = useState(null);
+  const [thumbDimensions, setThumbDimensions] = useState({ width: 0, height: 0 });
+  const [isAutoCropping, setIsAutoCropping] = useState(false);
 
   const categories = [
     { value: 'educational', label: 'Educational' },
@@ -60,7 +61,9 @@ const UploadVideo = () => {
     { value: 'other', label: 'Other' },
   ];
 
-  // === Logic ===
+  const TARGET_WIDTH = 1280;
+  const TARGET_HEIGHT = 720;
+
   useEffect(() => {
     const currentVideoUrl = videoPreviewUrl;
     const currentThumbnailUrl = thumbnailPreviewUrl;
@@ -68,7 +71,6 @@ const UploadVideo = () => {
     return () => {
       if (currentVideoUrl) {
         URL.revokeObjectURL(currentVideoUrl);
-  
       }
       if (currentThumbnailUrl) {
         URL.revokeObjectURL(currentThumbnailUrl);
@@ -76,6 +78,81 @@ const UploadVideo = () => {
     };
   }, [videoPreviewUrl, thumbnailPreviewUrl]);
 
+  // Handler for canvas.toBlob callback to avoid excessive nesting
+  const handleCanvasBlob = (blob, file, resolve, reject) => {
+    if (!blob) {
+      setIsAutoCropping(false);
+      reject(new Error("Failed to create thumbnail blob"));
+      return;
+    }
+    
+    const processedFile = new File(
+      [blob], 
+      `processed_${file.name.split('.')[0]}.jpg`, 
+      { type: 'image/jpeg' }
+    );
+    
+    setProcessedThumbnailFile(processedFile);
+    setIsAutoCropping(false);
+    resolve(processedFile);
+  };
+
+  // Image onload handler to avoid excessive nesting
+  const handleImageLoad = (img, file, resolve, reject) => {
+    const canvas = thumbnailCanvasRef.current;
+    if (!canvas) {
+      setIsAutoCropping(false);
+      reject(new Error("Canvas reference not available"));
+      return;
+    }
+
+    const ctx = canvas.getContext('2d');
+    const { width: sourceWidth, height: sourceHeight } = img;
+    
+    canvas.width = TARGET_WIDTH;
+    canvas.height = TARGET_HEIGHT;
+    
+    let drawWidth, drawHeight, offsetX = 0, offsetY = 0;
+    
+    const sourceAspect = sourceWidth / sourceHeight;
+    const targetAspect = TARGET_WIDTH / TARGET_HEIGHT;
+    
+    if (sourceAspect > targetAspect) {
+      drawHeight = TARGET_HEIGHT;
+      drawWidth = sourceWidth * (TARGET_HEIGHT / sourceHeight);
+      offsetX = (TARGET_WIDTH - drawWidth) / 2;
+    } else {
+      drawWidth = TARGET_WIDTH;
+      drawHeight = sourceHeight * (TARGET_WIDTH / sourceWidth);
+      offsetY = (TARGET_HEIGHT - drawHeight) / 2;
+    }
+    
+    ctx.clearRect(0, 0, TARGET_WIDTH, TARGET_HEIGHT);
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, TARGET_WIDTH, TARGET_HEIGHT);
+    ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
+    
+    canvas.toBlob(
+      (blob) => handleCanvasBlob(blob, file, resolve, reject), 
+      'image/jpeg', 
+      0.9
+    );
+  };
+
+  const processThumbnail = (file) => {
+    return new Promise((resolve, reject) => {
+      setIsAutoCropping(true);
+      const img = new Image();
+      img.onload = () => handleImageLoad(img, file, resolve, reject);
+      
+      img.onerror = () => {
+        setIsAutoCropping(false);
+        reject(new Error("Failed to load thumbnail image"));
+      };
+      
+      img.src = URL.createObjectURL(file);
+    });
+  };
 
   const handleInputChange = (e) => {
     const { id, value } = e.target;
@@ -131,10 +208,7 @@ const UploadVideo = () => {
     setDebugInfo(null);
 
     try {
-  
       const response = await VideoService.initiateVideoUpload(metadataPayload);
-
-
       setDebugInfo(response);
 
       if (!response?.video_upload_url || !response?.thumbnail_upload_url) {
@@ -148,7 +222,6 @@ const UploadVideo = () => {
       setCurrentStep(2);
       setUploadStatus(null);
       setStatusMessage('');
-
     } catch (error) {
       console.error('Error initiating upload:', error);
       setUploadStatus('error');
@@ -161,7 +234,6 @@ const UploadVideo = () => {
 
     if (videoPreviewUrl) {
       URL.revokeObjectURL(videoPreviewUrl);
-     
       setVideoPreviewUrl(null);
     }
 
@@ -169,6 +241,7 @@ const UploadVideo = () => {
       setVideoFile(null);
       return;
     }
+    
     if (!file.type.startsWith('video/')) {
       setStatusMessage('Invalid file type. Please select a video file.');
       setUploadStatus('error');
@@ -177,7 +250,6 @@ const UploadVideo = () => {
       return;
     }
 
-
     setVideoFile(file);
     setUploadStatus(null);
     setStatusMessage('');
@@ -185,25 +257,71 @@ const UploadVideo = () => {
     const newPreviewUrl = URL.createObjectURL(file);
     setVideoPreviewUrl(newPreviewUrl);
     
+    generateThumbnailFromVideo(file);
+  };
+
+  // Handler for canvas.toBlob in video thumbnail generation to avoid deep nesting
+  const handleVideoThumbnailBlob = (blob) => {
+    if (blob) {
+      const thumbnailFile = new File([blob], `thumbnail_${Date.now()}.jpg`, { type: 'image/jpeg' });
+      
+      setStatusMessage('Auto-generated thumbnail from video. You can replace it if needed.');
+      setTimeout(() => setStatusMessage(''), 5000);
+      
+      handleThumbnailChangeWithFile(thumbnailFile);
+    }
+  };
+
+  // Handle video seeking for thumbnail generation
+  const handleVideoSeeked = (video) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    
+    canvas.toBlob(handleVideoThumbnailBlob, 'image/jpeg', 0.95);
+  };
+
+  const generateThumbnailFromVideo = (videoFile) => {
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    
+    video.onloadedmetadata = () => {
+      video.currentTime = video.duration * 0.25;
+    };
+    
+    video.onseeked = () => handleVideoSeeked(video);
+    
+    video.onerror = () => {
+      console.error('Error extracting thumbnail from video');
+    };
+    
+    video.src = URL.createObjectURL(videoFile);
   };
 
   const handleThumbnailChange = (e) => {
     const file = e.target.files?.[0];
-
-    if (thumbnailPreviewUrl) {
-      URL.revokeObjectURL(thumbnailPreviewUrl);
-   
-      setThumbnailPreviewUrl(null);
-    }
-
     if (!file) {
       setThumbnailFile(null);
       return;
     }
+    
+    handleThumbnailChangeWithFile(file);
+  };
+
+  const handleThumbnailChangeWithFile = async (file) => {
+    if (thumbnailPreviewUrl) {
+      URL.revokeObjectURL(thumbnailPreviewUrl);
+      setThumbnailPreviewUrl(null);
+    }
+
     if (!file.type.startsWith('image/')) {
       setStatusMessage('Invalid file type. Please select an image file (JPG, PNG, WEBP).');
       setUploadStatus('error');
-      e.target.value = '';
+      const thumbInput = document.getElementById('thumbnail');
+      if (thumbInput) thumbInput.value = '';
       setThumbnailFile(null);
       return;
     }
@@ -212,16 +330,33 @@ const UploadVideo = () => {
     setUploadStatus(null);
     setStatusMessage('');
 
-    const newPreviewUrl = URL.createObjectURL(file);
-    setThumbnailPreviewUrl(newPreviewUrl);
-
+    try {
+      const processedFile = await processThumbnail(file);
+      
+      const newPreviewUrl = URL.createObjectURL(processedFile);
+      setThumbnailPreviewUrl(newPreviewUrl);
+      
+      const img = new Image();
+      img.onload = () => {
+        setThumbDimensions({
+          width: img.width,
+          height: img.height
+        });
+      };
+      img.src = newPreviewUrl;
+      
+    } catch (error) {
+      console.error('Error processing thumbnail:', error);
+      setStatusMessage('Failed to process thumbnail. Please try another image.');
+      setUploadStatus('error');
+    }
   };
 
   const validateFileForm = () => {
     if (!videoFile) {
       return { valid: false, message: 'Please select a video file to upload.' };
     }
-    if (!thumbnailFile) {
+    if (!processedThumbnailFile && !thumbnailFile) {
       return { valid: false, message: 'Please select a thumbnail image.' };
     }
     if (!uploadUrls.videoUrl || !uploadUrls.thumbnailUrl) {
@@ -243,48 +378,39 @@ const UploadVideo = () => {
     setUploadProgress(0);
     setStatusMessage('Starting upload...');
 
-
     if (videoPreviewUrl) {
       URL.revokeObjectURL(videoPreviewUrl);
-     
       setVideoPreviewUrl(null);
     }
     if (thumbnailPreviewUrl) {
       URL.revokeObjectURL(thumbnailPreviewUrl);
-   
       setThumbnailPreviewUrl(null);
     }
 
     try {
-
       setStatusMessage(`Uploading video: ${videoFile.name}...`);
       await VideoService.uploadFileToBlob(uploadUrls.videoUrl, videoFile, (progress) => {
-  
         setUploadProgress(progress * 70); 
         setStatusMessage(`Uploading video: ${Math.round(progress * 100)}%`);
       });
 
-      setUploadProgress(70); 
+      setUploadProgress(70);
 
-
-      setStatusMessage(`Uploading thumbnail: ${thumbnailFile.name}...`);
-      await VideoService.uploadFileToBlob(uploadUrls.thumbnailUrl, thumbnailFile, (progress) => {
-   
+      const thumbnailToUpload = processedThumbnailFile || thumbnailFile;
+      setStatusMessage(`Uploading thumbnail: ${thumbnailToUpload.name}...`);
+      await VideoService.uploadFileToBlob(uploadUrls.thumbnailUrl, thumbnailToUpload, (progress) => {
         setUploadProgress(70 + (progress * 30));
         setStatusMessage(`Uploading thumbnail: ${Math.round(progress * 100)}%`);
       });
-    
 
-      setUploadProgress(100); // Ensure 100% at the end
+      setUploadProgress(100);
       setUploadStatus('success');
       setStatusMessage('Video and thumbnail uploaded successfully!');
       setCurrentStep(3);
-
     } catch (error) {
       console.error('File upload failed:', error);
       setUploadStatus('error');
       setStatusMessage(`Upload failed: ${error.message || 'An unknown error occurred during upload.'}`);
-  
     }
   };
 
@@ -292,6 +418,7 @@ const UploadVideo = () => {
     setFormData({ title: '', description: '', category: '', visibility: 'private' });
     setVideoFile(null);
     setThumbnailFile(null);
+    setProcessedThumbnailFile(null);
     setGeneratedFilename('');
     setUploadUrls({ videoUrl: null, thumbnailUrl: null });
     setUploadStatus(null);
@@ -300,18 +427,14 @@ const UploadVideo = () => {
     setCurrentStep(1);
     setDebugInfo(null);
 
-
     if (videoPreviewUrl) {
         URL.revokeObjectURL(videoPreviewUrl);
-  
     }
     if (thumbnailPreviewUrl) {
         URL.revokeObjectURL(thumbnailPreviewUrl);
-     
     }
     setVideoPreviewUrl(null);
     setThumbnailPreviewUrl(null);
-
 
     const videoInput = document.getElementById('video');
     const thumbInput = document.getElementById('thumbnail');
@@ -319,13 +442,11 @@ const UploadVideo = () => {
     if (thumbInput) thumbInput.value = '';
   };
 
-  // === Render Functions ===
-
   const renderMetadataForm = () => (
     <form onSubmit={handleMetadataSubmit} className="space-y-4">
       <div>
         <div className="mb-2 block">
-          <Label htmlFor="title" value="Video Title (required)" />
+          <Label htmlFor="title" value="Video Title (required)" className="text-white" />
         </div>
         <TextInput
           id="title"
@@ -339,7 +460,7 @@ const UploadVideo = () => {
       </div>
       <div>
          <div className="mb-2 block">
-            <Label htmlFor="description" value="Description" />
+            <Label htmlFor="description" value="Description" className="text-white" />
          </div>
         <Textarea
           id="description"
@@ -352,7 +473,7 @@ const UploadVideo = () => {
       </div>
       <div>
          <div className="mb-2 block">
-           <Label htmlFor="category" value="Category" />
+           <Label htmlFor="category" value="Category" className="text-white" />
          </div>
         <Select id="category" value={formData.category} onChange={handleInputChange}>
           <option value="">Select a category (optional)</option>
@@ -365,14 +486,14 @@ const UploadVideo = () => {
       </div>
       <div>
         <div className="mb-2 block">
-            <Label htmlFor="visibility" value="Visibility" />
+            <Label htmlFor="visibility" value="Visibility" className="text-white" />
         </div>
         <Select id="visibility" value={formData.visibility} onChange={handleInputChange}>
           <option value="private">Private (Only you can see)</option>
           <option value="unlisted">Unlisted (Anyone with the link)</option>
           <option value="public">Public (Visible to everyone)</option>
         </Select>
-         <p className="mt-1 text-xs text-gray-400">
+         <p className="mt-1 text-xs text-gray-300">
               Choose who can view your video.
          </p>
       </div>
@@ -407,17 +528,16 @@ const UploadVideo = () => {
     <form onSubmit={handleFileUpload} className="space-y-6">
       <div className="text-center mb-6"> 
         <h3 className="text-xl font-semibold text-white">Upload Files</h3>
-        <p className="text-gray-400 mt-1">
+        <p className="text-gray-300 mt-1">
           Select the video file and a thumbnail image.
         </p>
       </div>
 
-  
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
         <div className="flex flex-col space-y-4"> 
           <div>
             <div className="mb-2 block">
-              <Label htmlFor="video" value="Video File (required)" />
+              <Label htmlFor="video" value="Video File (required)" className="text-white" />
             </div>
             <FileInput
               id="video"
@@ -448,12 +568,13 @@ const UploadVideo = () => {
                     className="absolute top-0 left-0 w-full h-full object-contain" 
                     aria-label="Video Preview"
                   >
+                    <track kind="captions" src="" label="English" />
                     Your browser does not support the video tag.
                   </video>
                  </div>
               </div>
             ) : (
-              <div className="p-3 border border-dashed border-gray-600 rounded-lg bg-gray-700/30 flex items-center justify-center text-gray-500 h-full">
+              <div className="p-3 border border-dashed border-gray-600 rounded-lg bg-gray-700/30 flex items-center justify-center text-gray-300 h-full">
                  <Video className="w-10 h-10" /> 
                  <span className="ml-2">Video preview appears here</span>
               </div>
@@ -461,52 +582,58 @@ const UploadVideo = () => {
           </div>
         </div>
 
-        {/* === Thumbnail Column === */}
         <div className="flex flex-col space-y-4"> 
           <div>
             <div className="mb-2 block">
-              <Label htmlFor="thumbnail" value="Thumbnail Image (required)" />
+              <Label htmlFor="thumbnail" value="Thumbnail Image (required)" className="text-white" />
             </div>
             <FileInput
               id="thumbnail"
               onChange={handleThumbnailChange}
               accept="image/jpeg, image/png, image/webp, image/gif"
-              helperText="Upload a preview image (JPG, PNG, WEBP). Ratio 16:9."
-              required
+              helperText="Upload a preview image. Will be auto-resized to 1280×720 (16:9)."
+              required={!thumbnailFile && !processedThumbnailFile}
             />
             {thumbnailFile && (
-              <p className="mt-2 text-xs text-green-400 flex items-center">
-                 <Check size={14} className="mr-1 flex-shrink-0"/> 
-                 <span className="truncate"> 
-                   Selected: {thumbnailFile.name} ({(thumbnailFile.size / 1024).toFixed(1)} KB)
-                 </span>
-              </p>
+              <div className="mt-2 flex items-center justify-between">
+                <p className="text-xs text-green-400 flex items-center">
+                  <Check size={14} className="mr-1 flex-shrink-0"/> 
+                  <span className="truncate"> 
+                    {isAutoCropping ? "Processing..." : `Selected: ${thumbnailFile.name} (${(thumbnailFile.size / 1024).toFixed(1)} KB)`}
+                  </span>
+                </p>
+                {isAutoCropping && <Spinner size="sm" />}
+              </div>
             )}
           </div>
-           <div className="flex-grow flex flex-col min-h-[150px]">
-              {thumbnailPreviewUrl ? (
-                <div className="p-3 border border-gray-600 rounded-lg bg-gray-700/50 flex flex-col h-full">
-                  <Label value="Thumbnail Preview" className="text-sm font-medium text-gray-300 mb-2 block flex-shrink-0"/>
-             
-                  <div className="relative w-full aspect-video bg-black rounded overflow-hidden flex-grow"> 
-                    <img
-                      src={thumbnailPreviewUrl}
-                      alt="Thumbnail Preview"
-                      className="absolute top-0 left-0 w-full h-full object-contain"
-                    />
-                   </div>
+          <div className="flex-grow flex flex-col min-h-[150px]">
+            {thumbnailPreviewUrl ? (
+              <div className="p-3 border border-gray-600 rounded-lg bg-gray-700/50 flex flex-col h-full">
+                <div className="flex justify-between items-center mb-2">
+                  <Label value="Thumbnail Preview (16:9)" className="text-sm font-medium text-gray-300 flex-shrink-0"/>
+                  <div className="text-xs text-gray-300">
+                    {thumbDimensions.width}×{thumbDimensions.height} px
+                  </div>
                 </div>
-              ) : (
-                 <div className="p-3 border border-dashed border-gray-600 rounded-lg bg-gray-700/30 flex items-center justify-center text-gray-500 h-full">
-                   <ImagePlus className="w-10 h-10" />
-                   <span className="ml-2">Thumbnail preview appears here</span>
-                 </div>
-              )}
-           </div>
+                <div className="relative w-full aspect-video bg-black rounded overflow-hidden flex-grow"> 
+                  <img
+                    src={thumbnailPreviewUrl}
+                    alt="Thumbnail Preview"
+                    className="absolute top-0 left-0 w-full h-full object-contain"
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="p-3 border border-dashed border-gray-600 rounded-lg bg-gray-700/30 flex items-center justify-center text-gray-300 h-full">
+                <ImagePlus className="w-10 h-10" />
+                <span className="ml-2">Thumbnail preview appears here</span>
+              </div>
+            )}
+          </div>
         </div>
       </div> 
 
-      <div className="flex justify-between items-center pt-5 border-t border-gray-600 mt-8"> {/* Increased top margin */}
+      <div className="flex justify-between items-center pt-5 border-t border-gray-600 mt-8">
         <Button
           type="button"
           onClick={() => {
@@ -523,9 +650,9 @@ const UploadVideo = () => {
         </Button>
         <Button
           type="submit"
-          disabled={!videoFile || !thumbnailFile || !uploadUrls.videoUrl || !uploadUrls.thumbnailUrl || uploadStatus === 'uploading'}
+          disabled={!videoFile || (!thumbnailFile && !processedThumbnailFile) || !uploadUrls.videoUrl || !uploadUrls.thumbnailUrl || uploadStatus === 'uploading' || isAutoCropping}
           color="blue"
-          isProcessing={uploadStatus === 'uploading'}
+          isProcessing={uploadStatus === 'uploading' || isAutoCropping}
           processingSpinner={<Spinner size="sm" />}
         >
           {uploadStatus === 'uploading' ? 'Uploading...' : (
@@ -544,7 +671,7 @@ const UploadVideo = () => {
         <h3 className="text-xl font-semibold text-white mb-2">
           Uploading Your Files
         </h3>
-        <p className="text-gray-400">
+        <p className="text-gray-300">
            Please keep this window open until the upload completes.
         </p>
       </div>
@@ -572,15 +699,15 @@ const UploadVideo = () => {
       <h3 className="text-xl font-bold text-white mb-2">
         Upload Complete!
       </h3>
-      <p className="text-gray-400 max-w-md mx-auto mb-8">
-        Your video <span className="font-medium text-gray-300">"{formData.title}"</span> has been successfully uploaded. It may take a few moments to process before it's available.
+      <p className="text-gray-300 max-w-md mx-auto mb-8">
+        Your video <span className="font-medium text-white">"{formData.title}"</span> has been successfully uploaded. It may take a few moments to process before it's available.
       </p>
       <div className="flex flex-col sm:flex-row justify-center items-center gap-4">
         <Button onClick={handleReset} color="gray" outline>
           Upload Another Video
         </Button>
-        <Button href="/dashboard/videos" color="blue">
-          View My Videos
+        <Button href="/dashboard" color="blue">
+          View My Dashboard
         </Button>
       </div>
     </div>
@@ -606,31 +733,58 @@ const UploadVideo = () => {
     );
   };
 
-  const renderSteps = () => (
-    <ol className="flex items-center w-full text-sm font-medium text-center text-gray-400 sm:text-base mb-8">
-        {[
-            { number: 1, label: 'Video Details' },
-            { number: 2, label: 'Upload Files' },
-            { number: 3, label: 'Complete' }
-        ].map((step, index, arr) => (
-            <li key={step.number} className={`flex items-center ${
-                currentStep === step.number ? 'text-blue-500' :
-                currentStep > step.number ? 'text-green-500' : 'text-gray-500'
-            } ${index < arr.length - 1 ? "w-full after:content-[''] after:w-full after:h-1 after:border-b after:border-gray-600 after:border-1 after:inline-block" : ''} ${index > 0 ? 'md:w-full' : ''}`}>
-                 <span className={`flex items-center justify-center ${index < arr.length - 1 ? 'after:content-["/"] sm:after:hidden after:mx-2 after:text-gray-500' : ''}`}>
-                     <div className={`flex items-center justify-center w-8 h-8 rounded-full border-2 shrink-0 mr-2 ${
-                          currentStep === step.number ? 'border-blue-500 bg-blue-900' :
-                          currentStep > step.number ? 'border-green-500 bg-green-900' :
-                          'border-gray-600 bg-gray-700'
-                     }`}>
-                        {currentStep > step.number ? <Check size={16} /> : <span>{step.number}</span>}
-                     </div>
-                    {step.label}
-                </span>
+  // Helper function to get step icon background class
+  const getStepIconClass = (stepNumber) => {
+    if (currentStep === stepNumber) {
+      return 'border-blue-500 bg-blue-900';
+    } 
+    if (currentStep > stepNumber) {
+      return 'border-green-500 bg-green-900';
+    }
+    return 'border-gray-600 bg-gray-700';
+  };
+
+  const renderSteps = () => {
+    const steps = [
+      { number: 1, label: 'Video Details' },
+      { number: 2, label: 'Upload Files' },
+      { number: 3, label: 'Complete' }
+    ];
+    
+    return (
+      <ol className="flex items-center w-full text-sm font-medium text-center text-gray-400 sm:text-base mb-8">
+        {steps.map((step, index, arr) => {
+          let textColorClass = 'text-gray-500';
+          if (currentStep === step.number) {
+            textColorClass = 'text-blue-500';
+          } else if (currentStep > step.number) {
+            textColorClass = 'text-green-500';
+          }
+          
+          const hasAfterContent = index < arr.length - 1;
+          const iconClassName = getStepIconClass(step.number);
+          
+          return (
+            <li 
+              key={step.number} 
+              className={`flex items-center ${textColorClass} ${
+                hasAfterContent ? "w-full after:content-[''] after:w-full after:h-1 after:border-b after:border-gray-600 after:border-1 after:inline-block" : ''
+              } ${index > 0 ? 'md:w-full' : ''}`}
+            >
+              <span className={`flex items-center justify-center ${
+                hasAfterContent ? 'after:content-["/"] sm:after:hidden after:mx-2 after:text-gray-500' : ''
+              }`}>
+                <div className={`flex items-center justify-center w-8 h-8 rounded-full border-2 shrink-0 mr-2 ${iconClassName}`}>
+                  {currentStep > step.number ? <Check size={16} /> : <span>{step.number}</span>}
+                </div>
+                {step.label}
+              </span>
             </li>
-        ))}
-    </ol>
-);
+          );
+        })}
+      </ol>
+    );
+  };
 
   const renderContent = () => {
     if (uploadStatus === 'uploading') {
@@ -644,7 +798,7 @@ const UploadVideo = () => {
       case 3:
         return renderSuccessMessage();
       default:
-        return <p className="text-center text-gray-400">Loading...</p>;
+        return <p className="text-center text-gray-300">Loading...</p>;
     }
   };
 
@@ -661,14 +815,13 @@ const UploadVideo = () => {
             {JSON.stringify(debugInfo, null, 2)}
           </pre>
         </div>
-         <div className="mt-2">
-             <p className="font-medium">Generated Filename Hint:</p>
-             <p className="text-mono bg-black p-1 rounded mt-1 inline-block">{generatedFilename || 'Not generated yet'}</p>
-         </div>
+        <div className="mt-2">
+            <p className="font-medium">Generated Filename Hint:</p>
+            <p className="text-mono bg-black p-1 rounded mt-1 inline-block">{generatedFilename || 'Not generated yet'}</p>
+        </div>
       </div>
     );
   };
-
 
   return (
     <div className="max-w-3xl mx-auto p-4 sm:p-0">
@@ -682,6 +835,13 @@ const UploadVideo = () => {
       </Card>
 
       {renderDebugInfo()}
+
+      <canvas 
+        ref={thumbnailCanvasRef} 
+        className="hidden" 
+        width={TARGET_WIDTH} 
+        height={TARGET_HEIGHT}
+      />
     </div>
   );
 };
