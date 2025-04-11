@@ -18,12 +18,11 @@ DEBUG =os.getenv("DEBUG", "False").lower() == "true"
 ENVIRONMENT = os.getenv("ENVIRONMENT")
 
 if ENVIRONMENT == 'PROD':
-    ALLOWED_HOSTS = [
-        
-    ]
+    # Reads comma-separated allowed hosts from environment variable
+    allowed_hosts_str = os.getenv('ALLOWED_HOSTS')
+    ALLOWED_HOSTS = [host.strip() for host in allowed_hosts_str.split(',')]
 else:
     ALLOWED_HOSTS = ["*"]  # Allow all hosts in development
-
 # Application definition
 
 INSTALLED_APPS = [
@@ -143,11 +142,10 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 if ENVIRONMENT == 'PROD':
     CORS_ALLOW_ALL_ORIGINS = False
-    CORS_ALLOWED_ORIGINS = [
-        "https://frontend-domain.com",
-        "https://api-domain.com"
-    ]
     CORS_ALLOW_CREDENTIALS = True
+    cors_origins_str = os.getenv('CORS_ALLOWED_ORIGINS', '')
+    if cors_origins_str:
+        CORS_ALLOWED_ORIGINS = [origin.strip() for origin in cors_origins_str.split(',')]
 else:
     CORS_ALLOW_ALL_ORIGINS = True  # Development only
     CORS_ALLOW_CREDENTIALS = True
