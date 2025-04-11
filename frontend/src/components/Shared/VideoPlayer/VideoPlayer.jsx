@@ -1,229 +1,432 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
-import { Play, X, AlertCircle } from 'lucide-react';
-import FaceTracker from '../../Shared/FaceTracker/FaceTracker';
-import { extractYouTubeId, getYouTubeThumbnail, createYouTubeEmbedUrl } from './youtubeUtils';
+import { Button, Spinner } from 'flowbite-react';
+import { Play, Pause, Volume2, VolumeX, Maximize, Settings, RotateCcw } from 'lucide-react';
 
-/**
- * VideoPlayer component with face tracking
- * Fixed issues with black screen and refactored for lower complexity
- */
-const VideoPlayer = ({ videoSource, title, onTrackingData, previewImage }) => {
-  // Component state
+const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded }) => {
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isFullScreen, setIsFullScreen] = useState(false);
-  const [trackingActive, setTrackingActive] = useState(false);
-  const [showWarning, setShowWarning] = useState(false);
-  const [youtubeId, setYoutubeId] = useState(null);
-  const [videoLoaded, setVideoLoaded] = useState(false);
-  
-  // Refs
+  const [isMuted, setIsMuted] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [volume, setVolume] = useState(1);
+  const [showControls, setShowControls] = useState(true);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [playbackRate, setPlaybackRate] = useState(1);
+
   const videoRef = useRef(null);
-  const containerRef = useRef(null);
-  
-  // Process video source on mount
+  const videoContainerRef = useRef(null);
+  const controlsTimerRef = useRef(null);
+
   useEffect(() => {
-    if (!videoSource) return;
-    
-    // Check if YouTube video and extract ID
-    const id = extractYouTubeId(videoSource);
-    if (id) {
-      setYoutubeId(id);
+    if (!videoUrl) {
+      setError('Video URL is missing');
+      setIsLoading(false);
+      return;
     }
-  }, [videoSource]);
-  
-  // Handler functions
-  const handlePlayClick = useCallback(() => {
-    setShowWarning(true);
-  }, []);
-  
-  const handleStartVideo = useCallback(() => {
-    setShowWarning(false);
-    setIsPlaying(true);
-    setTrackingActive(true);
+
+    const videoElement = videoRef.current;
     
-    // Delay going fullscreen to allow components to mount
-    setTimeout(() => {
-      setIsFullScreen(true);
-    }, 100);
-  }, []);
-  
-  const handleCloseVideo = useCallback(() => {
-    setIsFullScreen(false);
-    setTrackingActive(false);
-    
-    // Delay hiding video for smooth animation
-    setTimeout(() => {
+    const handleCanPlay = () => {
+      setIsLoading(false);
+      setDuration(videoElement.duration);
+      if (autoPlay) {
+        videoElement.play().catch(e => {
+          console.error('Autoplay prevented:', e);
+        });
+      }
+    };
+
+    const handleError = (e) => {
+      console.error('Error loading video:', e);
+      setError('Failed to load video. Please try again later.');
+      setIsLoading(false);
+    };
+
+    const handleTimeUpdate = () => {
+      setCurrentTime(videoElement.currentTime);
+    };
+
+    const handleEnded = () => {
       setIsPlaying(false);
-      setVideoLoaded(false);
-    }, 300);
-  }, []);
-  
-  const handleTrackingData = useCallback((data) => {
-    if (onTrackingData) {
-      onTrackingData(data);
+      if (onEnded) onEnded();
+    };
+
+    const handlePlay = () => {
+      setIsPlaying(true);
+    };
+
+    const handlePause = () => {
+      setIsPlaying(false);
+    };
+
+    const handleVolumeChange = () => {
+      setVolume(videoElement.volume);
+      setIsMuted(videoElement.muted);
+    };
+
+    const handleKeyDown = (e) => {
+      if (document.activeElement === videoElement || document.activeElement === videoContainerRef.current) {
+        switch (e.key.toLowerCase()) {
+          case ' ':
+          case 'k':
+            e.preventDefault();
+            togglePlay();
+            break;
+          case 'f':
+            e.preventDefault();
+            toggleFullscreen();
+            break;
+          case 'm':
+            e.preventDefault();
+            toggleMute();
+            break;
+          case 'arrowright':
+            e.preventDefault();
+            skip(10);
+            break;
+          case 'arrowleft':
+            e.preventDefault();
+            skip(-10);
+            break;
+          case 'arrowup':
+            e.preventDefault();
+            changeVolume(0.1);
+            break;
+          case 'arrowdown':
+            e.preventDefault();
+            changeVolume(-0.1);
+            break;
+          default:
+            break;
+        }
+      }
+    };
+
+    const handleFullscreenChange = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement));
+    };
+
+    videoElement.addEventListener('canplay', handleCanPlay);
+    videoElement.addEventListener('error', handleError);
+    videoElement.addEventListener('timeupdate', handleTimeUpdate);
+    videoElement.addEventListener('ended', handleEnded);
+    videoElement.addEventListener('play', handlePlay);
+    videoElement.addEventListener('pause', handlePause);
+    videoElement.addEventListener('volumechange', handleVolumeChange);
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+
+    const handleMouseMove = () => {
+      setShowControls(true);
+      resetControlsTimer();
+    };
+
+    videoContainerRef.current.addEventListener('mousemove', handleMouseMove);
+
+    return () => {
+      videoElement.removeEventListener('canplay', handleCanPlay);
+      videoElement.removeEventListener('error', handleError);
+      videoElement.removeEventListener('timeupdate', handleTimeUpdate);
+      videoElement.removeEventListener('ended', handleEnded);
+      videoElement.removeEventListener('play', handlePlay);
+      videoElement.removeEventListener('pause', handlePause);
+      videoElement.removeEventListener('volumechange', handleVolumeChange);
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      
+      if (videoContainerRef.current) {
+        videoContainerRef.current.removeEventListener('mousemove', handleMouseMove);
+      }
+      
+      if (controlsTimerRef.current) {
+        clearTimeout(controlsTimerRef.current);
+      }
+    };
+  }, [videoUrl, autoPlay, onEnded]);
+
+  useEffect(() => {
+    setIsLoading(true);
+    setError(null);
+    setCurrentTime(0);
+    setDuration(0);
+    setIsPlaying(false);
+  }, [videoUrl]);
+
+  const resetControlsTimer = () => {
+    if (controlsTimerRef.current) {
+      clearTimeout(controlsTimerRef.current);
     }
-  }, [onTrackingData]);
-  
-  const handlePermissionGranted = useCallback(() => {
-    // Video should already be visible by now
-    console.log('Permission granted, ready to play');
-  }, []);
-  
-  const handleVideoLoad = useCallback(() => {
-    setVideoLoaded(true);
-  }, []);
-  
-  // Get preview image
-  const getPreviewImage = () => {
-    if (previewImage) return previewImage;
-    if (youtubeId) return getYouTubeThumbnail(youtubeId);
-    return '/api/placeholder/400/225';
+    
+    if (isPlaying) {
+      controlsTimerRef.current = setTimeout(() => {
+        setShowControls(false);
+      }, 3000);
+    }
   };
-  
-  // Render video preview
-  const renderPreview = () => (
-    <div className="absolute inset-0 bg-gradient-to-r from-gray-900/50 via-transparent to-gray-900/50">
-      <img 
-        src={getPreviewImage()} 
-        alt={title || "Video preview"} 
-        className="w-full h-full object-cover" 
-        onError={(e) => {
-          e.target.src = '/api/placeholder/400/225';
-        }}
-      />
-      <div className="absolute inset-0 flex items-center justify-center">
-        <button
-          onClick={handlePlayClick}
-          className="w-16 h-16 bg-blue-600 bg-opacity-90 rounded-full flex items-center justify-center hover:bg-opacity-100 transition-all transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-400"
-          type="button"
-          aria-label="Play video"
-        >
-          <Play size={32} className="text-white ml-1" />
-        </button>
-      </div>
-    </div>
-  );
-  
-  // Render YouTube video
-  const renderYouTubeVideo = () => (
-    <iframe 
-      width="100%" 
-      height="100%" 
-      src={createYouTubeEmbedUrl(youtubeId)}
-      title={title || "Video"}
-      style={{ border: 0 }}
-      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-      allowFullScreen={false}
-      className={`z-20 ${videoLoaded ? 'opacity-100' : 'opacity-0'}`}
-      id="youtube-player"
-      onLoad={handleVideoLoad}
-    ></iframe>
-  );
-  
-  // Render direct video
-  const renderDirectVideo = () => (
-    <video
-      ref={videoRef}
-      src={videoSource}
-      className={`w-full h-full z-20 ${videoLoaded ? 'opacity-100' : 'opacity-0'}`}
-      autoPlay
-      playsInline
-      controls={false}
-      onContextMenu={(e) => e.preventDefault()}
-      onCanPlay={handleVideoLoad}
-    >
-      <track kind="captions" />
-    </video>
-  );
-  
-  // Render permission warning
-  const renderWarning = () => (
-    <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-80 z-50">
-      <div className="bg-gray-800 p-6 rounded-lg max-w-md">
-        <div className="flex justify-center mb-4">
-          <AlertCircle size={48} className="text-yellow-400" />
-        </div>
-        <h3 className="text-xl font-bold mb-3 text-white text-center">Advertisement Engagement Analysis</h3>
-        <p className="text-gray-300 mb-4">
-          This platform uses your camera to measure engagement with the advertisement. 
-          The ad will only play while your attention is focused on it.
-        </p>
-        <p className="text-gray-300 mb-6 text-sm">
-          <strong>Note:</strong> Your facial reactions will be recorded and stored for engagement analysis purposes.
-          All data is handled according to our privacy policy.
-        </p>
-        <div className="flex gap-3 justify-center">
-          <button 
-            onClick={handleStartVideo}
-            className="bg-blue-600 text-white px-4 py-2 rounded-md font-medium"
-            type="button"
-          >
-            Begin Ad Analysis
-          </button>
-          <button 
-            onClick={() => setShowWarning(false)}
-            className="bg-gray-700 text-white px-4 py-2 rounded-md font-medium"
-            type="button"
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-  
-  // Render loading indicator
-  const renderLoading = () => (
-    <div className="absolute inset-0 flex items-center justify-center bg-black z-10">
-      <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-    </div>
-  );
-  
+
+  const togglePlay = () => {
+    if (!videoRef.current) return;
+    
+    if (isPlaying) {
+      videoRef.current.pause();
+    } else {
+      videoRef.current.play().catch(e => {
+        console.error('Play prevented:', e);
+      });
+    }
+  };
+
+  const toggleMute = () => {
+    if (!videoRef.current) return;
+    videoRef.current.muted = !isMuted;
+  };
+
+  const changeVolume = (delta) => {
+    if (!videoRef.current) return;
+    
+    const newVolume = Math.max(0, Math.min(1, volume + delta));
+    videoRef.current.volume = newVolume;
+    if (newVolume > 0 && isMuted) {
+      videoRef.current.muted = false;
+    }
+  };
+
+  const skip = (seconds) => {
+    if (!videoRef.current) return;
+    
+    const newTime = videoRef.current.currentTime + seconds;
+    videoRef.current.currentTime = Math.max(0, Math.min(duration, newTime));
+  };
+
+  const toggleFullscreen = () => {
+    if (!videoContainerRef.current) return;
+    
+    // Fix for Issue #1: Don't use Promise returns in boolean contexts
+    if (!document.fullscreenElement) {
+      if (videoContainerRef.current.requestFullscreen) {
+        videoContainerRef.current.requestFullscreen();
+      } else if (videoContainerRef.current.webkitRequestFullscreen) {
+        videoContainerRef.current.webkitRequestFullscreen();
+      } else if (videoContainerRef.current.msRequestFullscreen) {
+        videoContainerRef.current.msRequestFullscreen();
+      }
+    } else {
+      // Fix: Call each method separately without using them in a boolean context
+      try {
+        if (document.exitFullscreen) {
+          document.exitFullscreen();
+        } else if (document.webkitExitFullscreen) {
+          document.webkitExitFullscreen();
+        } else if (document.msExitFullscreen) {
+          document.msExitFullscreen();
+        }
+      } catch (error) {
+        console.error('Error exiting fullscreen:', error);
+      }
+    }
+  };
+
+  const changePlaybackRate = (rate) => {
+    if (!videoRef.current) return;
+    
+    videoRef.current.playbackRate = rate;
+    setPlaybackRate(rate);
+  };
+
+  const formatTime = (timeInSeconds) => {
+    if (isNaN(timeInSeconds)) return '0:00';
+    
+    const minutes = Math.floor(timeInSeconds / 60);
+    const seconds = Math.floor(timeInSeconds % 60);
+    return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+  };
+
   return (
     <div 
-      ref={containerRef}
-      className={`relative overflow-hidden transition-all duration-300 ${isFullScreen ? 'fixed inset-0 bg-black z-50' : 'aspect-video'}`}
+      ref={videoContainerRef}
+      className={`relative w-full ${isFullscreen ? 'h-full' : 'aspect-video'} bg-black rounded-lg overflow-hidden group`}
+      role="application"
+      aria-label="Video Player"
     >
-      {!isPlaying && renderPreview()}
-      
-      {isPlaying && (
-        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black">
-          <button 
-            onClick={handleCloseVideo}
-            className="absolute top-4 right-4 bg-gray-800 text-white p-2 rounded-full z-30 hover:bg-gray-700 transition-all"
-            type="button"
-            aria-label="Close video"
-          >
-            <X size={20} />
-          </button>
-          
-          <div className={`relative ${isFullScreen ? 'w-full h-full' : 'w-4/5 h-4/5'}`}>
-            {!videoLoaded && renderLoading()}
-            {youtubeId ? renderYouTubeVideo() : renderDirectVideo()}
-            
-            {trackingActive && (
-              <FaceTracker 
-                isActive={trackingActive}
-                onTrackingData={handleTrackingData}
-                onPermissionGranted={handlePermissionGranted}
-                videoElement={videoRef.current ? videoRef : null}
-              />
-            )}
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-70 z-10">
+          <Spinner size="xl" color="info" />
+        </div>
+      )}
+
+      {error && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-70 z-10">
+          <div className="text-center p-4">
+            <p className="text-red-500 mb-2">{error}</p>
+            <Button 
+              color="blue"
+              onClick={() => {
+                if (videoRef.current) {
+                  setIsLoading(true);
+                  setError(null);
+                  videoRef.current.load();
+                }
+              }}
+              className="mt-2 flex items-center justify-center"
+            >
+              <RotateCcw className="mr-2 h-4 w-4" />
+              Try Again
+            </Button>
           </div>
         </div>
       )}
+
+      <video
+        ref={videoRef}
+        className="w-full h-full"
+        poster={thumbnailUrl}
+        preload="metadata"
+        playsInline
+        onClick={togglePlay}
+        title={title}
+      >
+        <source src={videoUrl} type="video/mp4" />
+        <track kind="captions" src="" label="English" />
+        Your browser does not support the video tag.
+      </video>
+
+      {/* Fix for Issues #2 and #3: Replace div with proper button that has keyboard support */}
+      <button 
+        className={`absolute inset-0 w-full h-full bg-transparent border-0 cursor-default focus:outline-none`}
+        onClick={togglePlay}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            togglePlay();
+          }
+        }}
+        aria-label={isPlaying ? "Pause video" : "Play video"}
+        type="button"
+        tabIndex="0"
+        style={{ display: 'block' }}
+      />
+
+      <div 
+        className={`absolute inset-0 transition-opacity duration-300 bg-gradient-to-t from-black/70 to-transparent flex flex-col justify-end ${showControls || !isPlaying ? 'opacity-100' : 'opacity-0'}`}
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
+        role="toolbar"
+        aria-label="Video controls"
+        tabIndex="0"
+      >
+        <input
+          type="range"
+          min="0"
+          max={duration || 1}
+          step="0.01"
+          value={currentTime}
+          onChange={(e) => {
+            if (videoRef.current) {
+              videoRef.current.currentTime = parseFloat(e.target.value);
+            }
+          }}
+          className="mx-4 my-2 h-1 bg-gray-600 accent-blue-500 rounded-full overflow-hidden"
+          aria-label="Seek video timeline"
+        />
+        
+        <div className="flex items-center justify-between p-4">
+          <div className="flex items-center space-x-4">
+            <button 
+              onClick={togglePlay}
+              className="text-white focus:outline-none hover:text-blue-400"
+              aria-label={isPlaying ? "Pause" : "Play"}
+              type="button"
+            >
+              {isPlaying ? <Pause size={24} /> : <Play size={24} />}
+            </button>
+            
+            <div className="flex items-center">
+              <button 
+                onClick={toggleMute}
+                className="text-white focus:outline-none hover:text-blue-400 mr-2"
+                aria-label={isMuted ? "Unmute" : "Mute"}
+                type="button"
+              >
+                {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
+              </button>
+              
+              <input 
+                type="range" 
+                min="0" 
+                max="1" 
+                step="0.01" 
+                value={isMuted ? 0 : volume}
+                onChange={(e) => {
+                  const newVolume = parseFloat(e.target.value);
+                  if (videoRef.current) {
+                    videoRef.current.volume = newVolume;
+                    if (newVolume > 0 && isMuted) {
+                      videoRef.current.muted = false;
+                    }
+                  }
+                }}
+                className="w-16 h-1 bg-gray-500 rounded-full accent-blue-500"
+                aria-label="Volume control"
+              />
+            </div>
+            
+            <div className="text-white text-sm">
+              {formatTime(currentTime)} / {formatTime(duration)}
+            </div>
+          </div>
+          
+          <div className="flex items-center space-x-4">
+            <div className="relative">
+              <button 
+                onClick={() => {
+                  const speeds = [0.5, 0.75, 1, 1.25, 1.5, 2];
+                  const currentIndex = speeds.indexOf(playbackRate);
+                  const nextIndex = (currentIndex + 1) % speeds.length;
+                  changePlaybackRate(speeds[nextIndex]);
+                }}
+                className="text-white focus:outline-none hover:text-blue-400 flex items-center"
+                aria-label="Change Playback Speed"
+                type="button"
+              >
+                <Settings size={20} />
+                <span className="ml-1 text-xs">{playbackRate}x</span>
+              </button>
+            </div>
+            
+            <button 
+              onClick={toggleFullscreen}
+              className="text-white focus:outline-none hover:text-blue-400"
+              aria-label={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+              type="button"
+            >
+              <Maximize size={20} />
+            </button>
+          </div>
+        </div>
+      </div>
       
-      {showWarning && renderWarning()}
+      {!isPlaying && !isLoading && !error && (
+        <button 
+          onClick={togglePlay}
+          className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-white bg-blue-600 bg-opacity-70 hover:bg-opacity-90 rounded-full p-4 transition-all duration-150"
+          aria-label="Play"
+          type="button"
+        >
+          <Play size={32} />
+        </button>
+      )}
     </div>
   );
 };
 
 VideoPlayer.propTypes = {
-  videoSource: PropTypes.string.isRequired,
+  videoUrl: PropTypes.string.isRequired,
+  thumbnailUrl: PropTypes.string,
   title: PropTypes.string,
-  onTrackingData: PropTypes.func,
-  previewImage: PropTypes.string
+  autoPlay: PropTypes.bool,
+  onEnded: PropTypes.func
 };
 
 export default VideoPlayer;

@@ -1,90 +1,95 @@
 import React, { useState, useContext, useEffect } from 'react';
 import PropTypes from 'prop-types';
-import { Outlet, useLocation } from 'react-router-dom';
+import { Outlet, useLocation, Link } from 'react-router-dom';
 import { AuthContext } from '../../../contexts/AuthProvider/AuthProvider';
-import { 
-  Card, 
-  Button, 
-  Badge,  
+import {
+  Card,
+  Button,
+  Badge,
   Progress,
-  Spinner
+  Spinner,
+  Alert
 } from 'flowbite-react';
-import { 
-  Clock, 
-  TrendingUp, 
-  Upload as UploadIcon, 
-  Play, 
-  ThumbsUp, 
-  Eye,
-  BarChart2
+import {
+  Clock,
+  TrendingUp,
+  Upload as UploadIcon,
+  Play,
+  ThumbsUp,
+  BarChart2,
+  AlertCircle
 } from 'lucide-react';
 import DashboardSideNavbar from '../../Shared/DashboardSideNavbar/DashboardSideNavbar';
+import VideoService from '../../../utils/VideoService';
 
-// Default avatar fallback
-const DEFAULT_AVATAR = "https://flowbite.com/docs/images/people/profile-picture-5.jpg";
+const VideoCard = ({ video, type = 'recent' }) => {
+  const duration = video.duration || "00:00";
+  const createdAt = video.upload_date
+    ? VideoService.formatRelativeTime(video.upload_date)
+    : "Unknown date";
 
-// Video Card Component
-const VideoCard = ({ video, type = 'recent' }) => (
-  <Card className="overflow-hidden hover:shadow-lg transition-all duration-300 bg-gray-800 border-gray-700">
-    <div className="relative">
-      <img 
-        src={video.thumbnail} 
-        alt={video.title} 
-        className="w-full h-36 object-cover"
-      />
-      <div className="absolute bottom-2 right-2 bg-gray-900 bg-opacity-80 text-white text-xs px-2 py-1 rounded-md flex items-center">
-        <Clock size={12} className="mr-1" />
-        {video.duration}
-      </div>
-      {type === 'popular' && (
-        <div className="absolute top-2 left-2">
-          <Badge color="purple" icon={TrendingUp} className="flex items-center">
-            Popular
-          </Badge>
+  return (
+    <Link to={`/video/${video.id}`} className="block">
+      <Card className="overflow-hidden hover:shadow-lg transition-all duration-300 bg-gray-800 border-gray-700 card-hover">
+        <div className="relative aspect-video">
+          <img
+            src={video.thumbnail_url || 'https://flowbite.com/docs/images/blog/image-1.jpg'}
+            alt={video.title}
+            className="w-full h-full object-cover rounded-t-lg"
+            loading="lazy"
+            onError={(e) => {
+              e.target.onerror = null;
+              e.target.src = 'https://flowbite.com/docs/images/blog/image-1.jpg';
+            }}
+          />
+          <div className="absolute bottom-2 right-2 bg-gray-900 bg-opacity-80 text-white text-xs px-2 py-1 rounded-md flex items-center">
+            <Clock size={12} className="mr-1" />
+            {duration}
+          </div>
+          {type === 'popular' && (
+            <div className="absolute top-2 left-2">
+              <Badge color="purple" icon={TrendingUp} className="flex items-center">
+                Popular
+              </Badge>
+            </div>
+          )}
         </div>
-      )}
-    </div>
-    
-    <h5 className="text-md font-medium text-white line-clamp-1 mt-2">
-      {video.title}
-    </h5>
-    
-    <div className="flex justify-between items-center mt-3 text-xs text-gray-400">
-      <div className="flex items-center">
-        <Eye size={14} className="mr-1" />
-        {video.views.toLocaleString()}
-      </div>
-      <div className="flex items-center">
-        <ThumbsUp size={14} className="mr-1" />
-        {video.likes.toLocaleString()}
-      </div>
-      <div className="flex items-center">
-        <Clock size={14} className="mr-1" />
-        {video.createdAt}
-      </div>
-    </div>
-  </Card>
-);
+        <h5 className="text-md font-medium text-white line-clamp-1 mt-2">
+          {video.title}
+        </h5>
+        <div className="flex justify-between items-center mt-3 text-xs text-gray-400">
+          <div className="flex items-center">
+            <span className="mr-1">{video.views || 0} views</span>
+          </div>
+          <div className="flex items-center">
+            <ThumbsUp size={14} className="mr-1" />
+            {video.likes || 0}
+          </div>
+          <div className="flex items-center">
+            <Clock size={14} className="mr-1" />
+            {createdAt}
+          </div>
+        </div>
+      </Card>
+    </Link>
+  );
+};
 
-// Props validation for VideoCard
 VideoCard.propTypes = {
   video: PropTypes.shape({
-    id: PropTypes.string.isRequired,
+    id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
     title: PropTypes.string.isRequired,
-    thumbnail: PropTypes.string.isRequired,
-    duration: PropTypes.string.isRequired,
-    views: PropTypes.number.isRequired,
-    likes: PropTypes.number.isRequired,
-    createdAt: PropTypes.string.isRequired
+    thumbnail_url: PropTypes.string,
+    duration: PropTypes.string,
+    views: PropTypes.number,
+    likes: PropTypes.number,
+    upload_date: PropTypes.string,
+    uploader_email: PropTypes.string
   }).isRequired,
   type: PropTypes.oneOf(['recent', 'popular'])
 };
+VideoCard.defaultProps = { type: 'recent' };
 
-VideoCard.defaultProps = {
-  type: 'recent'
-};
-
-// Stats Card Component
 const StatsCard = ({ title, value, icon: Icon, color }) => (
   <Card className="bg-gray-800 border-gray-700">
     <div className="flex items-center justify-between">
@@ -100,8 +105,6 @@ const StatsCard = ({ title, value, icon: Icon, color }) => (
     </div>
   </Card>
 );
-
-// Props validation for StatsCard
 StatsCard.propTypes = {
   title: PropTypes.string.isRequired,
   value: PropTypes.number.isRequired,
@@ -109,148 +112,149 @@ StatsCard.propTypes = {
   color: PropTypes.string.isRequired
 };
 
-// DashboardHome Component 
 const DashboardHome = ({ user, stats }) => {
- 
   const getStorageColor = (percentage) => {
     if (percentage < 50) return 'green';
     if (percentage < 80) return 'yellow';
     return 'red';
   };
-
   const storageColor = getStorageColor(stats.storageUsed);
+  const hasVideos = stats.totalVideos > 0;
 
   return (
     <div className="space-y-6">
-      {/* Welcome Section */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold text-white">
-            Welcome back, {user?.displayName?.split(' ')[0] || 'Creator'}
+            Welcome back, {user?.displayName?.split(' ')[0] || user?.email?.split('@')[0] || 'Administrator'}
           </h1>
           <p className="text-gray-400 mt-1">
             Here's what's happening with your videos today
           </p>
         </div>
-        <Button 
-          color="blue" 
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700"
-          href="/dashboard/upload"
+        <Button
+          color="blue"
+          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 glossy-button"
+          as={Link}
+          to="/dashboard/upload"
         >
           <UploadIcon size={18} />
           Upload New Video
         </Button>
       </div>
 
-      {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatsCard
-          title="Total Videos"
-          value={stats.totalVideos}
-          icon={Play}
-          color="blue"
-        />
-        <StatsCard
-          title="Total Views"
-          value={stats.totalViews}
-          icon={Eye}
-          color="green"
-        />
-        <StatsCard
-          title="Total Likes"
-          value={stats.totalLikes}
-          icon={ThumbsUp}
-          color="purple"
-        />
+        <StatsCard title="Total Videos" value={stats.totalVideos} icon={Play} color="blue" />
+        <StatsCard title="Total Views" value={stats.totalViews} icon={Play} color="green" />
+        <StatsCard title="Total Likes" value={stats.totalLikes} icon={ThumbsUp} color="purple" />
         <Card className="bg-gray-800 border-gray-700">
           <div>
             <div className="flex justify-between items-center mb-2">
               <p className="text-sm font-medium text-gray-400">Storage Used</p>
               <span className="text-sm font-medium text-white">{stats.storageUsed}%</span>
             </div>
-            <Progress
-              progress={stats.storageUsed}
-              size="md"
-              color={storageColor}
-            />
+            <Progress progress={stats.storageUsed} size="md" color={storageColor} />
           </div>
         </Card>
       </div>
 
-      {/* Recent & Popular Videos */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Recent Videos */}
         <div className="lg:col-span-2">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold text-white">Recent Videos</h2>
-            <Button 
-              color="gray" 
-              size="xs" 
-              pill
-              className="bg-gray-700 hover:bg-gray-600 text-gray-200"
-              href="/dashboard/videos"
-            >
-              View All
-            </Button>
+            {hasVideos && (
+                <Button
+                  color="gray" 
+                  size="xs" 
+                  pill
+                  className="bg-gray-700 hover:bg-gray-600 text-gray-200"
+                  as={Link} 
+                  to="/dashboard/videos"
+                >
+                  View All
+                </Button>
+            )}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {stats.recentVideos.map((video) => (
-              <VideoCard key={video.id} video={video} />
-            ))}
+            {hasVideos && stats.recentVideos.length > 0 ? (
+              stats.recentVideos.map((video) => (
+                <VideoCard key={video.id} video={video} type="recent" />
+              ))
+            ) : (
+              <div className="col-span-full text-center p-6 bg-gray-800 rounded-lg">
+                <p className="text-gray-400">You haven't uploaded any videos yet.</p>
+                <Button
+                  color="blue" 
+                  size="sm" 
+                  className="mt-3 glossy-button"
+                  as={Link} 
+                  to="/dashboard/upload"
+                >
+                  Upload Your First Video
+                </Button>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Popular Videos */}
         <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold text-white">Popular Videos</h2>
-            <Button 
-              color="gray" 
-              size="xs" 
-              pill
-              className="bg-gray-700 hover:bg-gray-600 text-gray-200"
-              href="/dashboard/analytics"
-            >
-              Analytics
-            </Button>
+            {hasVideos && (
+              <Button
+                color="gray" 
+                size="xs" 
+                pill
+                className="bg-gray-700 hover:bg-gray-600 text-gray-200"
+                as={Link} 
+                to="/dashboard/analytics"
+              >
+                Analytics
+              </Button>
+            )}
           </div>
           <div className="space-y-4">
-            {stats.popularVideos.map((video) => (
-              <VideoCard key={video.id} video={video} type="popular" />
-            ))}
+            {hasVideos && stats.popularVideos.length > 0 ? (
+              stats.popularVideos.map((video) => (
+                <VideoCard key={video.id} video={video} type="popular" />
+              ))
+            ) : (
+              <div className={`text-center p-4 text-gray-400 ${hasVideos ? 'bg-gray-800 rounded-lg' : 'hidden'}`}>
+                <p>No popular videos to show yet.</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Quick Analytics Section */}
-      <Card className="bg-gray-800 border-gray-700">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold text-white">Quick Analytics</h2>
-          <Button 
-            color="gray" 
-            size="xs"
-            className="bg-gray-700 hover:bg-gray-600 text-gray-200"
-            href="/dashboard/analytics"
-          >
-            <BarChart2 size={16} className="mr-2" />
-            Detailed Analytics
-          </Button>
-        </div>
-        
-        <div className="relative">
-          {/* Placeholder for chart - in a real app, use recharts or other charting library */}
-          <div className="h-64 bg-gray-700 rounded-lg flex items-center justify-center">
-            <p className="text-gray-400">
-              Analytics chart would render here with actual data
-            </p>
+      {hasVideos && (
+        <Card className="bg-gray-800 border-gray-700">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold text-white">Quick Analytics</h2>
+            <Button
+              color="gray" 
+              size="xs"
+              className="bg-gray-700 hover:bg-gray-600 text-gray-200"
+              as={Link} 
+              to="/dashboard/analytics"
+            >
+              <BarChart2 size={16} className="mr-2" />
+              Detailed Analytics
+            </Button>
           </div>
-        </div>
-      </Card>
+          <div className="relative">
+            <div className="h-64 bg-gray-700 rounded-lg flex items-center justify-center">
+              <p className="text-gray-400">
+                Analytics chart placeholder
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
     </div>
   );
 };
 
-// Props validation for DashboardHome
 DashboardHome.propTypes = {
   user: PropTypes.object,
   stats: PropTypes.shape({
@@ -263,11 +267,11 @@ DashboardHome.propTypes = {
   }).isRequired
 };
 
-// Main Dashboard Component
 const Dashboard = () => {
   const { user } = useContext(AuthContext);
   const location = useLocation();
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [stats, setStats] = useState({
     totalVideos: 0,
     totalViews: 0,
@@ -277,106 +281,133 @@ const Dashboard = () => {
     popularVideos: []
   });
 
-  // Determine if we're on the main dashboard page or a sub-route
   const isMainDashboard = location.pathname === '/dashboard';
 
-  // Simulate data loading
   useEffect(() => {
+    if (!isMainDashboard || !user?.email) {
+      setLoading(false);
+      return;
+    }
+
+    let isMounted = true;
+
     const fetchDashboardData = async () => {
+      setLoading(true);
+      setError(null);
+      console.log(`Fetching dashboard data for user: ${user.email}`);
+
       try {
-        // In a real app, this would be an API call
-        setLoading(true);
-        
-        // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // sample data disi
-        setStats({
-          totalVideos: 12,
-          totalViews: 24758,
-          totalLikes: 1832,
-          storageUsed: 65,
-          recentVideos: [
-            {
-              id: 'v1',
-              title: 'How to Create Modern UI with React',
-              thumbnail: 'https://flowbite.com/docs/images/blog/image-1.jpg',
-              duration: '12:45',
-              views: 1245,
-              likes: 89,
-              createdAt: '2 days ago'
-            },
-            {
-              id: 'v2',
-              title: 'Advanced Animation Techniques',
-              thumbnail: 'https://flowbite.com/docs/images/blog/image-2.jpg',
-              duration: '8:32',
-              views: 987,
-              likes: 61,
-              createdAt: '1 week ago'
-            },
-            {
-              id: 'v3',
-              title: 'Mastering State Management in React',
-              thumbnail: 'https://flowbite.com/docs/images/blog/image-3.jpg',
-              duration: '15:10',
-              views: 756,
-              likes: 45,
-              createdAt: '3 weeks ago'
-            }
-          ],
-          popularVideos: [
-            {
-              id: 'v4',
-              title: 'Ultimate Guide to Tailwind CSS',
-              thumbnail: 'https://flowbite.com/docs/images/blog/image-4.jpg',
-              duration: '18:22',
-              views: 8754,
-              likes: 432,
-              createdAt: '2 months ago'
-            },
-            {
-              id: 'v5',
-              title: 'Building a Modern Dashboard',
-              thumbnail: 'https://flowbite.com/docs/images/blog/image-3.jpg',
-              duration: '10:15',
-              views: 6543,
-              likes: 321,
-              createdAt: '3 months ago'
-            }
-          ]
-        });
-        
-        setLoading(false);
-      } catch (error) {
-        console.error('Error fetching dashboard data:', error);
-        setLoading(false);
+        const allVideos = await VideoService.getVideoFeed();
+
+        if (!isMounted) return;
+
+        if (!Array.isArray(allVideos)) {
+          console.error("Received non-array response from getVideoFeed:", allVideos);
+          setStats({
+            totalVideos: 0, 
+            totalViews: 0, 
+            totalLikes: 0,
+            storageUsed: 0, 
+            recentVideos: [], 
+            popularVideos: []
+          });
+          setLoading(false);
+          return;
+        }
+
+        const userVideos = allVideos.filter(video =>
+          video.uploader_email?.toLowerCase() === user.email.toLowerCase() ||
+          video.uploader?.email?.toLowerCase() === user.email.toLowerCase()
+        );
+
+        console.log(`Found ${userVideos.length} videos for user ${user.email}`);
+
+        if (userVideos.length > 0) {
+          const sortedByDate = [...userVideos].sort((a, b) =>
+            new Date(b.upload_date || 0) - new Date(a.upload_date || 0)
+          );
+          const sortedByViews = [...userVideos].sort((a, b) =>
+            (b.views || 0) - (a.views || 0)
+          );
+
+          setStats({
+            totalVideos: userVideos.length,
+            totalViews: userVideos.reduce((sum, v) => sum + (v.views || 0), 0),
+            totalLikes: userVideos.reduce((sum, v) => sum + (v.likes || 0), 0),
+            storageUsed: 25,
+            recentVideos: sortedByDate.slice(0, 3),
+            popularVideos: sortedByViews.slice(0, 2),
+          });
+        } else {
+          setStats({
+            totalVideos: 0, 
+            totalViews: 0, 
+            totalLikes: 0,
+            storageUsed: 0, 
+            recentVideos: [], 
+            popularVideos: []
+          });
+        }
+
+      } catch (fetchError) {
+        console.error('Error fetching dashboard video data:', fetchError);
+        if (isMounted) {
+          setError(fetchError.message || 'Failed to load video data. Please try again later.');
+          setStats({
+            totalVideos: 0, 
+            totalViews: 0, 
+            totalLikes: 0,
+            storageUsed: 0, 
+            recentVideos: [], 
+            popularVideos: []
+          });
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
-    if (isMainDashboard) {
-      fetchDashboardData();
+    fetchDashboardData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isMainDashboard, user?.email]);
+
+  // Extract nested ternary into separate variable
+  let dashboardContent;
+  if (isMainDashboard) {
+    if (loading) {
+      dashboardContent = (
+        <div className="flex items-center justify-center h-96">
+          <Spinner size="xl" color="info" />
+        </div>
+      );
+    } else if (error) {
+      dashboardContent = (
+        <Alert
+          color="failure"
+          icon={AlertCircle}
+          className="mb-4"
+          onDismiss={() => setError(null)}
+        >
+          <span className="font-medium">Error:</span> {error}
+        </Alert>
+      );
     } else {
-      setLoading(false);
+      dashboardContent = <DashboardHome user={user} stats={stats} />;
     }
-  }, [isMainDashboard]);
+  } else {
+    dashboardContent = <Outlet />;
+  }
 
   return (
     <div className="flex bg-gray-900 min-h-screen">
-      {/* Sidebar Navigation */}
       <DashboardSideNavbar />
-      
-      {/* Main Content */}
       <div className="flex-1 p-4 sm:p-6 md:p-8 ml-0 md:ml-20 lg:ml-64 transition-all duration-300">
-        {loading ? (
-          <div className="flex items-center justify-center h-96">
-            <Spinner size="xl" color="blue" />
-          </div>
-        ) : (
-          <>
-            {isMainDashboard ? <DashboardHome user={user} stats={stats} /> : <Outlet />}
-          </>
-        )}
+        {dashboardContent}
       </div>
     </div>
   );
