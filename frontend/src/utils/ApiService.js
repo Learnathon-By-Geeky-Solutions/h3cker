@@ -457,12 +457,10 @@ const ApiService = {
   configureXhrCallbacks(xhr, progressCallback, resolve, reject) {
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
-        try {
-          const response = JSON.parse(xhr.responseText);
-          resolve(response);
-        } catch (e) {
-          resolve(xhr.responseText); 
-        }
+        // Assuming the response should be JSON.
+        // If parsing fails, the error will propagate and reject the promise.
+        const response = JSON.parse(xhr.responseText);
+        resolve(response);
       } else if (xhr.status === 401) {
         console.error('Authentication failed during upload (401)');
         reject(new Error('Authentication failed during upload'));

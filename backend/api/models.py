@@ -121,7 +121,7 @@ class Video(models.Model):
   
     views = models.PositiveIntegerField(default=0, validators=[MinValueValidator(0)])
     likes = models.PositiveIntegerField(default=0, validators=[MinValueValidator(0)])
-    duration = models.CharField(max_length=50, blank=True, null=True) 
+    duration = models.CharField(max_length=50, blank=True) 
 
     class Meta:
         db_table = 'videos'

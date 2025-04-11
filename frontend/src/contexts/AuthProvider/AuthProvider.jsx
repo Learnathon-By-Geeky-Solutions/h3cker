@@ -14,7 +14,6 @@ import {
   sendPasswordResetEmail
 } from 'firebase/auth';
 import { doc, setDoc, getDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
-import { Spinner } from 'flowbite-react';
 import PropTypes from 'prop-types';
 import TokenService from '../../utils/TokenService';
 
