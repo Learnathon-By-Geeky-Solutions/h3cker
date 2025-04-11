@@ -173,7 +173,10 @@ const UploadVideo = () => {
       .replace(/[^a-z0-9]+/gi, '_')
       .replace(/_+/g, '_')
       .substring(0, 50);
-    const uniqueFilename = `${safeName || 'video'}_${timestamp}_${Math.random().toString(36).substring(2, 7)}`;
+    const randomBytes = new Uint8Array(5); 
+    window.crypto.getRandomValues(randomBytes);
+    const randomString = Array.from(randomBytes).map(byte => byte.toString(16).padStart(2, '0')).join('');
+    const uniqueFilename = `${safeName || 'video'}_${timestamp}_${randomString.substring(0, 7)}`; 
     setGeneratedFilename(uniqueFilename);
     return uniqueFilename;
   };
