@@ -22,7 +22,10 @@ import {
 import DashboardSideNavbar from '../../Shared/DashboardSideNavbar/DashboardSideNavbar';
 import VideoService from '../../../utils/VideoService';
 
-const VideoCard = ({ video, type = 'recent' }) => {
+const VideoCard = ({ 
+  video, 
+  type = 'recent' 
+}) => {
   const duration = video.duration || "00:00";
   const createdAt = video.upload_date
     ? VideoService.formatRelativeTime(video.upload_date)
@@ -88,7 +91,6 @@ VideoCard.propTypes = {
   }).isRequired,
   type: PropTypes.oneOf(['recent', 'popular'])
 };
-VideoCard.defaultProps = { type: 'recent' };
 
 const StatsCard = ({ title, value, icon: Icon, color }) => (
   <Card className="bg-gray-800 border-gray-700">
@@ -105,6 +107,7 @@ const StatsCard = ({ title, value, icon: Icon, color }) => (
     </div>
   </Card>
 );
+
 StatsCard.propTypes = {
   title: PropTypes.string.isRequired,
   value: PropTypes.number.isRequired,
@@ -280,6 +283,7 @@ const Dashboard = () => {
     recentVideos: [],
     popularVideos: []
   });
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const isMainDashboard = location.pathname === '/dashboard';
 
@@ -405,7 +409,10 @@ const Dashboard = () => {
 
   return (
     <div className="flex bg-gray-900 min-h-screen">
-      <DashboardSideNavbar />
+      <DashboardSideNavbar 
+        isOpen={sidebarOpen} 
+        setIsOpen={setSidebarOpen}
+      />
       <div className="flex-1 p-4 sm:p-6 md:p-8 ml-0 md:ml-20 lg:ml-64 transition-all duration-300">
         {dashboardContent}
       </div>

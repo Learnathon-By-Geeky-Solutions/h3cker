@@ -12,7 +12,12 @@ import TokenService from '../../../utils/TokenService';
 const DEFAULT_AVATAR = "https://flowbite.com/docs/images/people/profile-picture-5.jpg";
 const IMGBB_API_KEY = import.meta.env.VITE_IMGBB_API_KEY;
 
-const ProfileAvatar = ({ photoURL, isEditing, onShowPhotoOptions, previewImage }) => (
+const ProfileAvatar = ({ 
+  photoURL = DEFAULT_AVATAR, 
+  isEditing = false, 
+  onShowPhotoOptions, 
+  previewImage = null 
+}) => (
   <div className="relative group">
     <div className="rounded-full overflow-hidden w-24 h-24 md:w-28 md:h-28 border-4 border-blue-600/30 shadow-lg shadow-blue-700/20">
       <Avatar 
@@ -47,20 +52,14 @@ ProfileAvatar.propTypes = {
   previewImage: PropTypes.string
 };
 
-ProfileAvatar.defaultProps = {
-  photoURL: DEFAULT_AVATAR,
-  isEditing: false,
-  previewImage: null
-};
-
 const PhotoOptionsPanel = ({ 
-  photoURL, 
+  photoURL = '', 
   onInputChange, 
   onClose, 
   onFileUpload, 
-  uploadLoading, 
-  uploadError, 
-  previewImage 
+  uploadLoading = false, 
+  uploadError = '', 
+  previewImage = null 
 }) => (
   <div className="absolute top-full mt-2 bg-gray-800 rounded-lg shadow-lg p-4 z-20 w-full max-w-sm border border-gray-700">
     <div className="flex justify-between items-center mb-2">
@@ -149,14 +148,14 @@ PhotoOptionsPanel.propTypes = {
   previewImage: PropTypes.string
 };
 
-PhotoOptionsPanel.defaultProps = {
-  photoURL: '',
-  uploadLoading: false,
-  uploadError: '',
-  previewImage: null
-};
-
-const InputField = ({ id, icon, value, onChange, disabled, required }) => {
+const InputField = ({ 
+  id, 
+  icon, 
+  value = '', 
+  onChange = () => {}, 
+  disabled = false, 
+  required = false 
+}) => {
   const Icon = icon;
   
   return (
@@ -186,14 +185,7 @@ InputField.propTypes = {
   required: PropTypes.bool
 };
 
-InputField.defaultProps = {
-  value: '',
-  onChange: () => {},
-  disabled: false,
-  required: false
-};
-
-const EmailField = ({ email, isVerified }) => (
+const EmailField = ({ email = '', isVerified = false }) => (
   <div>
     <Label htmlFor="email" value="Email Address" className="text-xs font-medium text-gray-300" />
     <div className="mt-1 relative">
@@ -226,11 +218,6 @@ const EmailField = ({ email, isVerified }) => (
 EmailField.propTypes = {
   email: PropTypes.string,
   isVerified: PropTypes.bool
-};
-
-EmailField.defaultProps = {
-  email: '',
-  isVerified: false
 };
 
 const formatDate = (timestamp) => {
@@ -266,7 +253,7 @@ TimelineItem.propTypes = {
   ])
 };
 
-const AccountInfoSection = ({ user, lastUpdateTime }) => (
+const AccountInfoSection = ({ user = {}, lastUpdateTime }) => (
   <div className="pt-3 border-t border-gray-700">
     <h3 className="text-sm font-medium mb-3 text-gray-300">Account Information</h3>
     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -291,10 +278,6 @@ AccountInfoSection.propTypes = {
     ])
   }),
   lastUpdateTime: PropTypes.instanceOf(Date)
-};
-
-AccountInfoSection.defaultProps = {
-  user: {}
 };
 
 const ToastMessage = ({ toast, onDismiss }) => {

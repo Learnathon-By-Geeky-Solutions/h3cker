@@ -27,9 +27,11 @@ const TokenService = {
       const timestamp = Date.now().toString(36);
       return timestamp + '-' + randomHex;
     } catch (error) {
-      console.error('Error generating device ID:', error);
-      // Fallback to timestamp-based ID if crypto fails
-      return Date.now().toString(36) + '-' + Math.random().toString(36).substring(2);
+      console.error('Error generating device ID using crypto:', error);
+
+      const timestamp = Date.now().toString(36);
+      const perfNow = typeof performance !== 'undefined' && performance.now ? Math.floor(performance.now() * 1000).toString(36) : timestamp.split('').reverse().join('');
+      return timestamp + '-' + perfNow;
     }
   },
 
