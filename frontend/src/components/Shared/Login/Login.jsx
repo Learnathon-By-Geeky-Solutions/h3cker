@@ -24,14 +24,22 @@ const Login = () => {
 
     // Check for cached Google account on component mount
     useEffect(() => {
-        try {
-            const cachedAuth = getGoogleAuthCache ? getGoogleAuthCache() : null;
-            if (cachedAuth?.email) {
-                setCachedGoogleAccount(cachedAuth);
+        const checkGoogleCache = () => {
+            try {
+                if (typeof getGoogleAuthCache === 'function') {
+                    const cachedAuth = getGoogleAuthCache();
+                    if (cachedAuth?.email) {
+                        setCachedGoogleAccount(cachedAuth);
+                    }
+                }
+            } catch (error) {
+                console.error("Error retrieving cached Google account:", error);
             }
-        } catch (error) {
-            console.error("Error retrieving cached Google account:", error);
-        }
+        };
+        
+        // Adding a small delay to ensure context is fully loaded
+        const timeoutId = setTimeout(checkGoogleCache, 100);
+        return () => clearTimeout(timeoutId);
     }, [getGoogleAuthCache]);
 
     const handleEmailLogin = async (e) => {

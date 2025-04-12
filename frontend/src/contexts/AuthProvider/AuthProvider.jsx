@@ -345,17 +345,15 @@ const AuthProvider = ({ children }) => {
             }, currentUser.uid);
           }
           
-          // Ensure we get the emailVerified directly from the auth object
+     
           const userData = userDoc.exists() ? userDoc.data() : {};
-          
-          // Update Firestore with the current verification status
+
           if (userDoc.exists() && userData.emailVerified !== currentUser.emailVerified) {
             await updateDoc(doc(db, "users", currentUser.uid), {
               emailVerified: currentUser.emailVerified
             });
           }
-          
-          // Make sure to include the emailVerified from auth directly in the user object
+
           setUser({ 
             ...currentUser, 
             ...userData,
@@ -380,6 +378,15 @@ const AuthProvider = ({ children }) => {
     return () => unsubscribe();
   }, [checkSession]);
  
+  const safeGetGoogleAuthCache = useCallback(() => {
+    try {
+      return TokenService.getGoogleAuthCache();
+    } catch (error) {
+      console.error("Error getting Google auth cache:", error);
+      return null;
+    }
+  }, []);
+
   const value = useMemo(() => ({
     user,
     loading,
@@ -399,8 +406,8 @@ const AuthProvider = ({ children }) => {
     extendSession,
     checkSession,
     googleAuthChecked,
-    getGoogleAuthCache: TokenService.getGoogleAuthCache
-  }), [user, loading, deviceError, sessionExpiring, sessionTimeRemaining, extendSession, checkSession, googleAuthChecked]);
+    getGoogleAuthCache: safeGetGoogleAuthCache 
+  }), [user, loading, deviceError, sessionExpiring, sessionTimeRemaining, extendSession, checkSession, googleAuthChecked, safeGetGoogleAuthCache]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
