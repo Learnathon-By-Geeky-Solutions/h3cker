@@ -166,12 +166,7 @@ const ApiService = {
         return fieldErrors;
       }
     }
-
-    try {
-      return JSON.stringify(data);
-    } catch (e) {
-      return 'Unknown error format';
-    }
+    return JSON.stringify(data);
   },
 
   /**
@@ -357,10 +352,9 @@ const ApiService = {
    */
   handleUploadResponse(xhr, resolve, reject) {
     if (xhr.status >= 200 && xhr.status < 300) {
-      try {
-        const response = JSON.parse(xhr.responseText);
-        resolve(response);
-      } catch (e) {
+      if (xhr.getResponseHeader('Content-Type')?.includes('application/json')) {
+        resolve(JSON.parse(xhr.responseText));
+      } else {
         resolve(xhr.responseText);
       }
     } else if (xhr.status === 401) {
