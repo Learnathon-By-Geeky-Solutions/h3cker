@@ -1,81 +1,131 @@
 import React from 'react';
 import PropTypes from 'prop-types';
-import { Play } from 'lucide-react';
-import { extractYouTubeId, getYouTubeThumbnail } from '../../Shared/VideoPlayer/youtubeUtils';
+import { Card, Badge } from 'flowbite-react';
+import { Clock, TrendingUp, ThumbsUp, Play } from 'lucide-react';
+import { formatDistanceToNow, parseISO, isValid } from 'date-fns';
 
-/**
- * AdCard component 
- * Simplified to avoid SonarQube issues
- */
 const AdCard = ({ ad, onPlayClick }) => {
-  // Get thumbnail from video URL if available
   const getThumbnail = () => {
-    // If image URL is provided, use it
-    if (ad.imageUrl) return ad.imageUrl;
-    
-    // Try to extract YouTube thumbnail
-    const videoId = extractYouTubeId(ad.videoUrl);
-    if (videoId) return getYouTubeThumbnail(videoId);
-    
-    // Fallback to placeholder
-    return `/api/placeholder/400/225?text=${encodeURIComponent(ad.title)}`;
+    if (ad.imageUrl || ad.thumbnail_url) return ad.imageUrl || ad.thumbnail_url;
+    return ad.imageUrl || ad.thumbnail_url || '';
   };
-  
-  // Handle play button click
+
+  const duration = ad.duration || "00:00";
+
+  const formatDateString = (dateString) => {
+    let formattedDate = 'Unknown date';
+    if (dateString) {
+      try {
+        const dateObject = parseISO(dateString);
+        if (isValid(dateObject)) {
+          formattedDate = formatDistanceToNow(dateObject, { addSuffix: true });
+        }
+      } catch (error) {
+        console.error("Error parsing date:", dateString, error);
+      }
+    }
+    return formattedDate;
+  };
+
+  const createdAt = formatDateString(ad.upload_date);
+
+  const isFeatured = ad.featured || ad.popular || false;
+
   const handleClick = (e) => {
     e.preventDefault();
-    if (onPlayClick) onPlayClick(ad);
+    if (onPlayClick && ad.video_url) {
+        onPlayClick(ad);
+    } else if (onPlayClick) {
+        console.warn("Play clicked but no video URL found for:", ad.title);
+    }
   };
-  
-  // Render card
+
+  const placeholderSrc = `/api/placeholder/400/225?text=${encodeURIComponent(ad.title || 'Video')}`;
+
   return (
-    <div className="relative rounded-md overflow-hidden shadow-md bg-gray-800 h-full group">
-      {/* Card thumbnail */}
-      <div className="relative aspect-video bg-gray-900">
-        <img 
-          src={getThumbnail()} 
-          alt={ad.title}
-          className="w-full h-full object-cover"
+    <Card className="overflow-hidden hover:shadow-lg transition-all duration-300 bg-gray-800 border-gray-700 card-hover group p-0">
+      <div className="relative aspect-video">
+        <img
+          src={getThumbnail() || placeholderSrc} // Use placeholder if getThumbnail returns empty
+          alt={ad.title || 'Video thumbnail'}
+          className="w-full h-full object-cover rounded-t-lg"
           loading="lazy"
           onError={(e) => {
-            // Fallback for broken images
-            e.target.src = `/api/placeholder/400/225?text=${encodeURIComponent(ad.title)}`;
+            e.target.onerror = null;
+            if (e.target.src !== placeholderSrc) { // Avoid infinite loop if placeholder fails
+                e.target.src = placeholderSrc;
+            }
           }}
         />
-        
-        {/* Play button overlay */}
-        <div className="absolute inset-0 flex items-center justify-center">
-          <button 
-            onClick={handleClick}
-            aria-label={`Play ${ad.title}`}
-            className="w-12 h-12 bg-blue-600 bg-opacity-90 rounded-full flex items-center justify-center transition-transform transform group-hover:scale-110"
-            type="button"
-          >
-            <Play size={24} className="text-white ml-1" />
-          </button>
+        <div className="absolute bottom-2 right-2 bg-gray-900 bg-opacity-80 text-white text-xs px-2 py-1 rounded-md flex items-center">
+          <Clock size={12} className="mr-1" />
+          {duration}
         </div>
-        
-        {/* Brand tag */}
-        <div className="absolute top-2 right-2 px-2 py-1 bg-black/70 rounded-full text-xs font-bold text-white">
-          {ad.brand}
+        {isFeatured && (
+          <div className="absolute top-2 left-2">
+            <Badge color="purple" icon={TrendingUp} className="flex items-center text-xs">
+              Featured
+            </Badge>
+          </div>
+        )}
+
+        <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+          {ad.video_url && ( // Only show play button if there's a video URL
+            <button
+              onClick={handleClick}
+              aria-label={`Play ${ad.title}`}
+              className="w-10 h-10 bg-blue-600 bg-opacity-90 rounded-full flex items-center justify-center transform scale-90 hover:scale-100 transition-all duration-300 shadow-lg hover:bg-blue-500"
+              type="button"
+            >
+              <Play size={20} className="text-white ml-0.5" />
+            </button>
+           )}
         </div>
       </div>
-      
-      {/* Card title */}
+
       <div className="p-3">
-        <h3 className="font-bold text-sm text-white">{ad.title}</h3>
+        <h5 className="text-sm font-medium text-white line-clamp-1" title={ad.title || 'Untitled Video'}>
+          {ad.title || 'Untitled Video'}
+        </h5>
+
+        <div className="flex justify-between items-center mt-2 text-xs text-gray-400 space-x-2">
+           <div className="flex items-center overflow-hidden whitespace-nowrap">
+             <Play size={12} className="mr-1 flex-shrink-0" />
+             <span className="truncate">{ad.views != null ? ad.views.toLocaleString() : '0'} views</span>
+           </div>
+           <div className="flex items-center overflow-hidden whitespace-nowrap">
+             <ThumbsUp size={12} className="mr-1 flex-shrink-0" />
+             <span className="truncate">{ad.likes != null ? ad.likes.toLocaleString() : '0'}</span>
+           </div>
+           <div className="flex items-center overflow-hidden whitespace-nowrap">
+             <Clock size={12} className="mr-1 flex-shrink-0" />
+             <span className="truncate" title={ad.upload_date ? new Date(parseISO(ad.upload_date)).toLocaleString() : 'Unknown date'}>
+                 {createdAt}
+             </span>
+           </div>
+        </div>
       </div>
-    </div>
+    </Card>
   );
 };
 
 AdCard.propTypes = {
   ad: PropTypes.shape({
-    id: PropTypes.number.isRequired,
-    title: PropTypes.string.isRequired,
+    id: PropTypes.oneOfType([PropTypes.number, PropTypes.string]).isRequired,
+    title: PropTypes.string,
     imageUrl: PropTypes.string,
-    videoUrl: PropTypes.string.isRequired,
-    brand: PropTypes.string.isRequired
+    thumbnail_url: PropTypes.string,
+    videoUrl: PropTypes.string, 
+    video_url: PropTypes.string,
+    duration: PropTypes.string,
+    views: PropTypes.number,
+    likes: PropTypes.number,
+    upload_date: PropTypes.string,
+    brand: PropTypes.string,
+    uploader_name: PropTypes.string,
+    featured: PropTypes.bool,
+    popular: PropTypes.bool,
+    description: PropTypes.string
   }).isRequired,
   onPlayClick: PropTypes.func
 };

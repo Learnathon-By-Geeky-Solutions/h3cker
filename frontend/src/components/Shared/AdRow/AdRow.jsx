@@ -1,82 +1,92 @@
 import React, { useState } from 'react';
 import PropTypes from 'prop-types';
-import AdCard from '../../Shared/AdCard/AdCard';
-import VideoPlayer from '../../Shared/VideoPlayer/VideoPlayer';
+import { Link } from 'react-router-dom';
+import { Button } from 'flowbite-react';
+import AdCard from '../AdCard/AdCard';
+import VideoPlayer from '../VideoPlayer/VideoPlayer';
 
-/**
- * AdRow component
- * Renders a row of ad cards with video playback functionality
- */
-const AdRow = ({ title, icon, ads }) => {
+const AdRow = ({ title, icon, ads, linkTo, isVideoSection = false }) => {
   const [selectedAd, setSelectedAd] = useState(null);
   const [showVideo, setShowVideo] = useState(false);
   
-  // Handle ad card click
   const handleAdClick = (ad) => {
+    if (isVideoSection && ad.id) {
+      return;
+    }
+    
     setSelectedAd(ad);
     setShowVideo(true);
   };
   
-  // Handle tracking data
   const handleTrackingData = (data) => {
     if (!selectedAd) return;
-    
     console.log(`Ad ${selectedAd.id} tracking:`, data);
-    // You can send this data to your backend
   };
   
-  // Handle video close
   const handleVideoClose = () => {
     setShowVideo(false);
     setSelectedAd(null);
   };
   
-  // Render title section
   const renderTitle = () => (
-    <h2 className="text-xl font-bold mb-5 flex items-center text-white">
-      {icon && <span className="mr-2">{icon}</span>}
-      {title}
-    </h2>
+    <div className="flex items-center justify-between mb-4">
+      <h2 className="text-xl font-bold text-white flex items-center">
+        {icon && <span className="mr-2">{icon}</span>}
+        {title}
+      </h2>
+      {linkTo && (
+        <Link to={linkTo}>
+          <Button 
+            color="gray" 
+            size="xs" 
+            pill 
+            className="bg-gray-700 hover:bg-gray-600 text-gray-200"
+          >
+            View All
+          </Button>
+        </Link>
+      )}
+    </div>
   );
   
-  // Render ad cards grid
   const renderGrid = () => (
     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
       {ads.map((ad) => (
-        <AdCard 
-          key={ad.id} 
-          ad={ad} 
-          onPlayClick={handleAdClick} 
-        />
+        isVideoSection ? (
+          <Link key={ad.id} to={`/video/${ad.id}`} className="block">
+            <AdCard ad={ad} onPlayClick={handleAdClick} />
+          </Link>
+        ) : (
+          <AdCard key={ad.id} ad={ad} onPlayClick={handleAdClick} />
+        )
       ))}
     </div>
   );
   
-  // Render video overlay
   const renderVideoOverlay = () => (
-    <div className="fixed inset-0 z-50 bg-black bg-opacity-90 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 bg-black bg-opacity-90 flex items-center justify-center backdrop-blur-sm animate-fadeIn">
       <button 
         onClick={handleVideoClose}
-        className="absolute top-4 right-4 bg-gray-800 text-white p-2 rounded-full z-30"
+        className="absolute top-4 right-4 bg-gray-800 hover:bg-gray-700 text-white p-2 rounded-full z-30 shadow-lg transition-colors duration-300"
         aria-label="Close video"
         type="button"
       >
         ✕
       </button>
       
-      <div className="w-full max-w-4xl">
+      <div className="w-full max-w-4xl rounded-lg overflow-hidden shadow-2xl animate-scaleIn">
         <VideoPlayer 
-          videoSource={selectedAd.videoUrl}
+          videoUrl={selectedAd.videoUrl || selectedAd.video_url}
           title={selectedAd.title}
-          onTrackingData={handleTrackingData}
-          previewImage={selectedAd.imageUrl}
+          onEnded={handleTrackingData}
+          thumbnailUrl={selectedAd.imageUrl || selectedAd.thumbnail_url}
         />
       </div>
     </div>
   );
 
   return (
-    <div className="mb-10 px-6 md:px-12">
+    <div className="mb-6 space-y-4">
       {renderTitle()}
       {renderGrid()}
       {showVideo && selectedAd && renderVideoOverlay()}
@@ -89,9 +99,11 @@ AdRow.propTypes = {
   icon: PropTypes.node,
   ads: PropTypes.arrayOf(
     PropTypes.shape({
-      id: PropTypes.number.isRequired
+      id: PropTypes.oneOfType([PropTypes.number, PropTypes.string]).isRequired
     })
-  ).isRequired
+  ).isRequired,
+  linkTo: PropTypes.string,
+  isVideoSection: PropTypes.bool
 };
 
 export default AdRow;

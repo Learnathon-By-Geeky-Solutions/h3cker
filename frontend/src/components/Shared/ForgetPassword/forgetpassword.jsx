@@ -108,24 +108,28 @@ const ForgetPassword = () => {
 
   return (
     <motion.div 
-      className="min-h-screen flex flex-col justify-center px-4 py-8 sm:py-12 bg-gradient-to-br from-blue-50 to-indigo-100"
+      className="min-h-screen flex flex-col justify-center px-4 py-8 sm:py-12 bg-gray-900"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.4, ease: 'easeOut' }}
     >
-      <div className="w-full max-w-md mx-auto">
+      {/* Background elements */}
+      <div className="absolute top-0 -left-32 w-[30rem] h-[30rem] bg-blue-600 opacity-15 rounded-full filter blur-[64px]" />
+      <div className="absolute bottom-0 -right-32 w-[30rem] h-[30rem] bg-purple-500 opacity-15 rounded-full filter blur-[64px]" />
+      
+      <div className="w-full max-w-md mx-auto relative z-10">
         <BrandLogo className="justify-center mb-8" />
-        <div className="relative bg-white bg-opacity-90 sm:backdrop-blur-md rounded-xl border border-white/40 shadow-2xl ring-2 ring-blue-100/50 p-4 sm:p-8 space-y-3">
-          <h2 className="text-2xl sm:text-3xl font-semibold text-center text-gray-900">
+        <div className="relative bg-gray-800/80 backdrop-blur-md rounded-[28px] border border-gray-700 shadow-2xl ring-1 ring-blue-900/30 p-6 sm:p-8 space-y-4">
+          <h2 className="text-2xl sm:text-3xl font-semibold text-center text-white mb-2">
             Reset Password
           </h2>
 
-          <form onSubmit={handlePasswordReset} className="space-y-4 sm:space-y-6">
-            <div className="space-y-1">
+          <form onSubmit={handlePasswordReset} className="space-y-5 sm:space-y-6">
+            <div className="space-y-2">
               <label 
                 htmlFor={emailId} 
-                className="block text-sm font-medium text-gray-700"
+                className="block text-sm font-medium text-gray-300"
               >
                 Email
               </label>
@@ -140,7 +144,7 @@ const ForgetPassword = () => {
                     document.cookie = 'resetCooldown=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
                   }
                 }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-2.5 bg-gray-700/50 border border-gray-600 rounded-[14px] shadow-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 required
                 aria-required="true"
               />
@@ -153,9 +157,9 @@ const ForgetPassword = () => {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
                   transition={{ duration: 0.2 }}
-                  className="p-3 rounded-md bg-red-50 border border-red-200"
+                  className="p-3 rounded-[14px] bg-red-800/30 border border-red-700"
                 >
-                  <p className="text-red-600 text-sm">{error}</p>
+                  <p className="text-red-400 text-sm">{error}</p>
                 </motion.div>
               )}
 
@@ -165,9 +169,9 @@ const ForgetPassword = () => {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
                   transition={{ duration: 0.2 }}
-                  className="p-3 rounded-md bg-green-50 border border-green-200"
+                  className="p-3 rounded-[14px] bg-green-800/30 border border-green-700"
                 >
-                  <p className="text-green-600 text-sm">
+                  <p className="text-green-400 text-sm">
                     If an account exists with this email address, you will receive a password reset link shortly.
                   </p>
                 </motion.div>
@@ -177,19 +181,24 @@ const ForgetPassword = () => {
             <motion.button
               type="submit"
               disabled={loading || cooldown > 0}
-              className="w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-              whileHover={{ scale: 1.01 }}
-              whileTap={{ scale: 0.99 }}
+              className="relative group w-full shadow-lg"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
               transition={{ duration: 0.2 }}
             >
-              {buttonText}
+              <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-blue-500 to-blue-700 rounded-[14px] shadow-md" />
+              <span className="absolute inset-0 w-full h-full bg-white/10 rounded-[14px] blur-[1px]" />
+              <span className="absolute inset-0 w-full h-full bg-blue-600 rounded-[14px] transform transition-transform group-hover:scale-[1.02]" />
+              <span className="relative flex items-center justify-center text-white font-medium py-2.5 text-sm">
+                {buttonText}
+              </span>
             </motion.button>
           </form>
 
-          <p className="mt-4 sm:mt-6 text-center text-sm text-gray-600">
+          <p className="mt-5 sm:mt-6 text-center text-sm text-gray-400">
             <Link
               to="/login"
-              className="font-medium text-blue-600 hover:text-blue-500"
+              className="font-medium text-blue-400 hover:text-blue-300"
             >
               Back to Login
             </Link>

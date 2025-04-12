@@ -10,6 +10,7 @@ import Dashboard from "../../components/Pages/Dashboard/Dashboard.jsx";
 import UploadVideo from "../../components/Pages/Dashboard/UploadVideo.jsx";
 import VideoDetail from "../../components/Shared/VideoPlayer/VideoDetail.jsx";
 import PrivateRoute from "../PrivateRoute/Privateroute.jsx";
+import Video from "../../components/Pages/Video/Video.jsx";
 
 const router = createBrowserRouter([
   {
@@ -49,8 +50,12 @@ const router = createBrowserRouter([
         element: <PrivateRoute><UploadVideo /></PrivateRoute>
       },
       {
-        path: "/video/:id", // Add the video detail route with id parameter
+        path: "/video/:id", 
         element: <VideoDetail />
+      },
+      {
+        path: "/videos",
+        element: <Video />
       }
     ]
   }

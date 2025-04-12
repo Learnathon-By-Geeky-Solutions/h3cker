@@ -22,7 +22,6 @@ const Login = () => {
     const emailId = useId();
     const passwordId = useId();
 
-    // Check for cached Google account on component mount
     useEffect(() => {
         const checkGoogleCache = () => {
             try {
@@ -37,7 +36,6 @@ const Login = () => {
             }
         };
         
-        // Adding a small delay to ensure context is fully loaded
         const timeoutId = setTimeout(checkGoogleCache, 100);
         return () => clearTimeout(timeoutId);
     }, [getGoogleAuthCache]);
@@ -87,24 +85,28 @@ const Login = () => {
 
     return (
         <motion.div 
-            className="min-h-screen flex flex-col justify-center px-4 py-8 sm:py-12 bg-gradient-to-br from-blue-50 to-indigo-100"
+            className="min-h-screen flex flex-col justify-center px-4 py-8 sm:py-12 bg-gray-900"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.4, ease: 'easeOut' }}
         >
-            <div className="w-full max-w-md mx-auto">
+            {/* Background elements */}
+            <div className="absolute top-0 -left-32 w-[30rem] h-[30rem] bg-blue-600 opacity-15 rounded-full filter blur-[64px]" />
+            <div className="absolute bottom-0 -right-32 w-[30rem] h-[30rem] bg-purple-500 opacity-15 rounded-full filter blur-[64px]" />
+            
+            <div className="w-full max-w-md mx-auto relative z-10">
                 <BrandLogo className="justify-center mb-8" />
-                <div className="relative bg-white bg-opacity-90 sm:backdrop-blur-md rounded-xl border border-white/40 shadow-2xl ring-2 ring-blue-100/50 p-4 sm:p-8 space-y-3">
-                    <h2 className="text-2xl sm:text-3xl font-semibold text-center text-gray-900">
+                <div className="relative bg-gray-800/80 backdrop-blur-md rounded-[28px] border border-gray-700 shadow-2xl ring-1 ring-blue-900/30 p-6 sm:p-8 space-y-4">
+                    <h2 className="text-2xl sm:text-3xl font-semibold text-center text-white mb-2">
                         Login
                     </h2>
 
-                    <form onSubmit={handleEmailLogin} className="space-y-4 sm:space-y-6">
-                        <div className="space-y-1">
+                    <form onSubmit={handleEmailLogin} className="space-y-5 sm:space-y-6">
+                        <div className="space-y-2">
                             <label 
                                 htmlFor={emailId} 
-                                className="block text-sm font-medium text-gray-700"
+                                className="block text-sm font-medium text-gray-300"
                             >
                                 Email
                             </label>
@@ -113,15 +115,15 @@ const Login = () => {
                                 type="email"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full px-4 py-2.5 bg-gray-700/50 border border-gray-600 rounded-[14px] shadow-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 required
                             />
                         </div>
 
-                        <div className="space-y-1">
+                        <div className="space-y-2">
                             <label 
                                 htmlFor={passwordId} 
-                                className="block text-sm font-medium text-gray-700"
+                                className="block text-sm font-medium text-gray-300"
                             >
                                 Password
                             </label>
@@ -131,13 +133,13 @@ const Login = () => {
                                     type={showPassword ? "text" : "password"}
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-full px-4 py-2.5 bg-gray-700/50 border border-gray-600 rounded-[14px] shadow-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     required
                                 />
                                 <button
                                     type="button"
                                     onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                                    className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-200"
                                 >
                                     {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                                 </button>
@@ -151,7 +153,7 @@ const Login = () => {
                         <div className="flex justify-between items-center">
                             <Link 
                                 to="/forgetpassword" 
-                                className="text-sm text-blue-600 hover:text-blue-500"
+                                className="text-sm text-blue-400 hover:text-blue-300"
                             >
                                 Forgot password?
                             </Link>
@@ -160,35 +162,39 @@ const Login = () => {
                         <motion.button
                             type="submit"
                             disabled={loading}
-                            className="w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-                            whileHover={{ scale: 1.01 }}
-                            whileTap={{ scale: 0.99 }}
+                            className="relative group w-full shadow-lg"
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
                             transition={{ duration: 0.2 }}
                         >
-                            {loading ? 'Signing in...' : 'Sign in'}
+                            <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-blue-500 to-blue-700 rounded-[14px] shadow-md" />
+                            <span className="absolute inset-0 w-full h-full bg-white/10 rounded-[14px] blur-[1px]" />
+                            <span className="absolute inset-0 w-full h-full bg-blue-600 rounded-[14px] transform transition-transform group-hover:scale-[1.02]" />
+                            <span className="relative flex items-center justify-center text-white font-medium py-2.5 text-sm">
+                                {loading ? 'Signing in...' : 'Sign in'}
+                            </span>
                         </motion.button>
                     </form>
 
-                    <div className="relative my-4 sm:my-6">
+                    <div className="relative my-5 sm:my-6">
                         <div className="absolute inset-0 flex items-center">
-                            <div className="w-full border-t border-gray-300" />
+                            <div className="w-full border-t border-gray-600" />
                         </div>
                         <div className="relative flex justify-center text-sm">
-                            <span className="px-2 bg-white text-gray-500">
+                            <span className="px-2 bg-gray-800 text-gray-400">
                                 Or continue with
                             </span>
                         </div>
                     </div>
 
-                    {/* Cached Google Account Button */}
                     {cachedGoogleAccount ? (
                         <div className="space-y-3">
                             <motion.button
                                 onClick={handleGoogleLogin}
                                 disabled={loading}
-                                className="w-full flex items-center justify-center py-2 px-4 border border-blue-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-blue-50 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-                                whileHover={{ scale: 1.01 }}
-                                whileTap={{ scale: 0.99 }}
+                                className="w-full flex items-center justify-center py-2.5 px-4 border border-blue-500 rounded-[14px] shadow-md text-sm font-medium text-white bg-blue-500/20 hover:bg-blue-500/30 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
                                 transition={{ duration: 0.2 }}
                             >
                                 {cachedGoogleAccount.photoURL ? (
@@ -222,9 +228,9 @@ const Login = () => {
                         <motion.button
                             onClick={handleGoogleLogin}
                             disabled={loading}
-                            className="w-full flex items-center justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-                            whileHover={{ scale: 1.01 }}
-                            whileTap={{ scale: 0.99 }}
+                            className="w-full flex items-center justify-center py-2.5 px-4 border border-gray-600 rounded-[14px] shadow-md text-sm font-medium text-white bg-gray-700/50 hover:bg-gray-700/70 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
                             transition={{ duration: 0.2 }}
                         >
                             <svg 
@@ -238,11 +244,11 @@ const Login = () => {
                         </motion.button>
                     )}
 
-                    <p className="mt-4 sm:mt-6 text-center text-sm text-gray-600">
+                    <p className="mt-5 sm:mt-6 text-center text-sm text-gray-400">
                         Don't have an account?{' '}
                         <Link 
                             to="/signup" 
-                            className="font-medium text-blue-600 hover:text-blue-500"
+                            className="font-medium text-blue-400 hover:text-blue-300"
                         >
                             Sign up
                         </Link>

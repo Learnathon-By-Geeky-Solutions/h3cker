@@ -10,10 +10,10 @@ const BrandLogo = ({ className = '' }) => {
         <BarChart3 size={32} className="text-white" />
       </div>
       <div className="flex flex-col">
-        <h1 className="text-2xl font-bold text-gray-900">
+        <h1 className="text-2xl font-bold text-white">
           Engage Analytics
         </h1>
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-white opacity-70">
           Unlock Your Data Potential
         </p>
       </div>
