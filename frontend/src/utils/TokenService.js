@@ -1,13 +1,14 @@
 const TokenService = {
-  // Key names for local storage
   tokenKey: 'auth_token',
   userDevicesKey: 'user_devices',
   currentDeviceKey: 'current_device_id',
   tokenExpiryKey: 'auth_token_expiry',
   googleAuthCacheKey: 'google_auth_cache',
   profileUpdateTimeKey: 'profile_last_update_time',
+  lastTokenSetTimeKey: 'last_token_set_time',
 
   sessionDuration: 24 * 60 * 60 * 1000, // 24 hours in milliseconds
+  tokenRateLimitMs: 1000, // Minimum time between token sets (1 second)
 
   // Max number of devices allowed to be logged in simultaneously
   maxDevices: 3,
@@ -17,20 +18,12 @@ const TokenService = {
    * @returns {string} A unique device identifier
    */
   generateDeviceId() {
-    // Create a buffer for 8 random bytes (64 bits)
     const buffer = new Uint8Array(8);
-
-    // Fill with cryptographically secure random values
     window.crypto.getRandomValues(buffer);
-
-    // Convert to a hex string and combine with timestamp for uniqueness
     const randomHex = Array.from(buffer)
       .map(b => b.toString(16).padStart(2, '0'))
       .join('');
-
-    // Include timestamp prefix for additional entropy and sortability
     const timestamp = Date.now().toString(36);
-
     return timestamp + '-' + randomHex;
   },
 
@@ -40,12 +33,10 @@ const TokenService = {
    */
   getCurrentDeviceId() {
     let deviceId = localStorage.getItem(this.currentDeviceKey);
-
     if (!deviceId) {
       deviceId = this.generateDeviceId();
       localStorage.setItem(this.currentDeviceKey, deviceId);
     }
-
     return deviceId;
   },
 
@@ -58,56 +49,68 @@ const TokenService = {
   },
 
   /**
-   * Remove the authentication token from local storage
+   * Check if token operations are being rate limited
+   * @returns {boolean} True if rate limited, false otherwise
    */
-  removeToken() {
-    localStorage.removeItem(this.tokenKey);
+  isRateLimited() {
+    const lastSetTime = localStorage.getItem(this.lastTokenSetTimeKey);
+    if (!lastSetTime) return false;
+    
+    const timeSinceLastSet = Date.now() - parseInt(lastSetTime, 10);
+    return timeSinceLastSet < this.tokenRateLimitMs;
   },
 
   /**
-   * Add the current device to the user's device tracking
-   * @param {string} uid - The user's ID
-   * @returns {boolean} True if the device was added, false if max devices reached
+   * Update the last token set timestamp
    */
-  addDeviceToTracking(uid) {
+  updateLastTokenSetTime() {
+    localStorage.setItem(this.lastTokenSetTimeKey, Date.now().toString());
+  },
+
+  /**
+   * Handle device tracking for a user
+   * @param {string} uid - The user's ID
+   * @returns {boolean} Success status of the operation
+   */
+  handleDeviceTracking(uid) {
     if (!uid) return false;
 
     const deviceId = this.getCurrentDeviceId();
     let userDevices = this.getUserDevices(uid);
 
-    // If this device is already registered, just update the timestamp
-    const existingDevice = userDevices.find(device => device.id === deviceId);
-    if (existingDevice) {
-      existingDevice.lastActive = new Date().toISOString();
-      localStorage.setItem(this.userDevicesKey, JSON.stringify({
-        uid,
-        devices: userDevices
-      }));
+    // Update existing device
+    const existingDeviceIndex = userDevices.findIndex(device => device.id === deviceId);
+    if (existingDeviceIndex >= 0) {
+      userDevices[existingDeviceIndex].lastActive = new Date().toISOString();
+      this.storeUserDevices(uid, userDevices);
       return true;
     }
 
-    // Check if max devices would be exceeded
     if (userDevices.length >= this.maxDevices) {
       console.warn('Maximum devices reached');
-      // Optional: Implement logic to remove the oldest device
-      // userDevices.sort((a, b) => new Date(a.lastActive) - new Date(b.lastActive));
-      // userDevices = userDevices.slice(1); // Remove the oldest
-      return false; // Current behavior: Deny login on new device
+      return false;
     }
 
-    // Add the new device
     userDevices.push({
       id: deviceId,
       name: this.getDeviceName(),
       lastActive: new Date().toISOString()
     });
 
+    this.storeUserDevices(uid, userDevices);
+    return true;
+  },
+
+  /**
+   * Store user devices in local storage
+   * @param {string} uid - The user's ID
+   * @param {Array} devices - Array of device objects
+   */
+  storeUserDevices(uid, devices) {
     localStorage.setItem(this.userDevicesKey, JSON.stringify({
       uid,
-      devices: userDevices
+      devices
     }));
-
-    return true;
   },
 
   /**
@@ -119,16 +122,11 @@ const TokenService = {
     if (!uid) return [];
 
     const storedData = localStorage.getItem(this.userDevicesKey);
-
     if (!storedData) return [];
 
     try {
       const parsed = JSON.parse(storedData);
-      // Only return devices for the current user
-      if (parsed.uid === uid) {
-        return parsed.devices || [];
-      }
-      return [];
+      return (parsed.uid === uid) ? (parsed.devices || []) : [];
     } catch (e) {
       console.error('Error parsing user devices', e);
       return [];
@@ -145,11 +143,7 @@ const TokenService = {
 
     const userDevices = this.getUserDevices(uid);
     const updatedDevices = userDevices.filter(device => device.id !== deviceId);
-
-    localStorage.setItem(this.userDevicesKey, JSON.stringify({
-      uid,
-      devices: updatedDevices
-    }));
+    this.storeUserDevices(uid, updatedDevices);
   },
 
   /**
@@ -157,7 +151,6 @@ const TokenService = {
    * @returns {string} A name for the current device
    */
   getDeviceName() {
-    // Avoiding deprecated navigator.platform property
     const platform = navigator.userAgentData?.platform || 'Unknown Device';
     const browser = this.getBrowserName();
     return `${browser} on ${platform}`;
@@ -170,13 +163,12 @@ const TokenService = {
   getBrowserName() {
     const userAgent = navigator.userAgent;
 
-    // Order matters here - check Edge/Chrome/Safari before generic terms
-    if (userAgent.indexOf("Edg") > -1) return "Edge"; // Modern Edge (Chromium based)
+    if (userAgent.indexOf("Edg") > -1) return "Edge";
     if (userAgent.indexOf("Chrome") > -1 && userAgent.indexOf("Safari") > -1 && userAgent.indexOf("OPR") === -1) return "Chrome";
     if (userAgent.indexOf("Firefox") > -1) return "Firefox";
     if (userAgent.indexOf("Safari") > -1 && userAgent.indexOf("Chrome") === -1) return "Safari";
     if (userAgent.indexOf("OPR") > -1 || userAgent.indexOf("Opera") > -1) return "Opera";
-    if (userAgent.indexOf("Trident") > -1 || userAgent.indexOf("MSIE") > -1) return "Internet Explorer"; // Older IE
+    if (userAgent.indexOf("Trident") > -1 || userAgent.indexOf("MSIE") > -1) return "Internet Explorer";
 
     return "Unknown Browser";
   },
@@ -187,20 +179,36 @@ const TokenService = {
    * @param {string} uid - The user's ID
    */
   setToken(token, uid) {
-      if (!token || !uid) {
-           console.error("setToken requires both token and uid.");
-           return;
-      }
+    if (!token || !uid) {
+      console.error("setToken requires both token and uid.");
+      return;
+    }
 
-      localStorage.setItem(this.tokenKey, token);
+    // Prevent rapid token refreshes
+    if (this.isRateLimited()) {
+      console.debug("Token set rate limited. Skipping redundant token update.");
+      return;
+    }
 
-      // Set token expiry time (24 hours from now)
-      const expiryTime = Date.now() + this.sessionDuration;
-      localStorage.setItem(this.tokenExpiryKey, expiryTime.toString());
-      console.log(`Token set. Expires at: ${new Date(expiryTime).toLocaleString()}`);
+    // Check if token is already set and hasn't changed
+    const currentToken = this.getToken();
+    if (currentToken === token) {
+      console.debug("Token unchanged. Skipping redundant update.");
+      return;
+    }
 
-      // Update device tracking
-      this.addDeviceToTracking(uid);
+    // Update token and expiry time
+    localStorage.setItem(this.tokenKey, token);
+    const expiryTime = Date.now() + this.sessionDuration;
+    localStorage.setItem(this.tokenExpiryKey, expiryTime.toString());
+    
+    // Track when we last set a token (for rate limiting)
+    this.updateLastTokenSetTime();
+    
+    console.log(`Token set. Expires at: ${new Date(expiryTime).toLocaleString()}`);
+
+    // Update device tracking
+    this.handleDeviceTracking(uid);
   },
 
   /**
@@ -208,27 +216,23 @@ const TokenService = {
    * @returns {boolean} True if token is expired or missing, false otherwise
    */
   isTokenExpired() {
-      const token = this.getToken();
-      if (!token) {
-          return true;
-      }
+    const token = this.getToken();
+    if (!token) return true;
 
-      const expiryTimeStr = localStorage.getItem(this.tokenExpiryKey);
-      if (!expiryTimeStr) {
-           console.warn("Token expiry check: Expiry time missing.");
-           return true;
-      }
+    const expiryTimeStr = localStorage.getItem(this.tokenExpiryKey);
+    if (!expiryTimeStr) {
+      console.warn("Token expiry check: Expiry time missing.");
+      return true;
+    }
 
-      const expiryTime = parseInt(expiryTimeStr, 10);
-       if (isNaN(expiryTime)) {
-           console.error("Token expiry check: Invalid expiry time format.");
-           // Treat as expired if invalid
-           this.clearAuth(); // Clear invalid state
-           return true;
-       }
+    const expiryTime = parseInt(expiryTimeStr, 10);
+    if (isNaN(expiryTime)) {
+      console.error("Token expiry check: Invalid expiry time format.");
+      this.clearAuth();
+      return true;
+    }
 
-      const isExpired = Date.now() > expiryTime;
-      return isExpired;
+    return Date.now() > expiryTime;
   },
 
   /**
@@ -236,15 +240,14 @@ const TokenService = {
    * @returns {number} Milliseconds until expiry, 0 if expired or error
    */
   getTimeUntilExpiry() {
-      const expiryTimeStr = localStorage.getItem(this.tokenExpiryKey);
-       if (!expiryTimeStr) return 0;
+    const expiryTimeStr = localStorage.getItem(this.tokenExpiryKey);
+    if (!expiryTimeStr) return 0;
 
-       const expiryTime = parseInt(expiryTimeStr, 10);
-       if (isNaN(expiryTime)) return 0;
+    const expiryTime = parseInt(expiryTimeStr, 10);
+    if (isNaN(expiryTime)) return 0;
 
-
-      const remaining = expiryTime - Date.now();
-      return remaining > 0 ? remaining : 0;
+    const remaining = expiryTime - Date.now();
+    return remaining > 0 ? remaining : 0;
   },
 
   /**
@@ -252,54 +255,69 @@ const TokenService = {
    * @returns {boolean} Whether the refresh was successful
    */
   refreshExpiry() {
-      const token = this.getToken();
-      if (!token || this.isTokenExpired()) { // Don't refresh if already expired or no token
-          return false;
-      }
+    const token = this.getToken();
+    if (!token || this.isTokenExpired()) return false;
 
-      const expiryTime = Date.now() + this.sessionDuration;
-      localStorage.setItem(this.tokenExpiryKey, expiryTime.toString());
-      console.log(`Token expiry refreshed. New expiry: ${new Date(expiryTime).toLocaleString()}`);
-      return true;
+    // Prevent rapid refreshes
+    if (this.isRateLimited()) return false;
+
+    const expiryTime = Date.now() + this.sessionDuration;
+    localStorage.setItem(this.tokenExpiryKey, expiryTime.toString());
+    this.updateLastTokenSetTime();
+    
+    console.log(`Token expiry refreshed. New expiry: ${new Date(expiryTime).toLocaleString()}`);
+    return true;
+  },
+
+  /**
+   * Encrypt/decrypt data with basic XOR obfuscation
+   * @param {string} text - Text to encrypt/decrypt
+   * @param {string} key - Key for obfuscation
+   * @returns {string} - Obfuscated/de-obfuscated text
+   * @private
+   */
+  simpleEncrypt(text, key) {
+    if (!key) return text;
+    
+    let result = '';
+    for (let i = 0; i < text.length; i++) {
+      const charCode = text.charCodeAt(i) ^ key.charCodeAt(i % key.length);
+      result += String.fromCharCode(charCode);
+    }
+    
+    return result;
   },
 
   /**
    * Store Google authentication state securely for faster login hints
-   * @param {Object} googleAuthState - The Google auth state object (e.g., from Firebase auth result)
+   * @param {Object} googleAuthState - The Google auth state object
    * @param {string} uid - The user's ID
    */
   setGoogleAuthCache(googleAuthState, uid) {
     if (!googleAuthState || !uid) return;
 
     try {
-      // Use a device-specific key for basic obfuscation
       const deviceKey = this.getCurrentDeviceId();
       const timestamp = Date.now();
+      const cacheExpiry = timestamp + (7 * 24 * 60 * 60 * 1000); // 7 days
 
-      // Only store essential, non-sensitive data for login hints
       const cacheData = {
         email: googleAuthState.email,
-        uid: uid, // Store UID for matching
+        uid: uid,
         displayName: googleAuthState.displayName,
         photoURL: googleAuthState.photoURL,
         lastUsed: timestamp,
-        // DO NOT store tokens, passwords, or provider-specific credentials
       };
 
-      // Convert to string and encrypt with simple XOR (basic obfuscation only, not true security)
       const dataString = JSON.stringify(cacheData);
       const encryptedData = this.simpleEncrypt(dataString, deviceKey);
 
-      // Store with expiration (e.g., 7 days)
-      const cacheObj = {
+      localStorage.setItem(this.googleAuthCacheKey, JSON.stringify({
         data: encryptedData,
-        expiry: timestamp + (7 * 24 * 60 * 60 * 1000), // 7 days
-      };
-
-      localStorage.setItem(this.googleAuthCacheKey, JSON.stringify(cacheObj));
+        expiry: cacheExpiry,
+      }));
     } catch (error) {
       console.error('Error caching Google auth state:', error);
-      // Fail gracefully - caching is a non-critical feature
       this.clearGoogleAuthCache();
     }
   },
@@ -314,23 +332,17 @@ const TokenService = {
       if (!cachedData) return null;
 
       const cacheObj = JSON.parse(cachedData);
-      const now = Date.now();
-
-      // Check if cache is expired
-      if (now > cacheObj.expiry) {
+      if (Date.now() > cacheObj.expiry) {
         this.clearGoogleAuthCache();
         return null;
       }
 
-      // Decrypt the data using the current device key
       const deviceKey = this.getCurrentDeviceId();
-      const decryptedData = this.simpleEncrypt(cacheObj.data, deviceKey); // XOR is reversible
-
-      // Parse and return the cached user info
+      const decryptedData = this.simpleEncrypt(cacheObj.data, deviceKey);
       return JSON.parse(decryptedData);
     } catch (error) {
       console.error('Error retrieving Google auth cache:', error);
-      this.clearGoogleAuthCache(); // Clear corrupted cache
+      this.clearGoogleAuthCache();
       return null;
     }
   },
@@ -349,7 +361,6 @@ const TokenService = {
    */
   setProfileUpdateTime(uid, timestamp = new Date()) {
     if (!uid) return;
-
     localStorage.setItem(`${this.profileUpdateTimeKey}_${uid}`, timestamp.getTime().toString());
   },
 
@@ -366,7 +377,6 @@ const TokenService = {
 
     const timestamp = parseInt(timestampStr, 10);
     return isNaN(timestamp) ? null : new Date(timestamp);
-
   },
 
   /**
@@ -376,33 +386,14 @@ const TokenService = {
    * @returns {boolean} Whether the profile can be updated
    */
   canUpdateProfile(uid, minDays = 1) {
-    if (!uid) return true; // Or false, depending on desired behavior for anonymous users
+    if (!uid) return true;
 
     const lastUpdate = this.getProfileUpdateTime(uid);
-    if (!lastUpdate) return true; // Allow first update
+    if (!lastUpdate) return true;
 
     const now = new Date();
     const daysSinceLastUpdate = (now.getTime() - lastUpdate.getTime()) / (1000 * 60 * 60 * 24);
-
     return daysSinceLastUpdate >= minDays;
-  },
-
-  /**
-   * Basic XOR encryption/decryption for simple obfuscation (NOT secure encryption)
-   * @param {string} text - Text to encrypt/decrypt
-   * @param {string} key - Key for obfuscation
-   * @returns {string} - Obfuscated/de-obfuscated text
-   * @private
-   */
-  simpleEncrypt(text, key) {
-    if (!key) return text; // Cannot encrypt without a key
-    let result = '';
-    for (let i = 0; i < text.length; i++) {
-      // XOR character code with corresponding key character code (wrapping key)
-      const charCode = text.charCodeAt(i) ^ key.charCodeAt(i % key.length);
-      result += String.fromCharCode(charCode);
-    }
-    return result;
   },
 
   /**
@@ -411,8 +402,8 @@ const TokenService = {
   clearAuth() {
     localStorage.removeItem(this.tokenKey);
     localStorage.removeItem(this.tokenExpiryKey);
-    this.clearGoogleAuthCache(); // Clear login hints
-    // Optional: Don't remove currentDeviceKey to potentially recognize the device later
+    localStorage.removeItem(this.lastTokenSetTimeKey);
+    this.clearGoogleAuthCache();
     console.log('Authentication data cleared.');
   }
 };

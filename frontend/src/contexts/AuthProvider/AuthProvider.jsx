@@ -20,7 +20,6 @@ import TokenService from '../../utils/TokenService';
 export const AuthContext = createContext();
 const googleProvider = new GoogleAuthProvider();
 
-// Default avatar from Flowbite
 const DEFAULT_AVATAR = 'https://flowbite.com/docs/images/people/profile-picture-5.jpg';
 
 const AuthProvider = ({ children }) => {
@@ -54,15 +53,12 @@ const AuthProvider = ({ children }) => {
     const userData = userSnapshot.data();
     const userDevices = userData.devices || [];
     
-    // Check if this device is already registered
     const isExistingDevice = userDevices.some(device => device.id === deviceId);
     
-    // If this is a new device and would exceed the limit, throw error
     if (!isExistingDevice && userDevices.length >= TokenService.maxDevices) {
       throw new Error('MAX_DEVICES_REACHED');
     }
     
-    // Update or add this device
     if (isExistingDevice) {
       return userDevices.map(device => 
         device.id === deviceId 
@@ -101,11 +97,10 @@ const AuthProvider = ({ children }) => {
       photoURL: DEFAULT_AVATAR,
       createdAt: serverTimestamp(),
       role: 'user',
-      emailVerified: false,
+      emailVerified: userCredential.user.emailVerified,
       devices
     });
 
-    // Set auth token
     const token = await userCredential.user.getIdToken();
     TokenService.setToken(token, userCredential.user.uid);
 
@@ -120,20 +115,17 @@ const AuthProvider = ({ children }) => {
       throw new Error('EMAIL_NOT_VERIFIED');
     }
 
-    // Get current device ID
     const deviceId = TokenService.getCurrentDeviceId();
     
-    // Update devices list
     const updatedDevices = await updateUserDevices(userCredential.user.uid, deviceId);
     
-    // Update user document
     const userDocRef = doc(db, "users", userCredential.user.uid);
     await updateDoc(userDocRef, {
       lastLoginAt: serverTimestamp(),
-      devices: updatedDevices
+      devices: updatedDevices,
+      emailVerified: userCredential.user.emailVerified
     });
 
-    // Get and store token
     const token = await userCredential.user.getIdToken();
     TokenService.setToken(token, userCredential.user.uid);
 
@@ -142,20 +134,14 @@ const AuthProvider = ({ children }) => {
 
   const signInWithGoogle = async () => {
     try {
-      // First check if we have cached Google auth data
       const cachedAuth = TokenService.getGoogleAuthCache();
       
-      // Use cached data to optimize the UI experience
       if (cachedAuth?.email) {
-        // We can show some indication that we're using a known account
-        // but we still need to complete the full auth flow for security
         console.log(`Signing in with previously used Google account: ${cachedAuth.email}`);
-        // This could trigger a UI indication that we're using a cached account
       }
       
       const result = await signInWithPopup(auth, googleProvider);
       
-      // Get current device ID
       const deviceId = TokenService.getCurrentDeviceId();
       const userDocRef = doc(db, "users", result.user.uid);
       const userSnapshot = await getDoc(userDocRef);
@@ -163,7 +149,6 @@ const AuthProvider = ({ children }) => {
       if (!userSnapshot.exists()) {
         const nameParts = result.user.displayName?.split(" ") || ['User'];
         
-        // Create new document with this device
         await setDoc(userDocRef, {
           firstName: nameParts[0],
           lastName: nameParts.slice(1).join(" ") || '',
@@ -180,7 +165,6 @@ const AuthProvider = ({ children }) => {
           }]
         });
       } else {
-        // Existing user - update devices
         const updatedDevices = await updateUserDevices(result.user.uid, deviceId);
         
         await updateDoc(userDocRef, { 
@@ -190,11 +174,9 @@ const AuthProvider = ({ children }) => {
         });
       }
 
-      // Get and store token
       const token = await result.user.getIdToken();
       TokenService.setToken(token, result.user.uid);
       
-      // Cache Google auth data for future use
       TokenService.setGoogleAuthCache({
         email: result.user.email,
         displayName: result.user.displayName,
@@ -203,7 +185,6 @@ const AuthProvider = ({ children }) => {
 
       return result.user;
     } catch (error) {
-      // If there was an error with the cached auth, clear it
       if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-disabled') {
         TokenService.clearGoogleAuthCache();
       }
@@ -228,7 +209,6 @@ const AuthProvider = ({ children }) => {
 
   const checkSession = useCallback(() => {
     if (TokenService.isTokenExpired()) {
-      // Token is expired, log the user out
       if (user) {
         console.log('Session expired, logging out');
         logout();
@@ -236,11 +216,9 @@ const AuthProvider = ({ children }) => {
       return false;
     }
     
-    // Get remaining time
     const timeRemaining = TokenService.getTimeUntilExpiry();
     setSessionTimeRemaining(timeRemaining);
     
-    // Show warning when less than 5 minutes remaining
     if (timeRemaining < 5 * 60 * 1000 && timeRemaining > 0) {
       setSessionExpiring(true);
     } else {
@@ -250,11 +228,9 @@ const AuthProvider = ({ children }) => {
     return true;
   }, [user]);
 
-  // Extend the session
   const extendSession = useCallback(async () => {
     if (user) {
       try {
-        // Get a fresh token from Firebase
         const token = await user.getIdToken(true);
         TokenService.setToken(token, user.uid);
         setSessionExpiring(false);
@@ -268,15 +244,13 @@ const AuthProvider = ({ children }) => {
     return false;
   }, [user, checkSession]);
 
-  // Updated logout to clear token and Google auth cache
   const logout = async () => {
     setSessionExpiring(false);
     setSessionTimeRemaining(null);
-    TokenService.clearAuth(); // This now also clears Google auth cache
+    TokenService.clearAuth();
     return signOut(auth);
   };
 
-  // Remove device from user's devices list
   const removeDevice = async (deviceId) => {
     if (!user?.uid) return false;
     
@@ -293,7 +267,6 @@ const AuthProvider = ({ children }) => {
           devices: updatedDevices
         });
         
-        // If current device was removed, also log out
         if (deviceId === TokenService.getCurrentDeviceId()) {
           await logout();
         }
@@ -307,7 +280,6 @@ const AuthProvider = ({ children }) => {
     }
   };
 
-  // Get user's devices
   const getUserDevices = async () => {
     if (!user?.uid) return [];
     
@@ -326,14 +298,11 @@ const AuthProvider = ({ children }) => {
     }
   };
 
-  // Check if we have cached Google auth data on initial load
   useEffect(() => {
     const checkGoogleAuthCache = async () => {
       try {
         const cachedAuth = TokenService.getGoogleAuthCache();
         if (cachedAuth?.email) {
-          // We have cached Google auth data - can be used in the UI
-          // to show a "Sign in as [email]" button
           console.log(`Found cached Google account: ${cachedAuth.email}`);
         }
       } catch (error) {
@@ -347,14 +316,11 @@ const AuthProvider = ({ children }) => {
     checkGoogleAuthCache();
   }, []);
 
-  // Add a session check interval
   useEffect(() => {
     if (!user) return undefined;
     
-    // Check session immediately
     checkSession();
     
-    // Set up periodic checks (every minute)
     const intervalId = setInterval(() => {
       checkSession();
     }, 60 * 1000);
@@ -368,11 +334,9 @@ const AuthProvider = ({ children }) => {
         if (currentUser) {
           const userDoc = await getDoc(doc(db, "users", currentUser.uid));
           
-          // Get updated token on each auth state change
           const token = await currentUser.getIdToken();
           TokenService.setToken(token, currentUser.uid);
           
-          // If this is a Google user, update the cache
           if (currentUser.providerData.some(provider => provider.providerId === 'google.com')) {
             TokenService.setGoogleAuthCache({
               email: currentUser.email,
@@ -381,11 +345,25 @@ const AuthProvider = ({ children }) => {
             }, currentUser.uid);
           }
           
-          setUser({ ...currentUser, ...userDoc.data() });
-          // Check session after setting user
+          // Ensure we get the emailVerified directly from the auth object
+          const userData = userDoc.exists() ? userDoc.data() : {};
+          
+          // Update Firestore with the current verification status
+          if (userDoc.exists() && userData.emailVerified !== currentUser.emailVerified) {
+            await updateDoc(doc(db, "users", currentUser.uid), {
+              emailVerified: currentUser.emailVerified
+            });
+          }
+          
+          // Make sure to include the emailVerified from auth directly in the user object
+          setUser({ 
+            ...currentUser, 
+            ...userData,
+            emailVerified: currentUser.emailVerified 
+          });
+          
           checkSession();
         } else {
-          // Clear auth when user is null
           TokenService.clearAuth();
           setUser(null);
           setSessionExpiring(false);
@@ -416,17 +394,13 @@ const AuthProvider = ({ children }) => {
     removeDevice,
     getUserDevices,
     maxDevices: TokenService.maxDevices,
-    // Session-related values
     sessionExpiring,
     sessionTimeRemaining,
     extendSession,
     checkSession,
-    // Google auth cache info
     googleAuthChecked,
     getGoogleAuthCache: TokenService.getGoogleAuthCache
   }), [user, loading, deviceError, sessionExpiring, sessionTimeRemaining, extendSession, checkSession, googleAuthChecked]);
-
-
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

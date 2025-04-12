@@ -8,89 +8,73 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000
  */
 const ApiService = {
   /**
-   * Make an authenticated request to the API
-   * @param {string} endpoint - API endpoint to call
-   * @param {Object} options - Fetch options
-   * @param {Object} adminCredentials - Optional admin credentials for elevated permissions
-   * @returns {Promise} - Response from the API
+   * Basic HTTP request methods that share common implementation
+   */
+  get(endpoint, adminCredentials = null) {
+    return this.request(endpoint, { method: 'GET' }, adminCredentials);
+  },
+
+  post(endpoint, data, adminCredentials = null) {
+    return this.request(endpoint, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }, adminCredentials);
+  },
+
+  put(endpoint, data, adminCredentials = null) {
+    return this.request(endpoint, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }, adminCredentials);
+  },
+
+  patch(endpoint, data, adminCredentials = null) {
+    return this.request(endpoint, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }, adminCredentials);
+  },
+
+  delete(endpoint, adminCredentials = null) {
+    return this.request(endpoint, { method: 'DELETE' }, adminCredentials);
+  },
+
+  /**
+   * Core request method that handles authentication and response processing
    */
   async request(endpoint, options = {}, adminCredentials = null) {
     try {
+ 
       const token = await this.getValidToken();
-      
       if (!token) {
         throw new Error('Authentication token is missing');
       }
 
+      const url = `${API_BASE_URL}/${endpoint.startsWith('/') ? endpoint.substring(1) : endpoint}`;
       const headers = this.prepareHeaders(token, adminCredentials, options.headers);
-      const config = { ...options, headers };
+      const config = { ...options, headers, retryCount: options.retryCount || 0 };
 
-      const url = this.formatApiUrl(endpoint);
-      
-      this.logRequestDetails(config.method || 'GET', url, config.body);
-
-      return await this.executeRequest(url, config, endpoint, adminCredentials);
-      
+      this.logRequest(config.method || 'GET', url, config.body);
+ 
+      const response = await fetch(url, config);
+      return await this.handleResponse(response, endpoint, config, adminCredentials);
     } catch (error) {
-    
-      console.error('API request failed:', error.message);
-
-      if (!(error instanceof Error && error.message.startsWith('API error'))) {
-        throw error;
+      if (this.isNetworkError(error)) {
+        throw new Error('Failed to connect to the API server. Please check your connection and try again.');
       }
       throw error;
     }
   },
 
   /**
-   * Get a valid token, refreshing if necessary
-   * @returns {Promise<string|null>} The valid token or null
+   * Prepare request headers including authentication
    */
-  async getValidToken() {
-    let token = TokenService.getToken();
-    if (!token || TokenService.isTokenExpired()) {
-      const currentUser = auth.currentUser;
-      if (currentUser) {
-        console.log('Token expired or missing, attempting to refresh...');
-        try {
-          token = await currentUser.getIdToken(true); 
-          TokenService.setToken(token, currentUser.uid);
-          console.log('Token refreshed successfully.');
-        } catch (refreshError) {
-          console.error('Failed to refresh Firebase token:', refreshError);
-          this.handleAuthError('Your session is invalid. Please log in again.');
-          throw new Error('Authentication failed: Could not refresh token');
-        }
-      } else {
-
-        console.warn('No Firebase user found for authentication.');
-        this.handleAuthError('User not authenticated');
-        throw new Error('User not authenticated');
-      }
-    }
-
-    return token;
-  },
-
-  /**
-   * Prepare request headers
-   * @param {Object} existingHeaders - Existing headers from options
-   * @param {string} token - Authentication token
-   * @param {string} token - Authentication token
-   * @param {Object} adminCredentials - Optional admin credentials
-   * @param {Object} existingHeaders - Existing headers from options
-   * @returns {Object} - Prepared headers
-   */
-  prepareHeaders(token, adminCredentials, existingHeaders = {}) {
+  prepareHeaders(token, adminCredentials = null, existingHeaders = {}) {
     const headers = {
       'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
       ...existingHeaders,
     };
-
-    if (token) {
-    
-      headers['Authorization'] = `Bearer ${token}`;
-    }
 
     if (adminCredentials) {
       headers['X-Admin-Username'] = adminCredentials.username;
@@ -101,427 +85,318 @@ const ApiService = {
   },
 
   /**
-   * Format the API URL
-   * @param {string} endpoint - API endpoint
-   * @returns {string} - Formatted URL
+   * Log API request details (for development)
    */
-  formatApiUrl(endpoint) {
-    console.log('Using API base URL:', API_BASE_URL);
-
-    if (!API_BASE_URL) {
-      console.error('API base URL is not defined in environment variables!');
-    }
-
-    return `${API_BASE_URL}/${endpoint.startsWith('/') ? endpoint.substring(1) : endpoint}`;
-  },
-
-  /**
-   * Log request details
-   * @param {string} method - HTTP method
-   * @param {string} url - Request URL
-   * @param {string|Object} body - Request body
-   */
-  logRequestDetails(method, url, body) {
-    console.log(`Making API request: ${method} ${url}`);
-    if (body && typeof body === 'string') {
-      console.log('Request body (first 100 chars):', body.substring(0, 100));
+  logRequest(method, url, body) {
+    console.log(`API Request: ${method} ${url}`);
+    if (body && typeof body === 'string' && body.length > 0) {
+      const preview = body.length > 100 ? `${body.substring(0, 100)}...` : body;
+      console.log('Request body:', preview);
     }
   },
 
   /**
-   * Execute the API request
-   * @param {string} url - Request URL
-   * @param {Object} config - Request configuration
-   * @param {string} endpoint - Original endpoint (for retry)
-   * @param {Object} adminCredentials - Admin credentials (for retry)
-   * @returns {Promise} - Response from the API
+   * Check if error is a network connectivity error
    */
-  async executeRequest(url, config, endpoint, adminCredentials) {
-    try {
-      // Make the request
-      const response = await fetch(url, config);
+  isNetworkError(error) {
+    return error instanceof TypeError && error.message === 'Failed to fetch';
+  },
 
-      // Debug response
-      console.log(`API Response Status: ${response.status} ${response.statusText}`);
-
-      if (response.status === 401) {
-        return await this.handleUnauthorized(endpoint, config, adminCredentials);
-      }
-
-      if (response.status === 403) {
-        return await this.handleForbidden(response);
-      }
-
-      if (!response.ok) {
-        return await this.handleErrorResponse(response);
-      }
-
-      // Parse and return successful response
-      return await this.parseResponseData(response);
-
-    } catch (error) {
-      // Catch network errors specifically
-      if (error instanceof TypeError && error.message === 'Failed to fetch') {
-        console.error('Network error: Failed to fetch. Check API server connection and CORS configuration on the backend.');
-        throw new Error('Failed to connect to the API server. Please ensure the backend is running and accessible.');
-      }
-      // Re-throw other errors (including parsed API errors)
-      throw error;
+  /**
+   * Process API response based on status code
+   */
+  async handleResponse(response, endpoint, config, adminCredentials) {
+    console.log(`API Response: ${response.status} ${response.statusText}`);
+  
+    if (response.status === 401) {
+      return await this.handleUnauthorized(response, endpoint, config, adminCredentials);
     }
-  },
-
-  /**
-   * Handle 401 Unauthorized response
-   * @param {string} endpoint - Original endpoint
-   * @param {Object} config - Request configuration
-   * @param {Object} adminCredentials - Admin credentials
-   * @returns {Promise} - Response from retry or throws error
-   */
-  async handleUnauthorized(endpoint, config, adminCredentials) {
-    console.warn('Received 401 Unauthorized from API. Token might be invalid on backend.');
-    const refreshed = await this.refreshToken();
-    if (refreshed && config.retryCount !== 1) { 
-      console.log('Retrying request after token refresh...');
-      config.retryCount = 1; 
-      const token = TokenService.getToken();
-      if (token) {
-        config.headers['Authorization'] = `Bearer ${token}`;
-      } else {
-        throw new Error('Authentication failed: Token unavailable after retry');
-      }
-      return this.request(endpoint, config, adminCredentials); // Retry the request
-    } else {
-      // If refresh failed or already retried, trigger logout
-      console.error('Authentication failed after 401, triggering logout.');
-      this.handleAuthError('Your session has expired or is invalid. Please log in again.');
-      throw new Error('Authentication failed');
-    }
-  },
-
-  /**
-   * Handle 403 Forbidden response
-   * @param {Response} response - Fetch Response object
-   * @returns {Promise} - Always throws an error
-   */
-  async handleForbidden(response) {
-    const errorData = await this.parseResponseData(response);
-    const errorMessage = typeof errorData === 'string' ?
-      errorData : (errorData.detail || 'Permission denied');
-    console.error(`Permission denied (403): ${errorMessage}`);
-    throw new Error(`Permission denied: ${errorMessage}`);
-  },
-
-  /**
-   * Handle error responses (non-200 status codes)
-   * @param {Response} response - Fetch Response object
-   * @returns {Promise} - Always throws an error
-   */
-  async handleErrorResponse(response) {
-    const errorData = await this.parseResponseData(response);
-    const detailMessage = this.extractErrorMessage(errorData);
     
-    console.error(`API error ${response.status}: ${detailMessage}`, errorData);
-    throw new Error(`API error (${response.status}): ${detailMessage}`);
+    if (response.status === 403) {
+      throw await this.createErrorFromResponse(response, 'Permission denied');
+    }
+    
+    if (!response.ok) {
+      throw await this.createErrorFromResponse(response);
+    }
+    
+    return await this.parseResponseData(response);
   },
 
   /**
-   * Extract error message from API response
-   * @param {Object|string} errorData - Error data from API
-   * @returns {string} - Error message
+   * Create an error object from response data
    */
-  extractErrorMessage(errorData) {
-    if (typeof errorData === 'string') {
-      return errorData;
-    } 
+  async createErrorFromResponse(response, defaultPrefix = 'API error') {
+    const data = await this.parseResponseData(response);
+    const message = this.extractErrorMessage(data);
+    const errorMessage = `${defaultPrefix} (${response.status}): ${message}`;
     
-    if (typeof errorData === 'object' && errorData !== null) {
-      // Common DRF error structures
-      if (errorData.detail) {
-        return errorData.detail;
-      } 
-      if (errorData.error) {
-        return errorData.error;
-      } 
-      if (errorData.message) {
-        return errorData.message;
-      }
-      
-      // Try to serialize specific field errors
-      const fieldErrors = Object.entries(errorData)
-        .map(([field, errors]) => `${field}: ${Array.isArray(errors) ? errors.join(', ') : errors}`)
+    const error = new Error(errorMessage);
+    error.status = response.status;
+    error.data = data;
+    return error;
+  },
+
+  /**
+   * Extract a meaningful error message from various API response formats
+   */
+  extractErrorMessage(data) {
+    if (typeof data === 'string') {
+      return data;
+    }
+
+    if (!data) {
+      return 'Unknown error';
+    }
+
+    if (data.detail) return data.detail;
+    if (data.error) return data.error;
+    if (data.message) return data.message;
+
+    if (typeof data === 'object') {
+      const fieldErrors = Object.entries(data)
+        .filter(([_, value]) => value !== null && value !== undefined)
+        .map(([field, errors]) => {
+          const errorMsg = Array.isArray(errors) ? errors.join(', ') : errors;
+          return `${field}: ${errorMsg}`;
+        })
         .join('; ');
       
       if (fieldErrors) {
         return fieldErrors;
       }
-      
-      try {
-        return JSON.stringify(errorData);
-      } catch {
-        /* ignore serialization error */
-      }
     }
-    
-    return 'Unknown API error';
+
+    try {
+      return JSON.stringify(data);
+    } catch (e) {
+      return 'Unknown error format';
+    }
   },
 
   /**
    * Parse response data based on content type
-   * @param {Response} response - Fetch Response object
-   * @returns {Promise<Object|string>} - Parsed response data
    */
   async parseResponseData(response) {
-    const contentType = response.headers.get('content-type');
-    if (response.status === 204 || !contentType) {
-      return null; // Or return {}, depending on expected behavior
+
+    if (response.status === 204 || response.headers.get('content-length') === '0') {
+      return null;
     }
-    if (contentType?.includes('application/json')) {
+    
+    const contentType = response.headers.get('content-type') || '';
+    
+    if (contentType.includes('application/json')) {
       try {
         return await response.json();
       } catch (e) {
-        console.error("Failed to parse JSON response:", e);
-        // Try reading as text as a fallback
+        console.error('Failed to parse JSON response:', e);
         const text = await response.text();
-        console.error("Response text:", text);
-        throw new Error("Received invalid JSON response from server.");
+        throw new Error(`Invalid JSON response: ${text.substring(0, 100)}...`);
       }
     }
+
     return await response.text();
   },
 
   /**
-   * Attempt to refresh the Firebase authentication token
-   * @returns {Promise<boolean>} - Whether the refresh was successful
+   * Handle 401 Unauthorized responses with token refresh
+   */
+  async handleUnauthorized(response, endpoint, config, adminCredentials) {
+    console.warn('Received 401 Unauthorized. Attempting token refresh...');
+   
+    if (config.retryCount > 0) {
+      this.handleAuthError('Session expired. Please log in again.');
+      throw new Error('Authentication failed after retry');
+    }
+
+    const refreshed = await this.refreshToken();
+    if (!refreshed) {
+      this.handleAuthError('Unable to refresh your session. Please log in again.');
+      throw new Error('Token refresh failed');
+    }
+
+    const token = TokenService.getToken();
+    if (!token) {
+      throw new Error('Token unavailable after refresh');
+    }
+
+    const newConfig = {
+      ...config,
+      retryCount: config.retryCount + 1,
+      headers: {
+        ...config.headers,
+        'Authorization': `Bearer ${token}`
+      }
+    };
+    
+    console.log('Retrying request with new token...');
+    return this.request(endpoint, newConfig, adminCredentials);
+  },
+
+  /**
+   * Getting a valid authentication token, refreshing if necessary
+   */
+  async getValidToken() {
+    const token = TokenService.getToken();
+
+    if (token && !TokenService.isTokenExpired()) {
+      return token;
+    }
+ 
+    return await this.refreshTokenAndGet();
+  },
+
+  /**
+   * Refresh the token and return the new one
+   */
+  async refreshTokenAndGet() {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      console.warn('No authenticated user found');
+      return null;
+    }
+    
+    try {
+      console.log('Refreshing Firebase token...');
+      const newToken = await currentUser.getIdToken(true);
+      TokenService.setToken(newToken, currentUser.uid);
+      return newToken;
+    } catch (error) {
+      console.error('Token refresh failed:', error);
+      return null;
+    }
+  },
+
+  /**
+   * Force refresh the token
    */
   async refreshToken() {
+    const currentUser = auth.currentUser;
+    if (!currentUser) return false;
+    
     try {
-      if (auth?.currentUser) {
-        console.log('Attempting to force refresh Firebase token...');
-        const newToken = await auth.currentUser.getIdToken(true);
-        if (newToken) {
-          TokenService.setToken(newToken, auth.currentUser.uid);
-          console.log('Firebase token refreshed and saved.');
-          return true;
-        }
-      }
-      console.warn('Could not refresh token: No current user found.');
-      return false;
+      const newToken = await currentUser.getIdToken(true);
+      if (!newToken) return false;
+      
+      TokenService.setToken(newToken, currentUser.uid);
+      return true;
     } catch (error) {
-      console.error('Failed to refresh Firebase token:', error);
-      if (error.code === 'auth/user-token-expired' || error.code === 'auth/invalid-user-token') {
-        this.handleAuthError('Your session has expired. Please log in again.');
+      console.error('Failed to refresh token:', error);
+      if (['auth/user-token-expired', 'auth/invalid-user-token'].includes(error.code)) {
+        this.handleAuthError('Your session has expired');
       }
+      
       return false;
     }
   },
 
   /**
-   * Handle authentication errors (e.g., trigger logout)
-   * @param {string} message - Optional custom error message
+   * Handling authentication errors by clearing state and notifying UI
    */
   handleAuthError(message = 'Authentication error') {
-    console.error(`Authentication Error: ${message}`);
-
+    console.error(`Auth error: ${message}`);
     TokenService.clearAuth();
-
-    window.dispatchEvent(new CustomEvent('auth_error', {
-      detail: { message }
+    window.dispatchEvent(new CustomEvent('auth_error', { 
+      detail: { message } 
     }));
   },
 
-
   /**
-   * GET request
-   * @param {string} endpoint - API endpoint
-   * @param {Object} adminCredentials - Optional admin credentials
-   * @returns {Promise} - Response data
-   */
-  get(endpoint, adminCredentials = null) {
-    return this.request(endpoint, { method: 'GET' }, adminCredentials);
-  },
-
-  /**
-   * POST request
-   * @param {string} endpoint - API endpoint
-   * @param {Object} data - Data to send (will be JSON.stringify'd)
-   * @param {Object} adminCredentials - Optional admin credentials
-   * @returns {Promise} - Response data
-   */
-  post(endpoint, data, adminCredentials = null) {
-    return this.request(endpoint, {
-      method: 'POST',
-      body: JSON.stringify(data), // Ensure data is stringified
-    }, adminCredentials);
-  },
-
-  /**
-   * PUT request
-   * @param {string} endpoint - API endpoint
-   * @param {Object} data - Data to send (will be JSON.stringify'd)
-   * @param {Object} adminCredentials - Optional admin credentials
-   * @returns {Promise} - Response data
-   */
-  put(endpoint, data, adminCredentials = null) {
-    return this.request(endpoint, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    }, adminCredentials);
-  },
-
-  /**
-   * PATCH request
-   * @param {string} endpoint - API endpoint
-   * @param {Object} data - Data to send (will be JSON.stringify'd)
-   * @param {Object} adminCredentials - Optional admin credentials
-   * @returns {Promise} - Response data
-   */
-  patch(endpoint, data, adminCredentials = null) {
-    return this.request(endpoint, {
-      method: 'PATCH',
-      body: JSON.stringify(data), // Ensure data is stringified
-    }, adminCredentials);
-  },
-
-  /**
-   * DELETE request
-   * @param {string} endpoint - API endpoint
-   * @param {Object} adminCredentials - Optional admin credentials
-   * @returns {Promise} - Response data
-   */
-  delete(endpoint, adminCredentials = null) {
-    return this.request(endpoint, { method: 'DELETE' }, adminCredentials);
-  },
-
-  /**
-   * Upload a file using FormData (typically to your own backend endpoint if it handles files)
-   * NOTE: This is NOT suitable for direct Azure SAS URL upload. Use VideoService.uploadFileToBlob for that.
-   * @param {string} endpoint - API endpoint
-   * @param {FormData} formData - Form data with files
-   * @param {Function} progressCallback - Optional callback for upload progress
-   * @param {Object} adminCredentials - Optional admin credentials
-   * @returns {Promise} - Response data
+   * Uploading a file using FormData
    */
   uploadFileWithFormData(endpoint, formData, progressCallback = null, adminCredentials = null) {
     return new Promise((resolve, reject) => {
-      // Setup the XHR request in a separate method
-      this.setupXhrUpload(endpoint, formData, progressCallback, adminCredentials, resolve, reject);
+      this.executeFileUpload(endpoint, formData, progressCallback, adminCredentials, resolve, reject);
     });
   },
 
   /**
-   * Set up the XHR upload request
-   * @param {string} endpoint - API endpoint
-   * @param {FormData} formData - Form data with files
-   * @param {Function} progressCallback - Optional callback for upload progress
-   * @param {Object} adminCredentials - Optional admin credentials
-   * @param {Function} resolve - Promise resolve function
-   * @param {Function} reject - Promise reject function
+   * Setting up and execute file upload via XMLHttpRequest
    */
-  async setupXhrUpload(endpoint, formData, progressCallback, adminCredentials, resolve, reject) {
+  async executeFileUpload(endpoint, formData, progressCallback, adminCredentials, resolve, reject) {
     try {
-      // Get a fresh token
-      await this.refreshToken(); // Ensure token is fresh before starting upload
-      const token = TokenService.getToken();
+  
+      const token = await this.getValidToken();
       if (!token) {
-        reject(new Error('Authentication token is missing for file upload'));
+        reject(new Error('Authentication failed for file upload'));
         return;
       }
 
       const xhr = new XMLHttpRequest();
       const url = `${API_BASE_URL}/${endpoint.startsWith('/') ? endpoint.substring(1) : endpoint}`;
-      xhr.open('POST', url); 
-
-
+      
+      xhr.open('POST', url);
       xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-
+      
+  
       if (adminCredentials) {
         xhr.setRequestHeader('X-Admin-Username', adminCredentials.username);
         xhr.setRequestHeader('X-Admin-Password', adminCredentials.password);
       }
+      
 
-      this.configureXhrCallbacks(xhr, progressCallback, resolve, reject);
+      xhr.onload = () => this.handleUploadResponse(xhr, resolve, reject);
+      xhr.onerror = () => reject(new Error('Network error during upload'));
+      
+      if (progressCallback && typeof progressCallback === 'function') {
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            progressCallback((event.loaded / event.total) * 100);
+          }
+        };
+      }
+      
       xhr.send(formData);
     } catch (error) {
-      console.error('Error setting up file upload:', error);
       reject(error);
     }
   },
 
   /**
-   * Configure XHR callbacks
-   * @param {XMLHttpRequest} xhr - The XHR object
-   * @param {Function} progressCallback - Progress callback function
-   * @param {Function} resolve - Promise resolve function
-   * @param {Function} reject - Promise reject function
+   * Handling the XHR upload response
    */
-  configureXhrCallbacks(xhr, progressCallback, resolve, reject) {
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        // Assuming the response should be JSON.
-        // If parsing fails, the error will propagate and reject the promise.
+  handleUploadResponse(xhr, resolve, reject) {
+    if (xhr.status >= 200 && xhr.status < 300) {
+      try {
         const response = JSON.parse(xhr.responseText);
         resolve(response);
-      } else if (xhr.status === 401) {
-        console.error('Authentication failed during upload (401)');
-        reject(new Error('Authentication failed during upload'));
-        this.handleAuthError('Authentication failed during upload');
-      } else if (xhr.status === 403) {
-        console.error('Permission denied during upload (403)');
-        reject(new Error('Permission denied during upload'));
-      } else {
-        console.error(`Upload failed with status: ${xhr.status} ${xhr.statusText}`);
-        reject(new Error(`Upload failed: ${xhr.status} ${xhr.statusText || 'Server error'}`));
+      } catch (e) {
+        resolve(xhr.responseText);
       }
-    };
-
-    xhr.onerror = () => {
-      console.error('Network error during upload');
-      reject(new Error('Network error during upload'));
-    };
-
-    if (progressCallback && typeof progressCallback === 'function') {
-      xhr.upload.onprogress = (event) => {
-        if (event.lengthComputable) {
-          const percentComplete = (event.loaded / event.total) * 100;
-          progressCallback(percentComplete);
-        }
-      };
+    } else if (xhr.status === 401) {
+      this.handleAuthError('Authentication failed during upload');
+      reject(new Error('Authentication failed during upload'));
+    } else {
+      reject(new Error(`Upload failed: ${xhr.status} ${xhr.statusText || 'Server error'}`));
     }
   },
 
   /**
-   * Test the authentication with the backend
-   * Useful for verifying the connection and token validity
-   * @returns {Promise<Object>} Authentication test result
+   * Testing authentication with the backend
    */
   async testAuth() {
     try {
       return await this.get('auth-test/');
     } catch (error) {
-      console.error('Auth test failed:', error);
-      return { success: false, error: error.message || 'Auth test failed' };
+      return { success: false, error: error.message };
     }
   },
 
   /**
-   * Set Firebase token in browser session for API browser testing (Django REST Framework)
-   * This hits a specific endpoint on the backend designed for this purpose.
-   * @param {string} token - Firebase ID token
-   * @returns {Promise<Object>} Authentication result from the backend
+   * Setting session token for Django REST Framework browsable API
    */
   async setSessionTokenForDRFBrowsableAPI(token) {
-    try {
-      const response = await fetch(`${API_BASE_URL}/set-token/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token }),
-      });
-      
-      return await response.json(); 
-    } catch (error) {
-      console.error('Failed to set session token for DRF Browsable API:', error);
-      throw error; 
+    if (!token) {
+      throw new Error('Token is required');
     }
+    
+    const response = await fetch(`${API_BASE_URL}/set-token/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    });
+    
+    return await response.json();
   }
 };
 
