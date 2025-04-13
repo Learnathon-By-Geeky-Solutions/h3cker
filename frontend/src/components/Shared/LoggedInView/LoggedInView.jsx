@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, TrendingUp, AlertCircle } from 'lucide-react';
-import { Alert, Button, Spinner } from 'flowbite-react';
-import { Link } from 'react-router-dom';
-import VideoService from '../../../utils/VideoService';
+import { Clock, TrendingUp } from 'lucide-react';
+import VideoDataService from '../../../utils/VideoDataService';
+import { 
+  LoadingState, 
+  ErrorState, 
+  EmptyState 
+} from '../VideoLoadingStates/VideoLoadingStates';
 import HeroBillboard from '../HeroBillboard/HeroBillboard';
 import AdRow from '../AdRow/AdRow';
 
@@ -15,39 +18,12 @@ const LoggedInView = () => {
   const [popularVideos, setPopularVideos] = useState([]);
   
   useEffect(() => {
-    const fetchVideos = async () => {
+    const loadVideos = async () => {
       try {
         setLoading(true);
         setError(null);
         
-        const allVideos = await VideoService.getVideoFeed();
-        
-        if (!Array.isArray(allVideos)) {
-          console.error("Received non-array response from getVideoFeed:", allVideos);
-          throw new Error("Invalid response format from server");
-        }
-        
-        // Normalize video data to match AdCard expectations
-        const normalizedVideos = allVideos.map(video => ({
-          id: video.id,
-          title: video.title || 'Untitled Video',
-          description: video.description || '',
-          imageUrl: video.thumbnail_url || null,
-          thumbnail_url: video.thumbnail_url || null,
-          videoUrl: video.video_url || null,
-          video_url: video.video_url || null,
-          brand: video.uploader_name || 'Anonymous',
-          uploader_name: video.uploader_name || 'Anonymous',
-          views: typeof video.views === 'number' ? video.views : 0,
-          likes: typeof video.likes === 'number' ? video.likes : 0,
-          upload_date: video.upload_date || null,
-          duration: video.duration || '00:00',
-          visibility: video.visibility || 'public'
-        }));
-        
-        const publicVideos = normalizedVideos.filter(video => 
-          video.visibility === 'public' || video.visibility === undefined
-        );
+        const { publicVideos } = await VideoDataService.fetchVideos();
         
         if (publicVideos.length === 0) {
           setVideos([]);
@@ -55,29 +31,15 @@ const LoggedInView = () => {
           return;
         }
         
-        const sortedByDate = [...publicVideos].sort((a, b) => {
-          const dateA = a.upload_date ? new Date(a.upload_date) : new Date(0);
-          const dateB = b.upload_date ? new Date(b.upload_date) : new Date(0);
-          return dateB - dateA;
-        });
+        const { 
+          featuredVideo: featured, 
+          recentVideos: recent, 
+          popularVideos: popular 
+        } = VideoDataService.prepareVideoCollections(publicVideos);
         
-        const sortedByViews = [...publicVideos].sort((a, b) =>
-          (b.views || 0) - (a.views || 0)
-        );
-        
-        const featured = sortedByViews.length > 0 ? sortedByViews[0] : null;
         setFeaturedVideo(featured);
-        
-        const recent = featured ? 
-          sortedByDate.filter(v => v.id !== featured.id).slice(0, 10) : 
-          sortedByDate.slice(0, 10);
         setRecentVideos(recent);
-        
-        const popular = featured ? 
-          sortedByViews.filter(v => v.id !== featured.id).slice(0, 10) : 
-          sortedByViews.slice(0, 10);
         setPopularVideos(popular);
-        
         setVideos(publicVideos);
         
       } catch (error) {
@@ -88,46 +50,25 @@ const LoggedInView = () => {
       }
     };
     
-    fetchVideos();
+    loadVideos();
   }, []);
   
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <div className="flex flex-col items-center">
-          <Spinner size="xl" color="info" />
-          <p className="mt-4 text-gray-300">Loading videos...</p>
-        </div>
-      </div>
-    );
+    return <LoadingState />;
   }
   
   if (error) {
-    return (
-      <Alert
-        color="failure"
-        icon={AlertCircle}
-        className="mb-4"
-        onDismiss={() => setError(null)}
-      >
-        <span className="font-medium">Error:</span> {error}
-      </Alert>
-    );
+    return <ErrorState error={error} onDismiss={() => setError(null)} />;
   }
   
   if (videos.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-96">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-white mb-4">No Public Videos Available</h2>
-          <p className="text-gray-400 mb-8">Be the first to upload public content to share with others!</p>
-          <Link to="/dashboard/upload">
-            <Button color="blue" className="glossy-button">
-              Upload Video
-            </Button>
-          </Link>
-        </div>
-      </div>
+      <EmptyState 
+        title="No Public Videos Available"
+        message="Be the first to upload public content to share with others!"
+        actionLink="/dashboard/upload"
+        actionText="Upload Video"
+      />
     );
   }
   

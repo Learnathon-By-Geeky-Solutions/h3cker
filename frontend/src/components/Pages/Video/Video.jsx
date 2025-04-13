@@ -1,19 +1,103 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { 
-  Spinner, 
-  Alert,
-  Button 
-} from 'flowbite-react';
-import { 
-  TrendingUp, 
-  ThumbsUp, 
-  AlertCircle,
-  Grid,
-  List
-} from 'lucide-react';
+import { Button } from 'flowbite-react';
+import { Grid, List, TrendingUp, ThumbsUp } from 'lucide-react';
+import PropTypes from 'prop-types';
 import AdCard from '../../Shared/AdCard/AdCard';
+import VideoDataService from '../../../utils/VideoDataService';
+import { 
+  LoadingState, 
+  ErrorState, 
+  EmptyState 
+} from '../../Shared/VideoLoadingStates/VideoLoadingStates';
 import VideoService from '../../../utils/VideoService';
+
+// Extract video list item to separate component
+const VideoListItem = ({ video }) => (
+  <div className="flex flex-col sm:flex-row">
+    <div className="w-full sm:w-64 h-40 overflow-hidden">
+      <img 
+        src={video.thumbnail_url || '/api/placeholder/400/225'} 
+        alt={video.title}
+        className="w-full h-full object-cover transition-transform duration-300 hover:scale-110"
+      />
+    </div>
+    <div className="p-6 flex-1">
+      <h3 className="text-white font-semibold text-xl mb-2 line-clamp-1">{video.title}</h3>
+      <p className="text-gray-400 text-sm mb-3 line-clamp-2">{video.description}</p>
+      <VideoMetrics video={video} />
+    </div>
+  </div>
+);
+
+VideoListItem.propTypes = {
+  video: PropTypes.shape({
+    id: PropTypes.oneOfType([PropTypes.number, PropTypes.string]).isRequired,
+    title: PropTypes.string,
+    description: PropTypes.string,
+    thumbnail_url: PropTypes.string
+  }).isRequired
+};
+
+// Extract video metrics to a separate component
+const VideoMetrics = ({ video }) => (
+  <>
+    <div className="flex items-center text-gray-500 text-sm gap-4">
+      <span className="flex items-center">
+        <ThumbsUp size={16} className="mr-1" /> 
+        {video.likes || 0}
+      </span>
+      <span className="flex items-center">
+        <TrendingUp size={16} className="mr-1" /> 
+        {video.views || 0} views
+      </span>
+      <span>{VideoService.formatRelativeTime(video.upload_date)}</span>
+    </div>
+    <div className="mt-3 text-sm text-blue-400">
+      {video.uploader_name}
+    </div>
+  </>
+);
+
+VideoMetrics.propTypes = {
+  video: PropTypes.shape({
+    likes: PropTypes.number,
+    views: PropTypes.number,
+    upload_date: PropTypes.string,
+    uploader_name: PropTypes.string
+  }).isRequired
+};
+
+// Video item renderer function
+const renderVideoItem = (video, viewMode, handleInteraction) => {
+  if (viewMode === 'grid') {
+    return (
+      <button
+        key={video.id} 
+        onClick={(e) => handleInteraction(video.id, e)}
+        onKeyDown={(e) => handleInteraction(video.id, e)}
+        className="block w-full text-left bg-transparent border-none p-0"
+        aria-label={`Watch video: ${video.title}`}
+      >
+        <div className="transform transition-transform duration-200 hover:scale-105">
+          <AdCard ad={video} />
+        </div>
+      </button>
+    );
+  } else {
+    return (
+      <button
+        key={video.id}
+        onClick={(e) => handleInteraction(video.id, e)}
+        onKeyDown={(e) => handleInteraction(video.id, e)}
+        className="block w-full text-left bg-gray-800 rounded-lg overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-700 hover:bg-gray-700/60 p-0"
+        aria-label={`Watch video: ${video.title}`}
+      >
+        <VideoListItem video={video} />
+      </button>
+    );
+  }
+};
 
 const Video = () => {
   const navigate = useNavigate();
@@ -28,41 +112,12 @@ const Video = () => {
   const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
   const [searchQuery, setSearchQuery] = useState(queryParams.get('q') || '');
   
- 
-  const fetchVideos = useCallback(async () => {
+  const fetchVideoData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       
-      const allVideos = await VideoService.getVideoFeed();
-      
-      if (!Array.isArray(allVideos)) {
-        throw new Error("Invalid response format from server");
-      }
-      
-      // Normalize video data
-      const normalizedVideos = allVideos.map(video => ({
-        id: video.id,
-        title: video.title || 'Untitled Video',
-        description: video.description || '',
-        imageUrl: video.thumbnail_url || null,
-        thumbnail_url: video.thumbnail_url || null,
-        videoUrl: video.video_url || null,
-        video_url: video.video_url || null,
-        brand: video.uploader_name || 'Anonymous',
-        uploader_name: video.uploader_name || 'Anonymous',
-        views: typeof video.views === 'number' ? video.views : 0,
-        likes: typeof video.likes === 'number' ? video.likes : 0,
-        upload_date: video.upload_date || null,
-        duration: video.duration || '00:00',
-        visibility: video.visibility || 'public'
-      }));
-      
-      // Filter public videos only
-      const publicVideos = normalizedVideos.filter(video => 
-        video.visibility === 'public' || video.visibility === undefined
-      );
-      
+      const { publicVideos } = await VideoDataService.fetchVideos();
       setVideos(publicVideos);
       
     } catch (error) {
@@ -75,8 +130,8 @@ const Video = () => {
   
   // Initial fetch
   useEffect(() => {
-    fetchVideos();
-  }, [fetchVideos]);
+    fetchVideoData();
+  }, [fetchVideoData]);
   
   // Fetch videos when URL parameters change
   useEffect(() => {
@@ -142,41 +197,20 @@ const Video = () => {
     }
   };
   
-  // Loading state
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96 w-full">
-        <div className="flex flex-col items-center">
-          <Spinner size="xl" color="info" />
-          <p className="mt-4 text-gray-300">Loading videos...</p>
-        </div>
-      </div>
-    );
+    return <LoadingState />;
   }
   
-  // Error state
   if (error) {
-    return (
-      <Alert
-        color="failure"
-        icon={AlertCircle}
-        className="mb-4 w-full"
-        onDismiss={() => setError(null)}
-      >
-        <span className="font-medium">Error:</span> {error}
-      </Alert>
-    );
+    return <ErrorState error={error} onDismiss={() => setError(null)} />;
   }
   
-  // Empty state
   if (videos.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-96 w-full">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-white mb-4">No Videos Available</h2>
-          <p className="text-gray-400 mb-8">There are no public videos available at this time.</p>
-        </div>
-      </div>
+      <EmptyState 
+        title="No Videos Available" 
+        message="There are no public videos available at this time."
+      />
     );
   }
   
@@ -218,19 +252,12 @@ const Video = () => {
         
         {/* No results message */}
         {filteredVideos.length === 0 && (
-          <div className="bg-gray-800 rounded-lg p-8 text-center w-full">
-            <h3 className="text-xl font-bold text-white mb-2">No videos match your criteria</h3>
-            <p className="text-gray-400 mb-4">Try adjusting your search terms</p>
-            <Button 
-              color="blue" 
-              onClick={() => {
-                setSearchQuery('');
-              }}
-              className="glossy-button"
-            >
-              Clear Search
-            </Button>
-          </div>
+          <EmptyState 
+            title="No videos match your criteria"
+            message="Try adjusting your search terms"
+            action={() => setSearchQuery('')}
+            actionText="Clear Search"
+          />
         )}
         
         {/* Videos grid/list view */}
@@ -241,55 +268,7 @@ const Video = () => {
               : "flex flex-col space-y-6"
           }>
             {filteredVideos.map(video => (
-              viewMode === 'grid' ? (
-                <button
-                  key={video.id} 
-                  onClick={(e) => handleVideoInteraction(video.id, e)}
-                  onKeyDown={(e) => handleVideoInteraction(video.id, e)}
-                  className="block w-full text-left bg-transparent border-none p-0"
-                  aria-label={`Watch video: ${video.title}`}
-                >
-                  <div className="transform transition-transform duration-200 hover:scale-105">
-                    <AdCard ad={video} />
-                  </div>
-                </button>
-              ) : (
-                <button
-                  key={video.id}
-                  onClick={(e) => handleVideoInteraction(video.id, e)}
-                  onKeyDown={(e) => handleVideoInteraction(video.id, e)}
-                  className="block w-full text-left bg-gray-800 rounded-lg overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-700 hover:bg-gray-700/60 p-0"
-                  aria-label={`Watch video: ${video.title}`}
-                >
-                  <div className="flex flex-col sm:flex-row">
-                    <div className="w-full sm:w-64 h-40 overflow-hidden">
-                      <img 
-                        src={video.thumbnail_url || '/api/placeholder/400/225'} 
-                        alt={video.title}
-                        className="w-full h-full object-cover transition-transform duration-300 hover:scale-110"
-                      />
-                    </div>
-                    <div className="p-6 flex-1">
-                      <h3 className="text-white font-semibold text-xl mb-2 line-clamp-1">{video.title}</h3>
-                      <p className="text-gray-400 text-sm mb-3 line-clamp-2">{video.description}</p>
-                      <div className="flex items-center text-gray-500 text-sm gap-4">
-                        <span className="flex items-center">
-                          <ThumbsUp size={16} className="mr-1" /> 
-                          {video.likes || 0}
-                        </span>
-                        <span className="flex items-center">
-                          <TrendingUp size={16} className="mr-1" /> 
-                          {video.views || 0} views
-                        </span>
-                        <span>{VideoService.formatRelativeTime(video.upload_date)}</span>
-                      </div>
-                      <div className="mt-3 text-sm text-blue-400">
-                        {video.uploader_name}
-                      </div>
-                    </div>
-                  </div>
-                </button>
-              )
+              renderVideoItem(video, viewMode, handleVideoInteraction)
             ))}
           </div>
         )}
