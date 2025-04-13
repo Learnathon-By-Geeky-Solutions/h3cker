@@ -143,6 +143,21 @@ export const useSignupForm = () => {
     setFormData(prev => ({ ...prev, [name]: value }));
   }, []);
 
+  const getAuthErrorMessage = useCallback((errorCode) => {
+    switch(errorCode) {
+      case 'auth/email-already-in-use':
+        return 'An account with this email already exists';
+      case 'auth/invalid-email':
+        return 'Please enter a valid email address';
+      case 'auth/weak-password':
+        return 'Password does not meet security requirements';
+      case 'MAX_DEVICES_REACHED':
+        return `You've reached the maximum device limit (${maxDevices}). Please log out from another device to continue.`;
+      default:
+        return 'An error occurred during signup. Please try again.';
+    }
+  }, [maxDevices]);
+
   const handleSubmit = useCallback(async (e, validateFn) => {
     e.preventDefault();
     setError('');
@@ -162,17 +177,11 @@ export const useSignupForm = () => {
       setShowVerificationMessage(true);
     } catch (err) {
       const errorCode = err.code || err.message;
-      const AUTH_ERROR_MESSAGES = {
-        'auth/email-already-in-use': 'An account with this email already exists',
-        'auth/invalid-email': 'Please enter a valid email address',
-        'auth/weak-password': 'Password is too weak',
-        'MAX_DEVICES_REACHED': `You've reached the maximum device limit (${maxDevices}). Please log out from another device to continue.`
-      };
-      setError(AUTH_ERROR_MESSAGES[errorCode] || 'An error occurred during signup. Please try again.');
+      setError(getAuthErrorMessage(errorCode));
     } finally {
       setLoading(false);
     }
-  }, [createUser, formData, maxDevices]);
+  }, [createUser, formData, maxDevices, getAuthErrorMessage]);
 
   return {
     formData,
