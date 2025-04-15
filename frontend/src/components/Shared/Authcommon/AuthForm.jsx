@@ -19,19 +19,20 @@ const AuthForm = ({
 }) => {
   return (
     <motion.div 
-      className="min-h-screen flex flex-col justify-center px-4 py-8 sm:py-12 bg-gray-900"
+      className="min-h-screen flex flex-col justify-center items-center px-4 py-8 sm:py-12 bg-gray-900 overflow-auto"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.4, ease: 'easeOut' }}
     >
-      <div className="absolute top-0 -left-32 w-[30rem] h-[30rem] bg-blue-600 opacity-15 rounded-full filter blur-[64px]" />
-      <div className="absolute bottom-0 -right-32 w-[30rem] h-[30rem] bg-purple-500 opacity-15 rounded-full filter blur-[64px]" />
+      {/* Fixed background elements */}
+      <div className="fixed top-0 -left-32 w-[30rem] h-[30rem] bg-blue-600 opacity-15 rounded-full filter blur-[64px] pointer-events-none" />
+      <div className="fixed bottom-0 -right-32 w-[30rem] h-[30rem] bg-purple-500 opacity-15 rounded-full filter blur-[64px] pointer-events-none" />
       
       <div className="w-full max-w-md mx-auto relative z-10">
         <BrandLogo className="justify-center mb-8" />
-        <div className="relative bg-gray-800/80 backdrop-blur-md rounded-[28px] border border-gray-700 shadow-2xl ring-1 ring-blue-900/30 p-6 sm:p-8 space-y-4">
-          <h2 className="text-2xl sm:text-3xl font-semibold text-center text-white mb-2">
+        <div className="relative bg-gray-800/80 backdrop-blur-md rounded-[28px] border border-gray-700 shadow-2xl ring-1 ring-blue-900/30 p-6 sm:p-8 space-y-4 max-h-[80vh] overflow-y-auto">
+          <h2 className="text-2xl sm:text-3xl font-semibold text-center text-white mb-2 sticky top-0 bg-gray-800/95 py-2 backdrop-blur-md z-10">
             {title}
           </h2>
 
@@ -52,7 +53,9 @@ const AuthForm = ({
 
           {!successMessage && (
             <>
-              {children}
+              <div className="pb-2">
+                {children}
+              </div>
 
               <div className="relative my-5 sm:my-6">
                 <div className="absolute inset-0 flex items-center">
@@ -96,7 +99,7 @@ const AuthForm = ({
                   <div className="text-center">
                     <button 
                       onClick={() => setCachedGoogleAccount(null)}
-                      className="text-xs text-gray-500 hover:text-gray-700"
+                      className="text-xs text-gray-500 hover:text-gray-400"
                     >
                       Use a different account
                     </button>
@@ -124,7 +127,7 @@ const AuthForm = ({
             </>
           )}
 
-          <p className="mt-5 sm:mt-6 text-center text-sm text-gray-400">
+          <p className="mt-5 sm:mt-6 text-center text-sm text-gray-400 sticky bottom-0 bg-gray-800/95 py-2 backdrop-blur-md">
             {footerText}{' '}
             <Link 
               to={footerLinkPath} 

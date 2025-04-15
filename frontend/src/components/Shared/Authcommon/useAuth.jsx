@@ -1,51 +1,63 @@
 import { useState, useContext, useCallback, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate} from 'react-router-dom';
 import { AuthContext } from '../../../contexts/AuthProvider/AuthProvider';
 
 export const useGoogleAuth = () => {
-  const { signInWithGoogle, maxDevices, getGoogleAuthCache } = useContext(AuthContext);
+  const { signInWithGoogle, maxDevices, getGoogleAuthCache, googleAuthChecked } = useContext(AuthContext);
   const [loading, setLoading] = useState(false);
   const [authError, setAuthError] = useState('');
   const [cachedGoogleAccount, setCachedGoogleAccount] = useState(null);
   const navigate = useNavigate();
-  const location = useLocation();
-  const from = location.state?.from?.pathname || '/';
 
+  // Load Google cached account when context is ready
   useEffect(() => {
-    const checkGoogleCache = () => {
+    const loadCachedAccount = () => {
       try {
         if (typeof getGoogleAuthCache === 'function') {
           const cachedAuth = getGoogleAuthCache();
           if (cachedAuth?.email) {
+            console.log("Found cached Google account, updating UI");
             setCachedGoogleAccount(cachedAuth);
+          } else {
+            console.log("No cached Google account found");
           }
         }
       } catch (error) {
         console.error("Error retrieving cached Google account:", error);
       }
     };
+
+    // Load immediately if auth is already checked
+    if (googleAuthChecked) {
+      loadCachedAccount();
+    }
     
-    const timeoutId = setTimeout(checkGoogleCache, 100);
-    return () => clearTimeout(timeoutId);
-  }, [getGoogleAuthCache]);
+    // Also set up an interval to periodically check for cache updates
+    const intervalId = setInterval(loadCachedAccount, 3000);
+    return () => clearInterval(intervalId);
+  }, [getGoogleAuthCache, googleAuthChecked]);
 
   const handleGoogleLogin = useCallback(async () => {
     setLoading(true);
     setAuthError('');
 
     try {
-      await signInWithGoogle();
-      navigate(from, { replace: true });
+      const user = await signInWithGoogle();
+      if (user) {
+        // Use direct navigation to home
+        navigate('/', { replace: true });
+      }
     } catch (error) {
       if (error.message === 'MAX_DEVICES_REACHED') {
         setAuthError(`You've reached the maximum device limit (${maxDevices}). Please log out from another device to continue.`);
       } else {
         setAuthError('Failed to sign in with Google');
+        console.error('Google sign-in error:', error);
       }
     } finally {
       setLoading(false);
     }
-  }, [signInWithGoogle, navigate, from, maxDevices]);
+  }, [signInWithGoogle, navigate, maxDevices]);
 
   return { 
     loading, 
@@ -65,8 +77,6 @@ export const useLoginForm = () => {
   const [authError, setAuthError] = useState('');
   
   const navigate = useNavigate();
-  const location = useLocation();
-  const from = location.state?.from?.pathname || '/';
 
   const handleLoginError = useCallback((error) => {
     if (error.message === 'EMAIL_NOT_VERIFIED') {
@@ -75,6 +85,7 @@ export const useLoginForm = () => {
       setAuthError(`You've reached the maximum device limit (${maxDevices}). Please log out from another device to continue.`);
     } else {
       setAuthError('Invalid email or password');
+      console.error('Login error:', error);
     }
   }, [maxDevices]);
 
@@ -84,14 +95,17 @@ export const useLoginForm = () => {
     setAuthError('');
 
     try {
-      await login(email, password);
-      navigate(from, { replace: true });
+      const user = await login(email, password);
+      if (user) {
+        // Use direct navigation to home
+        navigate('/', { replace: true });
+      }
     } catch (error) {
       handleLoginError(error);
     } finally {
       setLoading(false);
     }
-  }, [login, email, password, navigate, from, handleLoginError]);
+  }, [login, email, password, navigate, handleLoginError]);
 
   return {
     email,
@@ -124,10 +138,11 @@ export const useSignupForm = () => {
   
   const navigate = useNavigate();
 
+  // Redirect to home after verification message
   useEffect(() => {
     if (showVerificationMessage) {
       const timer = setTimeout(() => {
-        navigate('/login');
+        navigate('/', { replace: true });
       }, 2000);
       return () => clearTimeout(timer);
     }
@@ -168,20 +183,24 @@ export const useSignupForm = () => {
 
     setLoading(true);
     try {
-      await createUser(
+      const user = await createUser(
         formData.email,
         formData.password,
         formData.firstName.trim(),
         formData.lastName.trim()
       );
-      setShowVerificationMessage(true);
+      
+      if (user) {
+        setShowVerificationMessage(true);
+      }
     } catch (err) {
       const errorCode = err.code || err.message;
       setError(getAuthErrorMessage(errorCode));
+      console.error('Signup error:', err);
     } finally {
       setLoading(false);
     }
-  }, [createUser, formData, maxDevices, getAuthErrorMessage]);
+  }, [createUser, formData, getAuthErrorMessage]);
 
   return {
     formData,

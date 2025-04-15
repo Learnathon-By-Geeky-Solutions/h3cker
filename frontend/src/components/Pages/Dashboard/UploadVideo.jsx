@@ -43,11 +43,11 @@ const UploadVideo = () => {
   const [statusMessage, setStatusMessage] = useState('');
   const [uploadProgress, setUploadProgress] = useState(0);
   const [currentStep, setCurrentStep] = useState(1);
-  const [debugInfo, setDebugInfo] = useState(null); 
   const [videoPreviewUrl, setVideoPreviewUrl] = useState(null);
   const [thumbnailPreviewUrl, setThumbnailPreviewUrl] = useState(null);
   const [thumbDimensions, setThumbDimensions] = useState({ width: 0, height: 0 });
   const [isAutoCropping, setIsAutoCropping] = useState(false);
+  const [uploadStage, setUploadStage] = useState('preparing');
 
   const categories = [
     { value: 'educational', label: 'Educational' },
@@ -78,7 +78,6 @@ const UploadVideo = () => {
     };
   }, [videoPreviewUrl, thumbnailPreviewUrl]);
 
-  // Handler for canvas.toBlob callback to avoid excessive nesting
   const handleCanvasBlob = (blob, file, resolve, reject) => {
     if (!blob) {
       setIsAutoCropping(false);
@@ -208,11 +207,9 @@ const UploadVideo = () => {
 
     setUploadStatus('pending');
     setStatusMessage('Initializing upload...');
-    setDebugInfo(null);
 
     try {
       const response = await VideoService.initiateVideoUpload(metadataPayload);
-      setDebugInfo(response);
 
       if (!response?.video_upload_url || !response?.thumbnail_upload_url) {
         throw new Error("Backend did not return valid upload URLs.");
@@ -368,6 +365,16 @@ const UploadVideo = () => {
     return { valid: true, message: '' };
   };
 
+  // New function to ensure stable progress updates
+  const updateProgressWithDelay = (value, message = null) => {
+    // Ensure progress only increases, never decreases
+    setUploadProgress(prevProgress => Math.max(prevProgress, value));
+    
+    if (message) {
+      setStatusMessage(message);
+    }
+  };
+
   const handleFileUpload = async (e) => {
     e.preventDefault();
     const validation = validateFileForm();
@@ -377,9 +384,11 @@ const UploadVideo = () => {
       return;
     }
 
+    // Reset progress tracking
     setUploadStatus('uploading');
     setUploadProgress(0);
-    setStatusMessage('Starting upload...');
+    setUploadStage('preparing');
+    setStatusMessage('Preparing upload...');
 
     if (videoPreviewUrl) {
       URL.revokeObjectURL(videoPreviewUrl);
@@ -391,25 +400,39 @@ const UploadVideo = () => {
     }
 
     try {
+      // Upload video first (70% of total progress)
+      setUploadStage('video');
       setStatusMessage(`Uploading video: ${videoFile.name}...`);
+      updateProgressWithDelay(1, 'Starting video upload...');
+      
       await VideoService.uploadFileToBlob(uploadUrls.videoUrl, videoFile, (progress) => {
-        setUploadProgress(progress * 70); 
-        setStatusMessage(`Uploading video: ${Math.round(progress * 100)}%`);
+        const actualProgress = Math.min(Math.floor(progress * 70), 70);
+        updateProgressWithDelay(actualProgress, `Uploading video: ${Math.min(Math.round(progress * 100), 100)}%`);
       });
 
-      setUploadProgress(70);
-
+      // Ensure we reach exactly 70% when video upload is complete
+      updateProgressWithDelay(70, 'Video upload complete. Preparing thumbnail...');
+      
+      // Upload thumbnail next (remaining 30% of progress)
+      setUploadStage('thumbnail');
       const thumbnailToUpload = processedThumbnailFile || thumbnailFile;
       setStatusMessage(`Uploading thumbnail: ${thumbnailToUpload.name}...`);
+      
       await VideoService.uploadFileToBlob(uploadUrls.thumbnailUrl, thumbnailToUpload, (progress) => {
-        setUploadProgress(70 + (progress * 30));
-        setStatusMessage(`Uploading thumbnail: ${Math.round(progress * 100)}%`);
+        const actualProgress = 70 + Math.min(Math.floor(progress * 30), 30);
+        updateProgressWithDelay(actualProgress, `Uploading thumbnail: ${Math.min(Math.round(progress * 100), 100)}%`);
       });
 
+      // Ensure we reach exactly 100% when all uploads complete
       setUploadProgress(100);
+      setUploadStage('complete');
       setUploadStatus('success');
       setStatusMessage('Video and thumbnail uploaded successfully!');
-      setCurrentStep(3);
+      
+      // Short delay before moving to success step
+      setTimeout(() => {
+        setCurrentStep(3);
+      }, 500);
     } catch (error) {
       console.error('File upload failed:', error);
       setUploadStatus('error');
@@ -427,8 +450,8 @@ const UploadVideo = () => {
     setUploadStatus(null);
     setStatusMessage('');
     setUploadProgress(0);
+    setUploadStage('preparing');
     setCurrentStep(1);
-    setDebugInfo(null);
 
     if (videoPreviewUrl) {
         URL.revokeObjectURL(videoPreviewUrl);
@@ -681,7 +704,14 @@ const UploadVideo = () => {
       <div className="max-w-lg mx-auto space-y-4">
          <div>
             <div className="flex justify-between text-sm mb-1 text-gray-300">
-              <span>Overall Progress</span>
+              <span>
+                Overall Progress: {(() => {
+                  if (uploadStage === 'preparing') return 'Preparing';
+                  if (uploadStage === 'video') return 'Uploading Video';
+                  if (uploadStage === 'thumbnail') return 'Uploading Thumbnail';
+                  return 'Processing';
+                })()}
+              </span>
               <span>{Math.round(uploadProgress)}%</span>
             </div>
             <Progress progress={uploadProgress} size="lg" color="blue" />
@@ -805,27 +835,6 @@ const UploadVideo = () => {
     }
   };
 
-  const renderDebugInfo = () => {
-     if (import.meta.env.MODE !== 'development' || !debugInfo) {
-       return null;
-     }
-    return (
-      <div className="mt-6 p-4 bg-gray-900 rounded border border-gray-700 text-xs text-gray-300">
-        <h4 className="font-semibold mb-2 text-gray-200">Debug Info (Development Only)</h4>
-        <div>
-          <p className="font-medium">Backend Response (SAS URLs):</p>
-          <pre className="overflow-auto max-h-40 bg-black p-2 rounded mt-1 text-xs">
-            {JSON.stringify(debugInfo, null, 2)}
-          </pre>
-        </div>
-        <div className="mt-2">
-            <p className="font-medium">Generated Filename Hint:</p>
-            <p className="text-mono bg-black p-1 rounded mt-1 inline-block">{generatedFilename || 'Not generated yet'}</p>
-        </div>
-      </div>
-    );
-  };
-
   return (
     <div className="max-w-3xl mx-auto p-4 sm:p-0">
       <h1 className="text-2xl font-bold text-white mb-6">Upload New Video</h1>
@@ -836,8 +845,6 @@ const UploadVideo = () => {
       <Card className="bg-gray-800 border-gray-700 shadow-lg p-6">
         {renderContent()}
       </Card>
-
-      {renderDebugInfo()}
 
       <canvas 
         ref={thumbnailCanvasRef} 
