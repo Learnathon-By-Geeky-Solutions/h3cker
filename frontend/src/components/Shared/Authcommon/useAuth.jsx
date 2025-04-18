@@ -1,15 +1,66 @@
 import { useState, useContext, useCallback, useEffect } from 'react';
-import { useNavigate} from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { AuthContext } from '../../../contexts/AuthProvider/AuthProvider';
+
+const useAuthNavigation = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  
+  const navigateAfterAuth = useCallback((user) => {
+    if (!user) return false;
+    
+    try {
+
+      const from = location.state?.from?.pathname || '/';
+
+      sessionStorage.setItem('auth_navigation_pending', 'true');
+      sessionStorage.setItem('auth_navigation_target', from);
+      
+      // Edge browser detection
+      const isEdge = navigator.userAgent.indexOf("Edg") > -1;
+      
+      if (isEdge) {
+        // For Edge, use direct navigation immediately
+        console.log('Edge browser detected, using direct navigation');
+        window.location.href = from;
+        return true;
+      }
+      
+      navigate(from, { replace: true });
+      
+   
+      setTimeout(() => {
+ 
+        const currentPath = window.location.pathname;
+        if (currentPath.includes('/login') || 
+            currentPath.includes('/signup') || 
+            currentPath.includes('/forgetpassword')) {
+          
+          console.log('Router navigation may have failed, using direct navigation');
+          // Force direct browser navigation for Edge compatibility
+          window.location.href = from;
+        }
+      }, 200); 
+      
+      return true;
+    } catch (error) {
+      console.error('Navigation error:', error);
+      // Ultimate fallback
+      window.location.href = '/';
+      return false;
+    }
+  }, [navigate, location]);
+  
+  return { navigateAfterAuth };
+};
 
 export const useGoogleAuth = () => {
   const { signInWithGoogle, maxDevices, getGoogleAuthCache, googleAuthChecked } = useContext(AuthContext);
   const [loading, setLoading] = useState(false);
   const [authError, setAuthError] = useState('');
   const [cachedGoogleAccount, setCachedGoogleAccount] = useState(null);
-  const navigate = useNavigate();
+  const { navigateAfterAuth } = useAuthNavigation();
 
-  // Load Google cached account when context is ready
   useEffect(() => {
     const loadCachedAccount = () => {
       try {
@@ -18,8 +69,6 @@ export const useGoogleAuth = () => {
           if (cachedAuth?.email) {
             console.log("Found cached Google account, updating UI");
             setCachedGoogleAccount(cachedAuth);
-          } else {
-            console.log("No cached Google account found");
           }
         }
       } catch (error) {
@@ -27,14 +76,18 @@ export const useGoogleAuth = () => {
       }
     };
 
-    // Load immediately if auth is already checked
     if (googleAuthChecked) {
       loadCachedAccount();
     }
     
-    // Also set up an interval to periodically check for cache updates
-    const intervalId = setInterval(loadCachedAccount, 3000);
-    return () => clearInterval(intervalId);
+    const initialLoadTimeout = setTimeout(loadCachedAccount, 500);
+    
+    const intervalId = setInterval(loadCachedAccount, 5000);
+    
+    return () => {
+      clearTimeout(initialLoadTimeout);
+      clearInterval(intervalId);
+    };
   }, [getGoogleAuthCache, googleAuthChecked]);
 
   const handleGoogleLogin = useCallback(async () => {
@@ -42,10 +95,13 @@ export const useGoogleAuth = () => {
     setAuthError('');
 
     try {
+
+      sessionStorage.removeItem('auth_navigation_pending');
+      
       const user = await signInWithGoogle();
       if (user) {
-        // Use direct navigation to home
-        navigate('/', { replace: true });
+ 
+        navigateAfterAuth(user);
       }
     } catch (error) {
       if (error.message === 'MAX_DEVICES_REACHED') {
@@ -57,7 +113,7 @@ export const useGoogleAuth = () => {
     } finally {
       setLoading(false);
     }
-  }, [signInWithGoogle, navigate, maxDevices]);
+  }, [signInWithGoogle, navigateAfterAuth, maxDevices]);
 
   return { 
     loading, 
@@ -75,8 +131,7 @@ export const useLoginForm = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [authError, setAuthError] = useState('');
-  
-  const navigate = useNavigate();
+  const { navigateAfterAuth } = useAuthNavigation();
 
   const handleLoginError = useCallback((error) => {
     if (error.message === 'EMAIL_NOT_VERIFIED') {
@@ -95,17 +150,19 @@ export const useLoginForm = () => {
     setAuthError('');
 
     try {
+  
+      sessionStorage.removeItem('auth_navigation_pending');
+      
       const user = await login(email, password);
       if (user) {
-        // Use direct navigation to home
-        navigate('/', { replace: true });
+        navigateAfterAuth(user);
       }
     } catch (error) {
       handleLoginError(error);
     } finally {
       setLoading(false);
     }
-  }, [login, email, password, navigate, handleLoginError]);
+  }, [login, email, password, navigateAfterAuth, handleLoginError]);
 
   return {
     email,
@@ -135,18 +192,18 @@ export const useSignupForm = () => {
   const [loading, setLoading] = useState(false);
   const [showVerificationMessage, setShowVerificationMessage] = useState(false);
   const [touchedFields, setTouchedFields] = useState({});
-  
-  const navigate = useNavigate();
 
-  // Redirect to home after verification message
+
   useEffect(() => {
     if (showVerificationMessage) {
+      sessionStorage.setItem('verification_redirect', 'true');
+      
       const timer = setTimeout(() => {
-        navigate('/', { replace: true });
+        window.location.href = '/';
       }, 2000);
       return () => clearTimeout(timer);
     }
-  }, [showVerificationMessage, navigate]);
+  }, [showVerificationMessage]);
 
   const handleBlur = useCallback((e) => {
     const { name } = e.target;

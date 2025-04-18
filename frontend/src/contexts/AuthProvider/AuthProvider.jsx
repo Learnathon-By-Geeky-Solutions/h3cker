@@ -22,6 +22,58 @@ const googleProvider = new GoogleAuthProvider();
 
 const DEFAULT_AVATAR = 'https://flowbite.com/docs/images/people/profile-picture-5.jpg';
 
+// Helper function to handle user updates in Firestore
+const updateUserData = async (uid, updates) => {
+  try {
+    const userDocRef = doc(db, "users", uid);
+    await updateDoc(userDocRef, updates);
+    return true;
+  } catch (error) {
+    console.error('Error updating user data:', error);
+    return false;
+  }
+};
+
+// Helper function to process user data after authentication
+const processAuthenticatedUser = async (userCredential, deviceId) => {
+  const token = await userCredential.user.getIdToken();
+  TokenService.setToken(token, userCredential.user.uid);
+  return userCredential.user;
+};
+
+// Helper function to check pending navigations
+const checkPendingNavigations = (currentUser) => {
+  // Check for pending navigation in sessionStorage
+  const pendingNavigation = sessionStorage.getItem('auth_navigation_pending');
+  if (pendingNavigation === 'true') {
+    sessionStorage.removeItem('auth_navigation_pending');
+    
+    const authPaths = ['/login', '/signup', '/forgetpassword'];
+    const currentPath = window.location.pathname;
+    
+    // If user is authenticated but still on an auth page, redirect to home
+    if (authPaths.some(path => currentPath.includes(path))) {
+      const targetPath = sessionStorage.getItem('auth_navigation_target') || '/';
+      sessionStorage.removeItem('auth_navigation_target');
+      
+      console.log('Auth state changed, forcing navigation from auth page');
+      window.location.href = targetPath;
+    }
+  }
+  
+  // Handle verification redirects
+  const verificationRedirect = sessionStorage.getItem('verification_redirect');
+  if (verificationRedirect === 'true') {
+    sessionStorage.removeItem('verification_redirect');
+    
+    // If we've just verified and need to redirect
+    if (currentUser.emailVerified) {
+      console.log('Email verified, redirecting to home');
+      window.location.href = '/';
+    }
+  }
+};
+
 const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -101,10 +153,7 @@ const AuthProvider = ({ children }) => {
       devices
     });
 
-    const token = await userCredential.user.getIdToken();
-    TokenService.setToken(token, userCredential.user.uid);
-
-    return userCredential.user;
+    return processAuthenticatedUser(userCredential, deviceId);
   };
 
   const login = async (email, password) => {
@@ -119,17 +168,72 @@ const AuthProvider = ({ children }) => {
     
     const updatedDevices = await updateUserDevices(userCredential.user.uid, deviceId);
     
-    const userDocRef = doc(db, "users", userCredential.user.uid);
-    await updateDoc(userDocRef, {
+    await updateUserData(userCredential.user.uid, {
       lastLoginAt: serverTimestamp(),
       devices: updatedDevices,
       emailVerified: userCredential.user.emailVerified
     });
 
-    const token = await userCredential.user.getIdToken();
-    TokenService.setToken(token, userCredential.user.uid);
+    return processAuthenticatedUser(userCredential, deviceId);
+  };
 
-    return userCredential.user;
+  // Handle Google sign-in process
+  const handleGoogleSignIn = async (result) => {
+    const deviceId = TokenService.getCurrentDeviceId();
+    const userDocRef = doc(db, "users", result.user.uid);
+    const userSnapshot = await getDoc(userDocRef);
+
+    if (!userSnapshot.exists()) {
+      // Create new user document
+      await createGoogleUserDocument(result, deviceId);
+    } else {
+      // Update existing user document
+      await updateGoogleUserDocument(result, deviceId);
+    }
+
+    // Set token and cache
+    const token = await result.user.getIdToken();
+    TokenService.setToken(token, result.user.uid);
+    
+    TokenService.setGoogleAuthCache({
+      email: result.user.email,
+      displayName: result.user.displayName,
+      photoURL: result.user.photoURL
+    }, result.user.uid);
+
+    return result.user;
+  };
+
+  // Create new Google user document
+  const createGoogleUserDocument = async (result, deviceId) => {
+    const nameParts = result.user.displayName?.split(" ") || ['User'];
+    
+    await setDoc(doc(db, "users", result.user.uid), {
+      firstName: nameParts[0],
+      lastName: nameParts.slice(1).join(" ") || '',
+      email: result.user.email,
+      photoURL: result.user.photoURL || DEFAULT_AVATAR,
+      createdAt: serverTimestamp(),
+      lastLoginAt: serverTimestamp(),
+      role: 'user',
+      emailVerified: result.user.emailVerified,
+      devices: [{
+        id: deviceId,
+        name: TokenService.getDeviceName(),
+        lastActive: new Date().toISOString()
+      }]
+    });
+  };
+
+  // Update existing Google user document
+  const updateGoogleUserDocument = async (result, deviceId) => {
+    const updatedDevices = await updateUserDevices(result.user.uid, deviceId);
+    
+    await updateDoc(doc(db, "users", result.user.uid), { 
+      lastLoginAt: serverTimestamp(),
+      emailVerified: result.user.emailVerified,
+      devices: updatedDevices
+    });
   };
 
   const signInWithGoogle = async () => {
@@ -141,49 +245,7 @@ const AuthProvider = ({ children }) => {
       }
       
       const result = await signInWithPopup(auth, googleProvider);
-      
-      const deviceId = TokenService.getCurrentDeviceId();
-      const userDocRef = doc(db, "users", result.user.uid);
-      const userSnapshot = await getDoc(userDocRef);
-
-      if (!userSnapshot.exists()) {
-        const nameParts = result.user.displayName?.split(" ") || ['User'];
-        
-        await setDoc(userDocRef, {
-          firstName: nameParts[0],
-          lastName: nameParts.slice(1).join(" ") || '',
-          email: result.user.email,
-          photoURL: result.user.photoURL || DEFAULT_AVATAR,
-          createdAt: serverTimestamp(),
-          lastLoginAt: serverTimestamp(),
-          role: 'user',
-          emailVerified: result.user.emailVerified,
-          devices: [{
-            id: deviceId,
-            name: TokenService.getDeviceName(),
-            lastActive: new Date().toISOString()
-          }]
-        });
-      } else {
-        const updatedDevices = await updateUserDevices(result.user.uid, deviceId);
-        
-        await updateDoc(userDocRef, { 
-          lastLoginAt: serverTimestamp(),
-          emailVerified: result.user.emailVerified,
-          devices: updatedDevices
-        });
-      }
-
-      const token = await result.user.getIdToken();
-      TokenService.setToken(token, result.user.uid);
-      
-      TokenService.setGoogleAuthCache({
-        email: result.user.email,
-        displayName: result.user.displayName,
-        photoURL: result.user.photoURL
-      }, result.user.uid);
-
-      return result.user;
+      return await handleGoogleSignIn(result);
     } catch (error) {
       if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-disabled') {
         TokenService.clearGoogleAuthCache();
@@ -298,6 +360,7 @@ const AuthProvider = ({ children }) => {
     }
   };
 
+  // Check for Google auth cache
   useEffect(() => {
     const checkGoogleAuthCache = async () => {
       try {
@@ -316,6 +379,7 @@ const AuthProvider = ({ children }) => {
     checkGoogleAuthCache();
   }, []);
 
+  // Session check for logged in user
   useEffect(() => {
     if (!user) return undefined;
     
@@ -328,32 +392,14 @@ const AuthProvider = ({ children }) => {
     return () => clearInterval(intervalId);
   }, [user, checkSession]);
 
+  // Main auth state listener
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+    const handleAuthStateChange = async (currentUser) => {
       try {
         if (currentUser) {
-          const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+          await processAuthenticatedUser({ user: currentUser });
+          const userData = await getUserDataFromFirestore(currentUser);
           
-          const token = await currentUser.getIdToken();
-          TokenService.setToken(token, currentUser.uid);
-          
-          if (currentUser.providerData.some(provider => provider.providerId === 'google.com')) {
-            TokenService.setGoogleAuthCache({
-              email: currentUser.email,
-              displayName: currentUser.displayName,
-              photoURL: currentUser.photoURL
-            }, currentUser.uid);
-          }
-          
-     
-          const userData = userDoc.exists() ? userDoc.data() : {};
-
-          if (userDoc.exists() && userData.emailVerified !== currentUser.emailVerified) {
-            await updateDoc(doc(db, "users", currentUser.uid), {
-              emailVerified: currentUser.emailVerified
-            });
-          }
-
           setUser({ 
             ...currentUser, 
             ...userData,
@@ -361,6 +407,7 @@ const AuthProvider = ({ children }) => {
           });
           
           checkSession();
+          checkPendingNavigations(currentUser);
         } else {
           TokenService.clearAuth();
           setUser(null);
@@ -373,10 +420,70 @@ const AuthProvider = ({ children }) => {
         setUser(null);
       }
       setLoading(false);
-    });
+    };
 
+    const getUserDataFromFirestore = async (currentUser) => {
+      const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+      
+      // Set Google auth cache if applicable
+      if (currentUser.providerData.some(provider => provider.providerId === 'google.com')) {
+        TokenService.setGoogleAuthCache({
+          email: currentUser.email,
+          displayName: currentUser.displayName,
+          photoURL: currentUser.photoURL
+        }, currentUser.uid);
+      }
+      
+      // Update emailVerified status if needed
+      const userData = userDoc.exists() ? userDoc.data() : {};
+      if (userDoc.exists() && userData.emailVerified !== currentUser.emailVerified) {
+        await updateDoc(doc(db, "users", currentUser.uid), {
+          emailVerified: currentUser.emailVerified
+        });
+      }
+      
+      return userData;
+    };
+    
+    const unsubscribe = onAuthStateChanged(auth, handleAuthStateChange);
     return () => unsubscribe();
   }, [checkSession]);
+  
+  // Force check on initial load
+  useEffect(() => {
+    // Force a check on initial load
+    const checkCurrentAuthState = async () => {
+      if (auth.currentUser) {
+        try {
+          const token = await auth.currentUser.getIdToken(true);
+          TokenService.setToken(token, auth.currentUser.uid);
+        } catch (error) {
+          console.error('Error refreshing token on initial load:', error);
+        }
+      }
+    };
+    
+    checkCurrentAuthState();
+    
+    // Handle browser back button
+    const handleBackNavigation = () => {
+      if (auth.currentUser) {
+        const authPaths = ['/login', '/signup', '/forgetpassword'];
+        const currentPath = window.location.pathname;
+        
+        if (authPaths.some(path => currentPath.includes(path))) {
+          console.log('Detected back navigation to auth page while logged in');
+          window.location.replace('/');
+        }
+      }
+    };
+    
+    window.addEventListener('popstate', handleBackNavigation);
+    
+    return () => {
+      window.removeEventListener('popstate', handleBackNavigation);
+    };
+  }, []);
  
   const safeGetGoogleAuthCache = useCallback(() => {
     try {
