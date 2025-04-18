@@ -49,11 +49,86 @@ const TokenService = {
   },
 
   /**
+   * Simple hash function (non-cryptographic)
+   * @private
+   */
+  _simpleHash(str) {
+    let hash = 0;
+    if (!str || str.length === 0) return hash.toString(36);
+
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; 
+    }
+
+    return Math.abs(hash).toString(36);
+  },
+
+  /**
+   * Gathers performance data string for fallback ID generation
+   * @private
+   */
+  _getPerformanceDataString() {
+    const timestamp = Date.now().toString(36);
+    let perfData = '';
+    try {
+      if (typeof performance !== 'undefined' && performance.getEntriesByType) {
+        const navigationEntries = performance.getEntriesByType('navigation');
+        if (navigationEntries.length > 0) {
+          const navigationTiming = navigationEntries[0];
+          const timingData = navigationTiming.toJSON ? navigationTiming.toJSON() : navigationTiming;
+  
+          perfData = Object.values(timingData)
+                           .filter(v => typeof v === 'number' && !isNaN(v))
+                           .join('');
+        } else if (performance.now) {
+          perfData = performance.now().toString();
+        }
+      } else if (typeof performance !== 'undefined' && performance.now) {
+        perfData = performance.now().toString();
+      }
+    } catch (e) {
+      console.warn('Could not access performance timing data:', e);
+
+      perfData = timestamp.split('').reverse().join('');
+    }
+  
+    return perfData || timestamp;
+  },
+
+  /**
+   * Generates a device ID using fallback methods when crypto is unavailable
+   * @private
+   */
+  _generateFallbackDeviceId() {
+    console.warn('Crypto API not available, generating fallback device ID.');
+    const timestamp = Date.now().toString(36);
+
+    const timeStr = new Date().toISOString();
+    const navStr = typeof navigator !== 'undefined' ?
+                  `${navigator.userAgent || ''}${navigator.language || ''}${navigator.hardwareConcurrency || ''}` :
+                  'fallback-nav';
+    const d = new Date();
+    const timeComponents = [
+      d.getHours(), d.getMinutes(), d.getSeconds(), d.getMilliseconds()
+    ].join('-');
+
+    const perfData = this._getPerformanceDataString();
+
+    const part1 = this._simpleHash(timeStr + navStr);
+    const part2 = this._simpleHash(timeComponents + perfData + timestamp);
+
+    return `${timestamp}-${part1}-${part2}`;
+  },
+
+  /**
    * Generate a unique device ID with best available browser crypto methods
    * @returns {string} A unique device identifier
    */
   generateDeviceId() {
     try {
+      // Use crypto API if available
       if (window.crypto?.getRandomValues) {
         const buffer = new Uint8Array(8);
         window.crypto.getRandomValues(buffer);
@@ -61,64 +136,14 @@ const TokenService = {
           .map(b => b.toString(16).padStart(2, '0'))
           .join('');
         const timestamp = Date.now().toString(36);
-        return timestamp + '-' + randomHex;
+        return `${timestamp}-${randomHex}`;
       }
-      throw new Error('Crypto API not available');
-    } catch (error) {
-      console.error('Error generating device ID using crypto:', error);
-      
-      const timestamp = Date.now().toString(36);
-      
-      const simpleHash = (str) => {
-        let hash = 0;
-        if (str.length === 0) return hash.toString(36);
-        
-        for (let i = 0; i < str.length; i++) {
-          const char = str.charCodeAt(i);
-          hash = ((hash << 5) - hash) + char;
-          hash = hash & hash;
-        }
-        
-        return Math.abs(hash).toString(36);
-      };
-      
-      const timeStr = new Date().toISOString();
-      const navStr = typeof navigator !== 'undefined' ? 
-                    navigator.userAgent + navigator.language + navigator.hardwareConcurrency : 
-                    'fallback-nav';
-      const d = new Date();
-      const timeComponents = [
-        d.getHours(),
-        d.getMinutes(),
-        d.getSeconds(),
-        d.getMilliseconds()
-      ].join('-');
-      
-      let perfData = '';
-      try {
 
-        if (typeof performance !== 'undefined' && typeof performance.getEntriesByType === 'function') {
-          const navigationEntries = performance.getEntriesByType('navigation');
-   
-          if (navigationEntries.length > 0) {
-            const navigationTiming = navigationEntries[0];
-            const timingData = navigationTiming.toJSON ? navigationTiming.toJSON() : navigationTiming;
-            perfData = Object.values(timingData).join('');
-          } else if (performance.now) {
-            perfData = performance.now().toString();
-          }
-        } else if (typeof performance !== 'undefined' && performance.now) {
-           perfData = performance.now().toString();
-        }
-      } catch (e) {
-        console.warn('Could not access performance timing data:', e);
-        perfData = timestamp.split('').reverse().join('');
-      }
-      
-      const part1 = simpleHash(timeStr + navStr);
-      const part2 = simpleHash(timeComponents + perfData + timestamp);
-      
-      return `${timestamp}-${part1}-${part2}`;
+      return this._generateFallbackDeviceId();
+    } catch (error) {
+      console.error('Error generating device ID:', error);
+
+      return this._generateFallbackDeviceId();
     }
   },
 
@@ -357,8 +382,11 @@ const TokenService = {
       this.updateLastTokenSetTime();
       
       try {
-        document.cookie = `auth_token_backup=${encodeURIComponent(token)};path=/;max-age=${this.sessionDuration/1000}`;
-        document.cookie = `auth_uid_backup=${encodeURIComponent(uid)};path=/;max-age=${this.sessionDuration/1000}`;
+        // Add secure and httpOnly flags to cookies
+        const isSecure = window.location.protocol === 'https:';
+        const secureFlag = isSecure ? ';secure' : '';
+        document.cookie = `auth_token_backup=${encodeURIComponent(token)};path=/;max-age=${this.sessionDuration/1000}${secureFlag};httpOnly`;
+        document.cookie = `auth_uid_backup=${encodeURIComponent(uid)};path=/;max-age=${this.sessionDuration/1000}${secureFlag};httpOnly`;
       } catch (cookieError) {
         console.error('Error setting backup cookie:', cookieError);
       }
@@ -371,8 +399,10 @@ const TokenService = {
       
 
       try {
-        document.cookie = `auth_token_backup=${encodeURIComponent(token)};path=/;max-age=${this.sessionDuration/1000}`;
-        document.cookie = `auth_uid_backup=${encodeURIComponent(uid)};path=/;max-age=${this.sessionDuration/1000}`;
+        const isSecure = window.location.protocol === 'https:';
+        const secureFlag = isSecure ? ';secure' : '';
+        document.cookie = `auth_token_backup=${encodeURIComponent(token)};path=/;max-age=${this.sessionDuration/1000}${secureFlag};httpOnly`;
+        document.cookie = `auth_uid_backup=${encodeURIComponent(uid)};path=/;max-age=${this.sessionDuration/1000}${secureFlag};httpOnly`;
       } catch (cookieError) {
         console.error('Error setting backup cookie:', cookieError);
       }
@@ -492,16 +522,20 @@ const TokenService = {
       this._storage.setItem(this.tokenExpiryKey, expiryTime.toString());
       this.updateLastTokenSetTime();
       
-      // Update session cookie expiry as well
+      // Update session cookie expiry as well with secure and httpOnly flags
       try {
         const cookieToken = this.getTokenFromCookie();
         if (cookieToken) {
-          document.cookie = `auth_token_backup=${encodeURIComponent(cookieToken)};path=/;max-age=${this.sessionDuration/1000}`;
+          const isSecure = window.location.protocol === 'https:';
+          const secureFlag = isSecure ? ';secure' : '';
+          document.cookie = `auth_token_backup=${encodeURIComponent(cookieToken)};path=/;max-age=${this.sessionDuration/1000}${secureFlag};httpOnly`;
         }
         
         const cookieUid = this.getUidFromCookie();
         if (cookieUid) {
-          document.cookie = `auth_uid_backup=${encodeURIComponent(cookieUid)};path=/;max-age=${this.sessionDuration/1000}`;
+          const isSecure = window.location.protocol === 'https:';
+          const secureFlag = isSecure ? ';secure' : '';
+          document.cookie = `auth_uid_backup=${encodeURIComponent(cookieUid)};path=/;max-age=${this.sessionDuration/1000}${secureFlag};httpOnly`;
         }
       } catch (cookieError) {
         console.error('Error refreshing backup cookie:', cookieError);
@@ -760,8 +794,13 @@ const TokenService = {
       this._storage.removeItem(this.tokenExpiryKey);
       this._storage.removeItem(this.lastTokenSetTimeKey);
       this.clearGoogleAuthCache();
-      document.cookie = 'auth_token_backup=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-      document.cookie = 'auth_uid_backup=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+      
+      // Update cookie clearing with secure path
+      const isSecure = window.location.protocol === 'https:';
+      const secureFlag = isSecure ? ';secure' : '';
+      document.cookie = `auth_token_backup=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/${secureFlag};httpOnly`;
+      document.cookie = `auth_uid_backup=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/${secureFlag};httpOnly`;
+      
       try {
         sessionStorage.removeItem('google_auth_cache_backup');
         sessionStorage.removeItem('auth_navigation_pending');
