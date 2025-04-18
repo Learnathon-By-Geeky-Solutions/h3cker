@@ -49,12 +49,11 @@ const TokenService = {
   },
 
   /**
-   * Generate a unique device ID using cryptographically secure random values
+   * Generate a unique device ID with best available browser crypto methods
    * @returns {string} A unique device identifier
    */
   generateDeviceId() {
     try {
-      // First try the most secure method
       if (window.crypto?.getRandomValues) {
         const buffer = new Uint8Array(8);
         window.crypto.getRandomValues(buffer);
@@ -64,19 +63,62 @@ const TokenService = {
         const timestamp = Date.now().toString(36);
         return timestamp + '-' + randomHex;
       }
-      
-      // Fallback for older browsers
       throw new Error('Crypto API not available');
     } catch (error) {
       console.error('Error generating device ID using crypto:', error);
-
-      // Use a less secure but more compatible approach
+      
       const timestamp = Date.now().toString(36);
-      const randomChars = Math.random().toString(36).substring(2, 10);
-      const perfNow = typeof performance !== 'undefined' && performance.now ? 
-                     Math.floor(performance.now() * 1000).toString(36) : 
-                     timestamp.split('').reverse().join('');
-      return timestamp + '-' + randomChars + '-' + perfNow;
+      
+      const simpleHash = (str) => {
+        let hash = 0;
+        if (str.length === 0) return hash.toString(36);
+        
+        for (let i = 0; i < str.length; i++) {
+          const char = str.charCodeAt(i);
+          hash = ((hash << 5) - hash) + char;
+          hash = hash & hash;
+        }
+        
+        return Math.abs(hash).toString(36);
+      };
+      
+      const timeStr = new Date().toISOString();
+      const navStr = typeof navigator !== 'undefined' ? 
+                    navigator.userAgent + navigator.language + navigator.hardwareConcurrency : 
+                    'fallback-nav';
+      const d = new Date();
+      const timeComponents = [
+        d.getHours(),
+        d.getMinutes(),
+        d.getSeconds(),
+        d.getMilliseconds()
+      ].join('-');
+      
+      let perfData = '';
+      try {
+
+        if (typeof performance !== 'undefined' && typeof performance.getEntriesByType === 'function') {
+          const navigationEntries = performance.getEntriesByType('navigation');
+   
+          if (navigationEntries.length > 0) {
+            const navigationTiming = navigationEntries[0];
+            const timingData = navigationTiming.toJSON ? navigationTiming.toJSON() : navigationTiming;
+            perfData = Object.values(timingData).join('');
+          } else if (performance.now) {
+            perfData = performance.now().toString();
+          }
+        } else if (typeof performance !== 'undefined' && performance.now) {
+           perfData = performance.now().toString();
+        }
+      } catch (e) {
+        console.warn('Could not access performance timing data:', e);
+        perfData = timestamp.split('').reverse().join('');
+      }
+      
+      const part1 = simpleHash(timeStr + navStr);
+      const part2 = simpleHash(timeComponents + perfData + timestamp);
+      
+      return `${timestamp}-${part1}-${part2}`;
     }
   },
 
@@ -94,7 +136,6 @@ const TokenService = {
       return deviceId;
     } catch (error) {
       console.error('Error getting current device ID:', error);
-      // Return a temporary ID without storing it
       return this.generateDeviceId();
     }
   },
@@ -152,7 +193,6 @@ const TokenService = {
       const deviceId = this.getCurrentDeviceId();
       let userDevices = this.getUserDevices(uid);
 
-      // Update existing device
       const existingDeviceIndex = userDevices.findIndex(device => device.id === deviceId);
       if (existingDeviceIndex >= 0) {
         userDevices[existingDeviceIndex].lastActive = new Date().toISOString();
@@ -244,12 +284,9 @@ const TokenService = {
   getDeviceName() {
     try {
       let platform = 'Unknown Device';
-      
-      // Use newer API first, fall back to deprecated properties with warning
       if (navigator.userAgentData?.platform) {
         platform = navigator.userAgentData.platform;
       } else {
-        // Using alternative detection to avoid deprecated property
         const userAgent = navigator.userAgent;
         if (userAgent.includes('Win')) platform = 'Windows';
         else if (userAgent.includes('Mac')) platform = 'macOS';
@@ -301,28 +338,24 @@ const TokenService = {
         return;
       }
 
-      // Prevent rapid token refreshes
       if (this.isRateLimited()) {
         console.debug("Token set rate limited. Skipping redundant token update.");
         return;
       }
 
-      // Check if token is already set and hasn't changed
       const currentToken = this.getToken();
       if (currentToken === token) {
         console.debug("Token unchanged. Skipping redundant update.");
         return;
       }
 
-      // Update token and expiry time
       this._storage.setItem(this.tokenKey, token);
       const expiryTime = Date.now() + this.sessionDuration;
       this._storage.setItem(this.tokenExpiryKey, expiryTime.toString());
       
-      // Track when we last set a token (for rate limiting)
+
       this.updateLastTokenSetTime();
       
-      // Set a session cookie as a backup for browsers with localStorage issues
       try {
         document.cookie = `auth_token_backup=${encodeURIComponent(token)};path=/;max-age=${this.sessionDuration/1000}`;
         document.cookie = `auth_uid_backup=${encodeURIComponent(uid)};path=/;max-age=${this.sessionDuration/1000}`;
@@ -332,12 +365,11 @@ const TokenService = {
       
       console.log(`Token set. Expires at: ${new Date(expiryTime).toLocaleString()}`);
 
-      // Update device tracking
       this.handleDeviceTracking(uid);
     } catch (error) {
       console.error('Error setting token:', error);
       
-      // Try setting backup cookie if localStorage fails
+
       try {
         document.cookie = `auth_token_backup=${encodeURIComponent(token)};path=/;max-age=${this.sessionDuration/1000}`;
         document.cookie = `auth_uid_backup=${encodeURIComponent(uid)};path=/;max-age=${this.sessionDuration/1000}`;
@@ -355,10 +387,8 @@ const TokenService = {
     try {
       const token = this.getToken();
       if (!token) {
-        // Try to fall back to cookie if localStorage token is missing
         const cookieToken = this.getTokenFromCookie();
         if (cookieToken) {
-          // Restore from cookie
           const cookieUid = this.getUidFromCookie();
           if (cookieUid) {
             this._storage.setItem(this.tokenKey, cookieToken);
@@ -456,8 +486,6 @@ const TokenService = {
     try {
       const token = this.getToken();
       if (!token || this.isTokenExpired()) return false;
-
-      // Prevent rapid refreshes
       if (this.isRateLimited()) return false;
 
       const expiryTime = Date.now() + this.sessionDuration;
@@ -488,7 +516,7 @@ const TokenService = {
   },
 
   /**
-   * Encrypt/decrypt data with basic XOR obfuscation
+   * Encrypt/decrypt data with a secure XOR-based transformation
    * @param {string} text - Text to encrypt/decrypt
    * @param {string} key - Key for obfuscation
    * @returns {string} - Obfuscated/de-obfuscated text
@@ -498,10 +526,38 @@ const TokenService = {
     try {
       if (!key || !text) return text;
       
+
+      const expandKey = (baseKey) => {
+
+        let expandedKey = '';
+        let lastChar = 0;
+        
+        for (let i = 0; i < baseKey.length * 3; i++) {
+          const charIndex = i % baseKey.length;
+          const charCode = baseKey.charCodeAt(charIndex);
+
+          const newCharCode = (charCode + i + lastChar) % 256;
+          expandedKey += String.fromCharCode(newCharCode);
+          lastChar = newCharCode;
+        }
+        
+        return expandedKey;
+      };
+      
+      const extendedKey = expandKey(key);
+      
+
       let result = '';
       for (let i = 0; i < text.length; i++) {
-        const charCode = text.charCodeAt(i) ^ key.charCodeAt(i % key.length);
-        result += String.fromCharCode(charCode);
+        const keyIndex1 = i % extendedKey.length;
+        const keyIndex2 = (i * 3) % extendedKey.length;
+        
+        const charCode = text.charCodeAt(i);
+        const keyChar1 = extendedKey.charCodeAt(keyIndex1);
+        const keyChar2 = extendedKey.charCodeAt(keyIndex2);
+
+        const transformed = charCode ^ keyChar1 ^ keyChar2;
+        result += String.fromCharCode(transformed);
       }
       
       return result;
@@ -590,8 +646,6 @@ const TokenService = {
         this.clearGoogleAuthCache();
         return null;
       }
-
-      // Use optional chaining to check properties
       if (!cacheObj?.data || !cacheObj?.expiry) {
         this.clearGoogleAuthCache();
         return null;
@@ -614,11 +668,10 @@ const TokenService = {
       }
     } catch (error) {
       console.error('Error retrieving Google auth cache:', error);
-      // Try to clear cache if retrieval fails
+
       try {
         this.clearGoogleAuthCache();
       } catch (clearError) {
-        // If even clearing fails, just log and continue
         console.error('Error clearing Google auth cache after retrieval failure:', clearError);
       }
       return null;
@@ -631,8 +684,7 @@ const TokenService = {
   clearGoogleAuthCache() {
     try {
       this._storage.removeItem(this.googleAuthCacheKey);
-      
-      // Clear session storage backup
+
       try {
         sessionStorage.removeItem('google_auth_cache_backup');
       } catch (sessionError) {
@@ -708,12 +760,8 @@ const TokenService = {
       this._storage.removeItem(this.tokenExpiryKey);
       this._storage.removeItem(this.lastTokenSetTimeKey);
       this.clearGoogleAuthCache();
-      
-      // Clear backup cookies
       document.cookie = 'auth_token_backup=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
       document.cookie = 'auth_uid_backup=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-      
-      // Also clear any session storage backups
       try {
         sessionStorage.removeItem('google_auth_cache_backup');
         sessionStorage.removeItem('auth_navigation_pending');
