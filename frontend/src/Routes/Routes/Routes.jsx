@@ -51,11 +51,11 @@ const router = createBrowserRouter([
       },
       {
         path: "/video/:id", 
-        element: <VideoDetail />
+        element: <PrivateRoute><VideoDetail /></PrivateRoute>,
       },
       {
         path: "/videos",
-        element: <Video />
+        element: <PrivateRoute><Video /></PrivateRoute>,
       }
     ]
   }

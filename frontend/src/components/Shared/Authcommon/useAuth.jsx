@@ -2,21 +2,72 @@ import { useState, useContext, useCallback, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { AuthContext } from '../../../contexts/AuthProvider/AuthProvider';
 
+const useAuthNavigation = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  
+  const navigateAfterAuth = useCallback((user) => {
+    if (!user) return false;
+    
+    try {
+
+      const from = location.state?.from?.pathname || '/';
+
+      sessionStorage.setItem('auth_navigation_pending', 'true');
+      sessionStorage.setItem('auth_navigation_target', from);
+      
+      // Edge browser detection
+      const isEdge = navigator.userAgent.indexOf("Edg") > -1;
+      
+      if (isEdge) {
+        // For Edge, use direct navigation immediately
+        console.log('Edge browser detected, using direct navigation');
+        window.location.href = from;
+        return true;
+      }
+      
+      navigate(from, { replace: true });
+      
+   
+      setTimeout(() => {
+ 
+        const currentPath = window.location.pathname;
+        if (currentPath.includes('/login') || 
+            currentPath.includes('/signup') || 
+            currentPath.includes('/forgetpassword')) {
+          
+          console.log('Router navigation may have failed, using direct navigation');
+          // Force direct browser navigation for Edge compatibility
+          window.location.href = from;
+        }
+      }, 200); 
+      
+      return true;
+    } catch (error) {
+      console.error('Navigation error:', error);
+      // Ultimate fallback
+      window.location.href = '/';
+      return false;
+    }
+  }, [navigate, location]);
+  
+  return { navigateAfterAuth };
+};
+
 export const useGoogleAuth = () => {
-  const { signInWithGoogle, maxDevices, getGoogleAuthCache } = useContext(AuthContext);
+  const { signInWithGoogle, maxDevices, getGoogleAuthCache, googleAuthChecked } = useContext(AuthContext);
   const [loading, setLoading] = useState(false);
   const [authError, setAuthError] = useState('');
   const [cachedGoogleAccount, setCachedGoogleAccount] = useState(null);
-  const navigate = useNavigate();
-  const location = useLocation();
-  const from = location.state?.from?.pathname || '/';
+  const { navigateAfterAuth } = useAuthNavigation();
 
   useEffect(() => {
-    const checkGoogleCache = () => {
+    const loadCachedAccount = () => {
       try {
         if (typeof getGoogleAuthCache === 'function') {
           const cachedAuth = getGoogleAuthCache();
           if (cachedAuth?.email) {
+            console.log("Found cached Google account, updating UI");
             setCachedGoogleAccount(cachedAuth);
           }
         }
@@ -24,28 +75,45 @@ export const useGoogleAuth = () => {
         console.error("Error retrieving cached Google account:", error);
       }
     };
+
+    if (googleAuthChecked) {
+      loadCachedAccount();
+    }
     
-    const timeoutId = setTimeout(checkGoogleCache, 100);
-    return () => clearTimeout(timeoutId);
-  }, [getGoogleAuthCache]);
+    const initialLoadTimeout = setTimeout(loadCachedAccount, 500);
+    
+    const intervalId = setInterval(loadCachedAccount, 5000);
+    
+    return () => {
+      clearTimeout(initialLoadTimeout);
+      clearInterval(intervalId);
+    };
+  }, [getGoogleAuthCache, googleAuthChecked]);
 
   const handleGoogleLogin = useCallback(async () => {
     setLoading(true);
     setAuthError('');
 
     try {
-      await signInWithGoogle();
-      navigate(from, { replace: true });
+
+      sessionStorage.removeItem('auth_navigation_pending');
+      
+      const user = await signInWithGoogle();
+      if (user) {
+ 
+        navigateAfterAuth(user);
+      }
     } catch (error) {
       if (error.message === 'MAX_DEVICES_REACHED') {
         setAuthError(`You've reached the maximum device limit (${maxDevices}). Please log out from another device to continue.`);
       } else {
         setAuthError('Failed to sign in with Google');
+        console.error('Google sign-in error:', error);
       }
     } finally {
       setLoading(false);
     }
-  }, [signInWithGoogle, navigate, from, maxDevices]);
+  }, [signInWithGoogle, navigateAfterAuth, maxDevices]);
 
   return { 
     loading, 
@@ -63,10 +131,7 @@ export const useLoginForm = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [authError, setAuthError] = useState('');
-  
-  const navigate = useNavigate();
-  const location = useLocation();
-  const from = location.state?.from?.pathname || '/';
+  const { navigateAfterAuth } = useAuthNavigation();
 
   const handleLoginError = useCallback((error) => {
     if (error.message === 'EMAIL_NOT_VERIFIED') {
@@ -75,6 +140,7 @@ export const useLoginForm = () => {
       setAuthError(`You've reached the maximum device limit (${maxDevices}). Please log out from another device to continue.`);
     } else {
       setAuthError('Invalid email or password');
+      console.error('Login error:', error);
     }
   }, [maxDevices]);
 
@@ -84,14 +150,19 @@ export const useLoginForm = () => {
     setAuthError('');
 
     try {
-      await login(email, password);
-      navigate(from, { replace: true });
+  
+      sessionStorage.removeItem('auth_navigation_pending');
+      
+      const user = await login(email, password);
+      if (user) {
+        navigateAfterAuth(user);
+      }
     } catch (error) {
       handleLoginError(error);
     } finally {
       setLoading(false);
     }
-  }, [login, email, password, navigate, from, handleLoginError]);
+  }, [login, email, password, navigateAfterAuth, handleLoginError]);
 
   return {
     email,
@@ -121,17 +192,18 @@ export const useSignupForm = () => {
   const [loading, setLoading] = useState(false);
   const [showVerificationMessage, setShowVerificationMessage] = useState(false);
   const [touchedFields, setTouchedFields] = useState({});
-  
-  const navigate = useNavigate();
+
 
   useEffect(() => {
     if (showVerificationMessage) {
+      sessionStorage.setItem('verification_redirect', 'true');
+      
       const timer = setTimeout(() => {
-        navigate('/login');
+        window.location.href = '/';
       }, 2000);
       return () => clearTimeout(timer);
     }
-  }, [showVerificationMessage, navigate]);
+  }, [showVerificationMessage]);
 
   const handleBlur = useCallback((e) => {
     const { name } = e.target;
@@ -168,20 +240,24 @@ export const useSignupForm = () => {
 
     setLoading(true);
     try {
-      await createUser(
+      const user = await createUser(
         formData.email,
         formData.password,
         formData.firstName.trim(),
         formData.lastName.trim()
       );
-      setShowVerificationMessage(true);
+      
+      if (user) {
+        setShowVerificationMessage(true);
+      }
     } catch (err) {
       const errorCode = err.code || err.message;
       setError(getAuthErrorMessage(errorCode));
+      console.error('Signup error:', err);
     } finally {
       setLoading(false);
     }
-  }, [createUser, formData, maxDevices, getAuthErrorMessage]);
+  }, [createUser, formData, getAuthErrorMessage]);
 
   return {
     formData,

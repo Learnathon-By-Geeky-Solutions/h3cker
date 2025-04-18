@@ -160,3 +160,30 @@ Date: February 05, 2025
 - Implemented proper route protection
 - Added form validation patterns
 - Created user feedback system
+
+## Enhance Forget Password functionality with improved error handling, success messages, and UI updates
+
+- Added animated error and success message components for better user feedback.
+- Implemented email format validation before sending reset link.
+- Refactored cooldown logic to handle errors more gracefully.
+- Updated UI for better responsiveness and visual appeal.
+- Integrated common form elements for consistency across authentication components.
+
+## Revamp NotLoggedInView for improved user experience
+
+- Adjusted feature card icons and text sizes for better readability.
+- Enhanced layout responsiveness with updated grid and spacing.
+- Improved background elements for a more engaging visual design.
+
+## Refactor AuthProvider for better user data management and navigation handling
+
+- Introduced helper functions for user data updates and authentication processing.
+- Implemented checks for pending navigations and verification redirects.
+- Streamlined Google sign-in process with dedicated functions for user document management.
+
+## Improve TokenService for robust token management and error handling
+
+- Added safe wrappers for localStorage access to handle potential errors.
+- Implemented backup mechanisms using cookies for token storage.
+- Enhanced device ID generation with fallback methods for compatibility.
+- Improved session management with additional checks and balances.
