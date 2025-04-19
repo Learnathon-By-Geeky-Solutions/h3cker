@@ -34,8 +34,10 @@ jobs:
         shell: bash # Ensure bash shell for proper echo behavior
 
       - name: Create Backend .env File
-        run: echo "${{ secrets.BACKEND_ENV_FILE }}" > backend/.env
-        shell: bash # Ensure bash shell for proper echo behavior
+        env:
+          BACKEND_ENV_CONTENT: ${{ secrets.BACKEND_ENV_FILE }}
+        run: printf "%s\n" "$BACKEND_ENV_CONTENT" > backend/.env
+        shell: bash # Use printf for safer handling of special characters
 
       - name: Run tests and generate coverage report
         run: |
