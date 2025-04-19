@@ -95,4 +95,6 @@ jobs:
         uses: SonarSource/sonarcloud-github-action@v2
         with:
           projectBaseDir: .
-        # SONAR_TOKEN is already set in the job's env block
+          args: >
+            -Dsonar.sources=backend
+            -Dsonar.python.coverage.reportPaths=backend/coverage.xml
