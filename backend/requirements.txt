@@ -11,3 +11,6 @@ python-dotenv
 firebase-admin
 django-extensions
 azure-storage-blob
+pytest
+pytest-django
+pytest-cov
