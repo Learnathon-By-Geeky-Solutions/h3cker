@@ -153,7 +153,7 @@ else:
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'api.authentication.FirebaseAuthentication',
+        'backend.authentication.FirebaseAuthentication', # Updated path
         'rest_framework.authentication.SessionAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
