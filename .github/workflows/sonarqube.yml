@@ -30,8 +30,13 @@ jobs:
           pip install -r backend/requirements.txt
       
       - name: Create Firebase Credentials File
-        run: echo "${{ secrets.FIREBASE_CREDENTIALS_JSON }}" > backend/firebase-credentials.json
-        shell: bash # Ensure bash shell for proper echo behavior
+        env:
+          FIREBASE_CREDS: ${{ secrets.FIREBASE_CREDENTIALS_JSON }}
+        run: |
+          cat <<EOF > backend/firebase-credentials.json
+          ${FIREBASE_CREDS}
+          EOF
+        shell: bash # Use cat with heredoc for exact content preservation
 
       - name: Create Backend .env File
         env:
