@@ -1,7 +1,20 @@
 [run]
 branch = True
-source = backend.api,
+source = .
 relative_files = True
+parallel = True
+
+# Path rewriting for CI environments
+[paths]
+source =
+    backend/
+    /home/runner/work/h3cker/h3cker/backend/
 
 [report]
 show_missing = True
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    pass
