@@ -28,6 +28,14 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r backend/requirements.txt
+      
+      - name: Create Firebase Credentials File
+        run: echo "${{ secrets.FIREBASE_CREDENTIALS_JSON }}" > backend/firebase-credentials.json
+        shell: bash # Ensure bash shell for proper echo behavior
+
+      - name: Create Backend .env File
+        run: echo "${{ secrets.BACKEND_ENV_FILE }}" > backend/.env
+        shell: bash # Ensure bash shell for proper echo behavior
 
       - name: Run tests and generate coverage report
         run: |
