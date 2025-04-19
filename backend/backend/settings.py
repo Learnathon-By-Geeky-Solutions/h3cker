@@ -73,16 +73,9 @@ WSGI_APPLICATION = "backend.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
-# Check if running in GitHub Actions CI environment for tests
-if os.getenv('GITHUB_ACTIONS') == 'True':
-    # Use in-memory SQLite database for tests in CI
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': ':memory:',
-        }
-    }
-elif ENVIRONMENT == 'PROD':
+# Configuration now relies solely on environment variables.
+# In CI, these will be set by the workflow to point to the service container.
+if ENVIRONMENT == 'PROD':
     # Production Database
     tmpPostgres = urlparse(os.getenv("DATABASE_URL"))
     DATABASES = {

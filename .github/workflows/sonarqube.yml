@@ -12,7 +12,58 @@ jobs:
   analyze:
     name: Analyze with SonarCloud
     runs-on: ubuntu-latest
-    
+
+    # Add PostgreSQL service container
+    services:
+      postgres:
+        image: postgres:14 # Or your preferred version
+        env:
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpassword
+          POSTGRES_DB: testdb
+        ports:
+          - 5432:5432 # Map port to the host runner
+        # Options to wait for the database to be ready
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    # Set environment variables for the job to use the service DB
+    # These override any values that might be loaded from a .env file by python-dotenv
+    # and are directly used by settings.py via os.getenv()
+    env:
+      # Override database settings for CI
+      ENVIRONMENT: LOCAL # Use a specific value for CI if needed, or keep LOCAL/PROD logic
+      LOCAL_DB_NAME: testdb # Match service POSTGRES_DB
+      LOCAL_DB_USER: testuser # Match service POSTGRES_USER
+      LOCAL_DB_PASSWORD: testpassword # Match service POSTGRES_PASSWORD
+      LOCAL_DB_HOST: localhost # Service is available on localhost within the job
+      LOCAL_DB_PORT: 5432 # Mapped port
+      # Keep other necessary env vars (can still come from secrets if needed)
+      SECRET_KEY: ${{ secrets.SECRET_KEY }} # Still needed
+      DEBUG: "False" # Usually False for CI tests
+      # Add other non-DB vars needed by your app (Azure, Firebase, etc.)
+      AZURE_STORAGE_ACCOUNT_NAME: ${{ secrets.AZURE_STORAGE_ACCOUNT_NAME }}
+      AZURE_STORAGE_ACCOUNT_KEY: ${{ secrets.AZURE_STORAGE_ACCOUNT_KEY }}
+      AZURE_VIDEO_CONTAINER_NAME: ${{ secrets.AZURE_VIDEO_CONTAINER_NAME }}
+      AZURE_THUMBNAIL_CONTAINER_NAME: ${{ secrets.AZURE_THUMBNAIL_CONTAINER_NAME }}
+      FIREBASE_TYPE: ${{ secrets.FIREBASE_TYPE }}
+      FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+      FIREBASE_PRIVATE_KEY_ID: ${{ secrets.FIREBASE_PRIVATE_KEY_ID }}
+      FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
+      FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
+      FIREBASE_CLIENT_ID: ${{ secrets.FIREBASE_CLIENT_ID }}
+      FIREBASE_AUTH_URI: ${{ secrets.FIREBASE_AUTH_URI }}
+      FIREBASE_TOKEN_URI: ${{ secrets.FIREBASE_TOKEN_URI }}
+      FIREBASE_AUTH_PROVIDER_X509_CERT_URL: ${{ secrets.FIREBASE_AUTH_PROVIDER_X509_CERT_URL }}
+      FIREBASE_CLIENT_X509_CERT_URL: ${{ secrets.FIREBASE_CLIENT_X509_CERT_URL }}
+      FIREBASE_UNIVERSE_DOMAIN: ${{ secrets.FIREBASE_UNIVERSE_DOMAIN }}
+      # Note: ALLOWED_HOSTS and CORS might need adjustment for CI if tests make external calls
+      # Set SONAR_TOKEN for the SonarCloud Scan step later
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -29,41 +80,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r backend/requirements.txt
       
-      - name: Create Backend .env File
-        run: |
-          # Using echo block redirection as per user example
-          {
-            echo "SECRET_KEY=${{ secrets.SECRET_KEY }}"
-            echo "DEBUG=${{ secrets.DEBUG }}" # Or set directly, e.g., DEBUG=False
-            echo "ENVIRONMENT=${{ secrets.ENVIRONMENT }}" # Or set directly, e.g., ENVIRONMENT=CI
-            echo "ALLOWED_HOSTS=${{ secrets.ALLOWED_HOSTS }}"
-            echo "CORS_ALLOWED_ORIGINS=${{ secrets.CORS_ALLOWED_ORIGINS }}"
-            
-            # Azure
-            echo "AZURE_STORAGE_ACCOUNT_NAME=${{ secrets.AZURE_STORAGE_ACCOUNT_NAME }}"
-            echo "AZURE_STORAGE_ACCOUNT_KEY=${{ secrets.AZURE_STORAGE_ACCOUNT_KEY }}"
-            echo "AZURE_VIDEO_CONTAINER_NAME=${{ secrets.AZURE_VIDEO_CONTAINER_NAME }}"
-            echo "AZURE_THUMBNAIL_CONTAINER_NAME=${{ secrets.AZURE_THUMBNAIL_CONTAINER_NAME }}"
-            echo "GH_ACTIONS=${{ secrets.GH_ACTIONS }}"
-            
-            # Firebase
-            echo "FIREBASE_TYPE=${{ secrets.FIREBASE_TYPE }}"
-            echo "FIREBASE_PROJECT_ID=${{ secrets.FIREBASE_PROJECT_ID }}"
-            echo "FIREBASE_PRIVATE_KEY_ID=${{ secrets.FIREBASE_PRIVATE_KEY_ID }}"
-            # Using echo without quotes around the secret can be problematic for multi-line keys.
-            # Ensure the secret value itself is formatted correctly (e.g., contains literal \n)
-            # and doesn't contain characters that break the echo command.
-            echo "FIREBASE_PRIVATE_KEY=${{ secrets.FIREBASE_PRIVATE_KEY }}"
-            echo "FIREBASE_CLIENT_EMAIL=${{ secrets.FIREBASE_CLIENT_EMAIL }}"
-            echo "FIREBASE_CLIENT_ID=${{ secrets.FIREBASE_CLIENT_ID }}"
-            echo "FIREBASE_AUTH_URI=${{ secrets.FIREBASE_AUTH_URI }}"
-            echo "FIREBASE_TOKEN_URI=${{ secrets.FIREBASE_TOKEN_URI }}"
-            echo "FIREBASE_AUTH_PROVIDER_X509_CERT_URL=${{ secrets.FIREBASE_AUTH_PROVIDER_X509_CERT_URL }}"
-            echo "FIREBASE_CLIENT_X509_CERT_URL=${{ secrets.FIREBASE_CLIENT_X509_CERT_URL }}"
-            echo "FIREBASE_UNIVERSE_DOMAIN=${{ secrets.FIREBASE_UNIVERSE_DOMAIN }}"
-            
-          } > backend/.env
-        shell: bash
+      # Removed "Create Backend .env File" step as env vars are set at job level
+
+      # Add step to run migrations against the service database
+      - name: Run migrations
+        run: python backend/manage.py migrate
 
       - name: Run tests and generate coverage report
         run: |
@@ -74,5 +95,4 @@ jobs:
         uses: SonarSource/sonarcloud-github-action@v2
         with:
           projectBaseDir: .
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        # SONAR_TOKEN is already set in the job's env block
