@@ -30,10 +30,40 @@ jobs:
           pip install -r backend/requirements.txt
       
       - name: Create Backend .env File
-        env:
-          BACKEND_ENV_CONTENT: ${{ secrets.BACKEND_ENV_FILE }}
-        run: printf "%s\n" "$BACKEND_ENV_CONTENT" > backend/.env
-        shell: bash # Use printf for safer handling of special characters
+        run: |
+          # Using echo block redirection as per user example
+          {
+            echo "SECRET_KEY=${{ secrets.SECRET_KEY }}"
+            echo "DEBUG=${{ secrets.DEBUG }}" # Or set directly, e.g., DEBUG=False
+            echo "ENVIRONMENT=${{ secrets.ENVIRONMENT }}" # Or set directly, e.g., ENVIRONMENT=CI
+            echo "ALLOWED_HOSTS=${{ secrets.ALLOWED_HOSTS }}"
+            echo "CORS_ALLOWED_ORIGINS=${{ secrets.CORS_ALLOWED_ORIGINS }}"
+            
+            # Azure
+            echo "AZURE_STORAGE_ACCOUNT_NAME=${{ secrets.AZURE_STORAGE_ACCOUNT_NAME }}"
+            echo "AZURE_STORAGE_ACCOUNT_KEY=${{ secrets.AZURE_STORAGE_ACCOUNT_KEY }}"
+            echo "AZURE_VIDEO_CONTAINER_NAME=${{ secrets.AZURE_VIDEO_CONTAINER_NAME }}"
+            echo "AZURE_THUMBNAIL_CONTAINER_NAME=${{ secrets.AZURE_THUMBNAIL_CONTAINER_NAME }}"
+            echo "GH_ACTIONS=${{ secrets.GH_ACTIONS }}"
+            
+            # Firebase
+            echo "FIREBASE_TYPE=${{ secrets.FIREBASE_TYPE }}"
+            echo "FIREBASE_PROJECT_ID=${{ secrets.FIREBASE_PROJECT_ID }}"
+            echo "FIREBASE_PRIVATE_KEY_ID=${{ secrets.FIREBASE_PRIVATE_KEY_ID }}"
+            # Using echo without quotes around the secret can be problematic for multi-line keys.
+            # Ensure the secret value itself is formatted correctly (e.g., contains literal \n)
+            # and doesn't contain characters that break the echo command.
+            echo "FIREBASE_PRIVATE_KEY=${{ secrets.FIREBASE_PRIVATE_KEY }}"
+            echo "FIREBASE_CLIENT_EMAIL=${{ secrets.FIREBASE_CLIENT_EMAIL }}"
+            echo "FIREBASE_CLIENT_ID=${{ secrets.FIREBASE_CLIENT_ID }}"
+            echo "FIREBASE_AUTH_URI=${{ secrets.FIREBASE_AUTH_URI }}"
+            echo "FIREBASE_TOKEN_URI=${{ secrets.FIREBASE_TOKEN_URI }}"
+            echo "FIREBASE_AUTH_PROVIDER_X509_CERT_URL=${{ secrets.FIREBASE_AUTH_PROVIDER_X509_CERT_URL }}"
+            echo "FIREBASE_CLIENT_X509_CERT_URL=${{ secrets.FIREBASE_CLIENT_X509_CERT_URL }}"
+            echo "FIREBASE_UNIVERSE_DOMAIN=${{ secrets.FIREBASE_UNIVERSE_DOMAIN }}"
+            
+          } > backend/.env
+        shell: bash
 
       - name: Run tests and generate coverage report
         run: |
