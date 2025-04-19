@@ -88,8 +88,8 @@ jobs:
 
       - name: Run tests and generate coverage report
         run: |
-          cd backend
-          pytest --cov=api --cov=backend --cov-report=xml:coverage.xml
+          # Run from project root but specify paths explicitly
+          pytest backend --cov=backend/api --cov-report=xml:backend/coverage.xml
       
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@v2
@@ -98,3 +98,4 @@ jobs:
           args: >
             -Dsonar.sources=backend
             -Dsonar.python.coverage.reportPaths=backend/coverage.xml
+            -Dsonar.coverage.exclusions=**/tests/**,**/migrations/**
