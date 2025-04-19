@@ -1,37 +1,150 @@
 const TokenService = {
-  // Key names for local storage
   tokenKey: 'auth_token',
   userDevicesKey: 'user_devices',
   currentDeviceKey: 'current_device_id',
   tokenExpiryKey: 'auth_token_expiry',
   googleAuthCacheKey: 'google_auth_cache',
   profileUpdateTimeKey: 'profile_last_update_time',
+  lastTokenSetTimeKey: 'last_token_set_time',
 
   sessionDuration: 24 * 60 * 60 * 1000, // 24 hours in milliseconds
+  tokenRateLimitMs: 1000, // Minimum time between token sets (1 second)
 
   // Max number of devices allowed to be logged in simultaneously
   maxDevices: 3,
 
   /**
-   * Generate a unique device ID using cryptographically secure random values
+   * Safe wrapper for localStorage access
+   * Handles cases where localStorage might be unavailable or blocked
+   */
+  _storage: {
+    getItem(key) {
+      try {
+        return localStorage.getItem(key);
+      } catch (error) {
+        console.error(`Storage error retrieving ${key}:`, error);
+        return null;
+      }
+    },
+    
+    setItem(key, value) {
+      try {
+        localStorage.setItem(key, value);
+        return true;
+      } catch (error) {
+        console.error(`Storage error setting ${key}:`, error);
+        return false;
+      }
+    },
+    
+    removeItem(key) {
+      try {
+        localStorage.removeItem(key);
+        return true;
+      } catch (error) {
+        console.error(`Storage error removing ${key}:`, error);
+        return false;
+      }
+    }
+  },
+
+  /**
+   * Simple hash function (non-cryptographic)
+   * @private
+   */
+  _simpleHash(str) {
+    let hash = 0;
+    if (!str || str.length === 0) return hash.toString(36);
+
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; 
+    }
+
+    return Math.abs(hash).toString(36);
+  },
+
+  /**
+   * Gathers performance data string for fallback ID generation
+   * @private
+   */
+  _getPerformanceDataString() {
+    const timestamp = Date.now().toString(36);
+    let perfData = '';
+    try {
+      if (typeof performance !== 'undefined' && performance.getEntriesByType) {
+        const navigationEntries = performance.getEntriesByType('navigation');
+        if (navigationEntries.length > 0) {
+          const navigationTiming = navigationEntries[0];
+          const timingData = navigationTiming.toJSON ? navigationTiming.toJSON() : navigationTiming;
+  
+          perfData = Object.values(timingData)
+                           .filter(v => typeof v === 'number' && !isNaN(v))
+                           .join('');
+        } else if (performance.now) {
+          perfData = performance.now().toString();
+        }
+      } else if (typeof performance !== 'undefined' && performance.now) {
+        perfData = performance.now().toString();
+      }
+    } catch (e) {
+      console.warn('Could not access performance timing data:', e);
+
+      perfData = timestamp.split('').reverse().join('');
+    }
+  
+    return perfData || timestamp;
+  },
+
+  /**
+   * Generates a device ID using fallback methods when crypto is unavailable
+   * @private
+   */
+  _generateFallbackDeviceId() {
+    console.warn('Crypto API not available, generating fallback device ID.');
+    const timestamp = Date.now().toString(36);
+
+    const timeStr = new Date().toISOString();
+    const navStr = typeof navigator !== 'undefined' ?
+                  `${navigator.userAgent || ''}${navigator.language || ''}${navigator.hardwareConcurrency || ''}` :
+                  'fallback-nav';
+    const d = new Date();
+    const timeComponents = [
+      d.getHours(), d.getMinutes(), d.getSeconds(), d.getMilliseconds()
+    ].join('-');
+
+    const perfData = this._getPerformanceDataString();
+
+    const part1 = this._simpleHash(timeStr + navStr);
+    const part2 = this._simpleHash(timeComponents + perfData + timestamp);
+
+    return `${timestamp}-${part1}-${part2}`;
+  },
+
+  /**
+   * Generate a unique device ID with best available browser crypto methods
    * @returns {string} A unique device identifier
    */
   generateDeviceId() {
-    // Create a buffer for 8 random bytes (64 bits)
-    const buffer = new Uint8Array(8);
+    try {
+      // Use crypto API if available
+      if (window.crypto?.getRandomValues) {
+        const buffer = new Uint8Array(8);
+        window.crypto.getRandomValues(buffer);
+        const randomHex = Array.from(buffer)
+          .map(b => b.toString(16).padStart(2, '0'))
+          .join('');
+        const timestamp = Date.now().toString(36);
+        return `${timestamp}-${randomHex}`;
+      }
 
-    // Fill with cryptographically secure random values
-    window.crypto.getRandomValues(buffer);
+      return this._generateFallbackDeviceId();
+    } catch (error) {
+      console.error('Error generating device ID:', error);
 
-    // Convert to a hex string and combine with timestamp for uniqueness
-    const randomHex = Array.from(buffer)
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
-
-    // Include timestamp prefix for additional entropy and sortability
-    const timestamp = Date.now().toString(36);
-
-    return timestamp + '-' + randomHex;
+      return this._generateFallbackDeviceId();
+    }
   },
 
   /**
@@ -39,14 +152,17 @@ const TokenService = {
    * @returns {string} The current device ID
    */
   getCurrentDeviceId() {
-    let deviceId = localStorage.getItem(this.currentDeviceKey);
-
-    if (!deviceId) {
-      deviceId = this.generateDeviceId();
-      localStorage.setItem(this.currentDeviceKey, deviceId);
+    try {
+      let deviceId = this._storage.getItem(this.currentDeviceKey);
+      if (!deviceId) {
+        deviceId = this.generateDeviceId();
+        this._storage.setItem(this.currentDeviceKey, deviceId);
+      }
+      return deviceId;
+    } catch (error) {
+      console.error('Error getting current device ID:', error);
+      return this.generateDeviceId();
     }
-
-    return deviceId;
   },
 
   /**
@@ -54,60 +170,94 @@ const TokenService = {
    * @returns {string|null} The authentication token or null if not found
    */
   getToken() {
-    return localStorage.getItem(this.tokenKey);
+    try {
+      return this._storage.getItem(this.tokenKey);
+    } catch (error) {
+      console.error('Error getting token:', error);
+      return null;
+    }
   },
 
   /**
-   * Remove the authentication token from local storage
+   * Check if token operations are being rate limited
+   * @returns {boolean} True if rate limited, false otherwise
    */
-  removeToken() {
-    localStorage.removeItem(this.tokenKey);
+  isRateLimited() {
+    try {
+      const lastSetTime = this._storage.getItem(this.lastTokenSetTimeKey);
+      if (!lastSetTime) return false;
+      
+      const timeSinceLastSet = Date.now() - parseInt(lastSetTime, 10);
+      return timeSinceLastSet < this.tokenRateLimitMs;
+    } catch (error) {
+      console.error('Error checking rate limit:', error);
+      return false;
+    }
   },
 
   /**
-   * Add the current device to the user's device tracking
+   * Update the last token set timestamp
+   */
+  updateLastTokenSetTime() {
+    try {
+      this._storage.setItem(this.lastTokenSetTimeKey, Date.now().toString());
+    } catch (error) {
+      console.error('Error updating last token set time:', error);
+    }
+  },
+
+  /**
+   * Handle device tracking for a user
    * @param {string} uid - The user's ID
-   * @returns {boolean} True if the device was added, false if max devices reached
+   * @returns {boolean} Success status of the operation
    */
-  addDeviceToTracking(uid) {
-    if (!uid) return false;
+  handleDeviceTracking(uid) {
+    try {
+      if (!uid) return false;
 
-    const deviceId = this.getCurrentDeviceId();
-    let userDevices = this.getUserDevices(uid);
+      const deviceId = this.getCurrentDeviceId();
+      let userDevices = this.getUserDevices(uid);
 
-    // If this device is already registered, just update the timestamp
-    const existingDevice = userDevices.find(device => device.id === deviceId);
-    if (existingDevice) {
-      existingDevice.lastActive = new Date().toISOString();
-      localStorage.setItem(this.userDevicesKey, JSON.stringify({
-        uid,
-        devices: userDevices
-      }));
+      const existingDeviceIndex = userDevices.findIndex(device => device.id === deviceId);
+      if (existingDeviceIndex >= 0) {
+        userDevices[existingDeviceIndex].lastActive = new Date().toISOString();
+        this.storeUserDevices(uid, userDevices);
+        return true;
+      }
+
+      if (userDevices.length >= this.maxDevices) {
+        console.warn('Maximum devices reached');
+        return false;
+      }
+
+      userDevices.push({
+        id: deviceId,
+        name: this.getDeviceName(),
+        lastActive: new Date().toISOString()
+      });
+
+      this.storeUserDevices(uid, userDevices);
       return true;
+    } catch (error) {
+      console.error('Error handling device tracking:', error);
+      return false;
     }
+  },
 
-    // Check if max devices would be exceeded
-    if (userDevices.length >= this.maxDevices) {
-      console.warn('Maximum devices reached');
-      // Optional: Implement logic to remove the oldest device
-      // userDevices.sort((a, b) => new Date(a.lastActive) - new Date(b.lastActive));
-      // userDevices = userDevices.slice(1); // Remove the oldest
-      return false; // Current behavior: Deny login on new device
+  /**
+   * Store user devices in local storage
+   * @param {string} uid - The user's ID
+   * @param {Array} devices - Array of device objects
+   */
+  storeUserDevices(uid, devices) {
+    try {
+      this._storage.setItem(this.userDevicesKey, JSON.stringify({
+        uid,
+        devices
+      }));
+    } catch (error) {
+      console.error('Error storing user devices:', error);
     }
-
-    // Add the new device
-    userDevices.push({
-      id: deviceId,
-      name: this.getDeviceName(),
-      lastActive: new Date().toISOString()
-    });
-
-    localStorage.setItem(this.userDevicesKey, JSON.stringify({
-      uid,
-      devices: userDevices
-    }));
-
-    return true;
   },
 
   /**
@@ -116,21 +266,21 @@ const TokenService = {
    * @returns {Array} Array of devices
    */
   getUserDevices(uid) {
-    if (!uid) return [];
-
-    const storedData = localStorage.getItem(this.userDevicesKey);
-
-    if (!storedData) return [];
-
     try {
-      const parsed = JSON.parse(storedData);
-      // Only return devices for the current user
-      if (parsed.uid === uid) {
-        return parsed.devices || [];
+      if (!uid) return [];
+
+      const storedData = this._storage.getItem(this.userDevicesKey);
+      if (!storedData) return [];
+
+      try {
+        const parsed = JSON.parse(storedData);
+        return (parsed.uid === uid) ? (parsed.devices || []) : [];
+      } catch (parseError) {
+        console.error('Error parsing user devices JSON:', parseError);
+        return [];
       }
-      return [];
-    } catch (e) {
-      console.error('Error parsing user devices', e);
+    } catch (error) {
+      console.error('Error retrieving user devices:', error);
       return [];
     }
   },
@@ -141,15 +291,15 @@ const TokenService = {
    * @param {string} deviceId - The device ID to remove
    */
   removeDevice(uid, deviceId) {
-    if (!uid || !deviceId) return;
+    try {
+      if (!uid || !deviceId) return;
 
-    const userDevices = this.getUserDevices(uid);
-    const updatedDevices = userDevices.filter(device => device.id !== deviceId);
-
-    localStorage.setItem(this.userDevicesKey, JSON.stringify({
-      uid,
-      devices: updatedDevices
-    }));
+      const userDevices = this.getUserDevices(uid);
+      const updatedDevices = userDevices.filter(device => device.id !== deviceId);
+      this.storeUserDevices(uid, updatedDevices);
+    } catch (error) {
+      console.error('Error removing device:', error);
+    }
   },
 
   /**
@@ -157,10 +307,25 @@ const TokenService = {
    * @returns {string} A name for the current device
    */
   getDeviceName() {
-    // Avoiding deprecated navigator.platform property
-    const platform = navigator.userAgentData?.platform || 'Unknown Device';
-    const browser = this.getBrowserName();
-    return `${browser} on ${platform}`;
+    try {
+      let platform = 'Unknown Device';
+      if (navigator.userAgentData?.platform) {
+        platform = navigator.userAgentData.platform;
+      } else {
+        const userAgent = navigator.userAgent;
+        if (userAgent.includes('Win')) platform = 'Windows';
+        else if (userAgent.includes('Mac')) platform = 'macOS';
+        else if (userAgent.includes('Linux')) platform = 'Linux';
+        else if (userAgent.includes('Android')) platform = 'Android';
+        else if (userAgent.includes('iPhone') || userAgent.includes('iPad')) platform = 'iOS';
+      }
+      
+      const browser = this.getBrowserName();
+      return `${browser} on ${platform}`;
+    } catch (error) {
+      console.error('Error getting device name:', error);
+      return 'Unknown Device';
+    }
   },
 
   /**
@@ -168,17 +333,22 @@ const TokenService = {
    * @returns {string} The name of the browser
    */
   getBrowserName() {
-    const userAgent = navigator.userAgent;
+    try {
+      const userAgent = navigator.userAgent;
 
-    // Order matters here - check Edge/Chrome/Safari before generic terms
-    if (userAgent.indexOf("Edg") > -1) return "Edge"; // Modern Edge (Chromium based)
-    if (userAgent.indexOf("Chrome") > -1 && userAgent.indexOf("Safari") > -1 && userAgent.indexOf("OPR") === -1) return "Chrome";
-    if (userAgent.indexOf("Firefox") > -1) return "Firefox";
-    if (userAgent.indexOf("Safari") > -1 && userAgent.indexOf("Chrome") === -1) return "Safari";
-    if (userAgent.indexOf("OPR") > -1 || userAgent.indexOf("Opera") > -1) return "Opera";
-    if (userAgent.indexOf("Trident") > -1 || userAgent.indexOf("MSIE") > -1) return "Internet Explorer"; // Older IE
+      // Edge needs to be checked before Chrome due to its user agent string
+      if (userAgent.indexOf("Edg") > -1) return "Edge";
+      if (userAgent.indexOf("Chrome") > -1 && userAgent.indexOf("Safari") > -1 && userAgent.indexOf("OPR") === -1) return "Chrome";
+      if (userAgent.indexOf("Firefox") > -1) return "Firefox";
+      if (userAgent.indexOf("Safari") > -1 && userAgent.indexOf("Chrome") === -1) return "Safari";
+      if (userAgent.indexOf("OPR") > -1 || userAgent.indexOf("Opera") > -1) return "Opera";
+      if (userAgent.indexOf("Trident") > -1 || userAgent.indexOf("MSIE") > -1) return "Internet Explorer";
 
-    return "Unknown Browser";
+      return "Unknown Browser";
+    } catch (error) {
+      console.error('Error getting browser name:', error);
+      return "Unknown Browser";
+    }
   },
 
   /**
@@ -187,20 +357,56 @@ const TokenService = {
    * @param {string} uid - The user's ID
    */
   setToken(token, uid) {
+    try {
       if (!token || !uid) {
-           console.error("setToken requires both token and uid.");
-           return;
+        console.error("setToken requires both token and uid.");
+        return;
       }
 
-      localStorage.setItem(this.tokenKey, token);
+      if (this.isRateLimited()) {
+        console.debug("Token set rate limited. Skipping redundant token update.");
+        return;
+      }
 
-      // Set token expiry time (24 hours from now)
+      const currentToken = this.getToken();
+      if (currentToken === token) {
+        console.debug("Token unchanged. Skipping redundant update.");
+        return;
+      }
+
+      this._storage.setItem(this.tokenKey, token);
       const expiryTime = Date.now() + this.sessionDuration;
-      localStorage.setItem(this.tokenExpiryKey, expiryTime.toString());
+      this._storage.setItem(this.tokenExpiryKey, expiryTime.toString());
+      
+
+      this.updateLastTokenSetTime();
+      
+      try {
+        // Add secure and httpOnly flags to cookies
+        const isSecure = window.location.protocol === 'https:';
+        const secureFlag = isSecure ? ';secure' : '';
+        document.cookie = `auth_token_backup=${encodeURIComponent(token)};path=/;max-age=${this.sessionDuration/1000}${secureFlag};httpOnly`;
+        document.cookie = `auth_uid_backup=${encodeURIComponent(uid)};path=/;max-age=${this.sessionDuration/1000}${secureFlag};httpOnly`;
+      } catch (cookieError) {
+        console.error('Error setting backup cookie:', cookieError);
+      }
+      
       console.log(`Token set. Expires at: ${new Date(expiryTime).toLocaleString()}`);
 
-      // Update device tracking
-      this.addDeviceToTracking(uid);
+      this.handleDeviceTracking(uid);
+    } catch (error) {
+      console.error('Error setting token:', error);
+      
+
+      try {
+        const isSecure = window.location.protocol === 'https:';
+        const secureFlag = isSecure ? ';secure' : '';
+        document.cookie = `auth_token_backup=${encodeURIComponent(token)};path=/;max-age=${this.sessionDuration/1000}${secureFlag};httpOnly`;
+        document.cookie = `auth_uid_backup=${encodeURIComponent(uid)};path=/;max-age=${this.sessionDuration/1000}${secureFlag};httpOnly`;
+      } catch (cookieError) {
+        console.error('Error setting backup cookie:', cookieError);
+      }
+    }
   },
 
   /**
@@ -208,27 +414,78 @@ const TokenService = {
    * @returns {boolean} True if token is expired or missing, false otherwise
    */
   isTokenExpired() {
+    try {
       const token = this.getToken();
       if (!token) {
-          return true;
+        const cookieToken = this.getTokenFromCookie();
+        if (cookieToken) {
+          const cookieUid = this.getUidFromCookie();
+          if (cookieUid) {
+            this._storage.setItem(this.tokenKey, cookieToken);
+            return false;
+          }
+        }
+        return true;
       }
 
-      const expiryTimeStr = localStorage.getItem(this.tokenExpiryKey);
+      const expiryTimeStr = this._storage.getItem(this.tokenExpiryKey);
       if (!expiryTimeStr) {
-           console.warn("Token expiry check: Expiry time missing.");
-           return true;
+        console.warn("Token expiry check: Expiry time missing.");
+        return true;
       }
 
       const expiryTime = parseInt(expiryTimeStr, 10);
-       if (isNaN(expiryTime)) {
-           console.error("Token expiry check: Invalid expiry time format.");
-           // Treat as expired if invalid
-           this.clearAuth(); // Clear invalid state
-           return true;
-       }
+      if (isNaN(expiryTime)) {
+        console.error("Token expiry check: Invalid expiry time format.");
+        this.clearAuth();
+        return true;
+      }
 
-      const isExpired = Date.now() > expiryTime;
-      return isExpired;
+      return Date.now() > expiryTime;
+    } catch (error) {
+      console.error('Error checking token expiry:', error);
+      return true;
+    }
+  },
+
+  /**
+   * Get token from cookie (fallback method)
+   * @returns {string|null} Token from cookie or null
+   */
+  getTokenFromCookie() {
+    try {
+      const cookies = document.cookie.split(';');
+      for (const cookie of cookies) {
+        const trimmedCookie = cookie.trim();
+        if (trimmedCookie.startsWith('auth_token_backup=')) {
+          return decodeURIComponent(trimmedCookie.substring('auth_token_backup='.length));
+        }
+      }
+      return null;
+    } catch (error) {
+      console.error('Error getting token from cookie:', error);
+      return null;
+    }
+  },
+
+  /**
+   * Get UID from cookie (fallback method)
+   * @returns {string|null} UID from cookie or null
+   */
+  getUidFromCookie() {
+    try {
+      const cookies = document.cookie.split(';');
+      for (const cookie of cookies) {
+        const trimmedCookie = cookie.trim();
+        if (trimmedCookie.startsWith('auth_uid_backup=')) {
+          return decodeURIComponent(trimmedCookie.substring('auth_uid_backup='.length));
+        }
+      }
+      return null;
+    } catch (error) {
+      console.error('Error getting UID from cookie:', error);
+      return null;
+    }
   },
 
   /**
@@ -236,15 +493,19 @@ const TokenService = {
    * @returns {number} Milliseconds until expiry, 0 if expired or error
    */
   getTimeUntilExpiry() {
-      const expiryTimeStr = localStorage.getItem(this.tokenExpiryKey);
-       if (!expiryTimeStr) return 0;
+    try {
+      const expiryTimeStr = this._storage.getItem(this.tokenExpiryKey);
+      if (!expiryTimeStr) return 0;
 
-       const expiryTime = parseInt(expiryTimeStr, 10);
-       if (isNaN(expiryTime)) return 0;
-
+      const expiryTime = parseInt(expiryTimeStr, 10);
+      if (isNaN(expiryTime)) return 0;
 
       const remaining = expiryTime - Date.now();
       return remaining > 0 ? remaining : 0;
+    } catch (error) {
+      console.error('Error getting time until expiry:', error);
+      return 0;
+    }
   },
 
   /**
@@ -252,55 +513,142 @@ const TokenService = {
    * @returns {boolean} Whether the refresh was successful
    */
   refreshExpiry() {
+    try {
       const token = this.getToken();
-      if (!token || this.isTokenExpired()) { // Don't refresh if already expired or no token
-          return false;
-      }
+      if (!token || this.isTokenExpired()) return false;
+      if (this.isRateLimited()) return false;
 
       const expiryTime = Date.now() + this.sessionDuration;
-      localStorage.setItem(this.tokenExpiryKey, expiryTime.toString());
+      this._storage.setItem(this.tokenExpiryKey, expiryTime.toString());
+      this.updateLastTokenSetTime();
+      
+      // Update session cookie expiry as well with secure and httpOnly flags
+      try {
+        const cookieToken = this.getTokenFromCookie();
+        if (cookieToken) {
+          const isSecure = window.location.protocol === 'https:';
+          const secureFlag = isSecure ? ';secure' : '';
+          document.cookie = `auth_token_backup=${encodeURIComponent(cookieToken)};path=/;max-age=${this.sessionDuration/1000}${secureFlag};httpOnly`;
+        }
+        
+        const cookieUid = this.getUidFromCookie();
+        if (cookieUid) {
+          const isSecure = window.location.protocol === 'https:';
+          const secureFlag = isSecure ? ';secure' : '';
+          document.cookie = `auth_uid_backup=${encodeURIComponent(cookieUid)};path=/;max-age=${this.sessionDuration/1000}${secureFlag};httpOnly`;
+        }
+      } catch (cookieError) {
+        console.error('Error refreshing backup cookie:', cookieError);
+      }
+      
       console.log(`Token expiry refreshed. New expiry: ${new Date(expiryTime).toLocaleString()}`);
       return true;
+    } catch (error) {
+      console.error('Error refreshing expiry:', error);
+      return false;
+    }
+  },
+
+  /**
+   * Encrypt/decrypt data with a secure XOR-based transformation
+   * @param {string} text - Text to encrypt/decrypt
+   * @param {string} key - Key for obfuscation
+   * @returns {string} - Obfuscated/de-obfuscated text
+   * @private
+   */
+  simpleEncrypt(text, key) {
+    try {
+      if (!key || !text) return text;
+      
+
+      const expandKey = (baseKey) => {
+
+        let expandedKey = '';
+        let lastChar = 0;
+        
+        for (let i = 0; i < baseKey.length * 3; i++) {
+          const charIndex = i % baseKey.length;
+          const charCode = baseKey.charCodeAt(charIndex);
+
+          const newCharCode = (charCode + i + lastChar) % 256;
+          expandedKey += String.fromCharCode(newCharCode);
+          lastChar = newCharCode;
+        }
+        
+        return expandedKey;
+      };
+      
+      const extendedKey = expandKey(key);
+      
+
+      let result = '';
+      for (let i = 0; i < text.length; i++) {
+        const keyIndex1 = i % extendedKey.length;
+        const keyIndex2 = (i * 3) % extendedKey.length;
+        
+        const charCode = text.charCodeAt(i);
+        const keyChar1 = extendedKey.charCodeAt(keyIndex1);
+        const keyChar2 = extendedKey.charCodeAt(keyIndex2);
+
+        const transformed = charCode ^ keyChar1 ^ keyChar2;
+        result += String.fromCharCode(transformed);
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('Error during encryption/decryption:', error);
+      return text;
+    }
   },
 
   /**
    * Store Google authentication state securely for faster login hints
-   * @param {Object} googleAuthState - The Google auth state object (e.g., from Firebase auth result)
+   * @param {Object} googleAuthState - The Google auth state object
    * @param {string} uid - The user's ID
    */
   setGoogleAuthCache(googleAuthState, uid) {
-    if (!googleAuthState || !uid) return;
-
     try {
-      // Use a device-specific key for basic obfuscation
+      if (!googleAuthState || !uid) return;
+
       const deviceKey = this.getCurrentDeviceId();
       const timestamp = Date.now();
+      const cacheExpiry = timestamp + (7 * 24 * 60 * 60 * 1000); // 7 days
 
-      // Only store essential, non-sensitive data for login hints
       const cacheData = {
         email: googleAuthState.email,
-        uid: uid, // Store UID for matching
+        uid: uid,
         displayName: googleAuthState.displayName,
         photoURL: googleAuthState.photoURL,
         lastUsed: timestamp,
-        // DO NOT store tokens, passwords, or provider-specific credentials
       };
 
-      // Convert to string and encrypt with simple XOR (basic obfuscation only, not true security)
       const dataString = JSON.stringify(cacheData);
       const encryptedData = this.simpleEncrypt(dataString, deviceKey);
 
-      // Store with expiration (e.g., 7 days)
-      const cacheObj = {
+      this._storage.setItem(this.googleAuthCacheKey, JSON.stringify({
         data: encryptedData,
-        expiry: timestamp + (7 * 24 * 60 * 60 * 1000), // 7 days
-      };
-
-      localStorage.setItem(this.googleAuthCacheKey, JSON.stringify(cacheObj));
+        expiry: cacheExpiry,
+      }));
+      
+      // Set a backup in sessionStorage for cross-browser compatibility
+      try {
+        sessionStorage.setItem('google_auth_cache_backup', JSON.stringify({
+          email: googleAuthState.email,
+          displayName: googleAuthState.displayName,
+          photoURL: googleAuthState.photoURL,
+        }));
+      } catch (sessionError) {
+        console.error('Error setting session storage backup:', sessionError);
+      }
     } catch (error) {
       console.error('Error caching Google auth state:', error);
-      // Fail gracefully - caching is a non-critical feature
-      this.clearGoogleAuthCache();
+      // Try to clear cache if setting fails
+      try {
+        this.clearGoogleAuthCache();
+      } catch (clearError) {
+        // If even clearing fails, just log and continue
+        console.error('Error clearing Google auth cache:', clearError);
+      }
     }
   },
 
@@ -310,27 +658,56 @@ const TokenService = {
    */
   getGoogleAuthCache() {
     try {
-      const cachedData = localStorage.getItem(this.googleAuthCacheKey);
-      if (!cachedData) return null;
+      const cachedData = this._storage.getItem(this.googleAuthCacheKey);
+      if (!cachedData) {
+        // Try session storage backup
+        try {
+          const sessionBackup = sessionStorage.getItem('google_auth_cache_backup');
+          if (sessionBackup) {
+            return JSON.parse(sessionBackup);
+          }
+        } catch (sessionError) {
+          console.error('Error retrieving session backup:', sessionError);
+        }
+        return null;
+      }
 
-      const cacheObj = JSON.parse(cachedData);
-      const now = Date.now();
-
-      // Check if cache is expired
-      if (now > cacheObj.expiry) {
+      let cacheObj;
+      try {
+        cacheObj = JSON.parse(cachedData);
+      } catch (parseError) {
+        console.error('Error parsing cached data:', parseError);
+        this.clearGoogleAuthCache();
+        return null;
+      }
+      if (!cacheObj?.data || !cacheObj?.expiry) {
         this.clearGoogleAuthCache();
         return null;
       }
 
-      // Decrypt the data using the current device key
-      const deviceKey = this.getCurrentDeviceId();
-      const decryptedData = this.simpleEncrypt(cacheObj.data, deviceKey); // XOR is reversible
+      if (Date.now() > cacheObj.expiry) {
+        this.clearGoogleAuthCache();
+        return null;
+      }
 
-      // Parse and return the cached user info
-      return JSON.parse(decryptedData);
+      const deviceKey = this.getCurrentDeviceId();
+      const decryptedData = this.simpleEncrypt(cacheObj.data, deviceKey);
+      
+      try {
+        return JSON.parse(decryptedData);
+      } catch (parseError) {
+        console.error('Error parsing decrypted data:', parseError);
+        this.clearGoogleAuthCache();
+        return null;
+      }
     } catch (error) {
       console.error('Error retrieving Google auth cache:', error);
-      this.clearGoogleAuthCache(); // Clear corrupted cache
+
+      try {
+        this.clearGoogleAuthCache();
+      } catch (clearError) {
+        console.error('Error clearing Google auth cache after retrieval failure:', clearError);
+      }
       return null;
     }
   },
@@ -339,7 +716,17 @@ const TokenService = {
    * Clear the Google authentication cache
    */
   clearGoogleAuthCache() {
-    localStorage.removeItem(this.googleAuthCacheKey);
+    try {
+      this._storage.removeItem(this.googleAuthCacheKey);
+
+      try {
+        sessionStorage.removeItem('google_auth_cache_backup');
+      } catch (sessionError) {
+        console.error('Error clearing session storage backup:', sessionError);
+      }
+    } catch (error) {
+      console.error('Error clearing Google auth cache:', error);
+    }
   },
 
   /**
@@ -348,9 +735,12 @@ const TokenService = {
    * @param {Date} timestamp - The timestamp of the update (defaults to now)
    */
   setProfileUpdateTime(uid, timestamp = new Date()) {
-    if (!uid) return;
-
-    localStorage.setItem(`${this.profileUpdateTimeKey}_${uid}`, timestamp.getTime().toString());
+    try {
+      if (!uid) return;
+      this._storage.setItem(`${this.profileUpdateTimeKey}_${uid}`, timestamp.getTime().toString());
+    } catch (error) {
+      console.error('Error setting profile update time:', error);
+    }
   },
 
   /**
@@ -359,14 +749,18 @@ const TokenService = {
    * @returns {Date|null} The timestamp of the last update or null if not found
    */
   getProfileUpdateTime(uid) {
-    if (!uid) return null;
+    try {
+      if (!uid) return null;
 
-    const timestampStr = localStorage.getItem(`${this.profileUpdateTimeKey}_${uid}`);
-    if (!timestampStr) return null;
+      const timestampStr = this._storage.getItem(`${this.profileUpdateTimeKey}_${uid}`);
+      if (!timestampStr) return null;
 
-    const timestamp = parseInt(timestampStr, 10);
-    return isNaN(timestamp) ? null : new Date(timestamp);
-
+      const timestamp = parseInt(timestampStr, 10);
+      return isNaN(timestamp) ? null : new Date(timestamp);
+    } catch (error) {
+      console.error('Error getting profile update time:', error);
+      return null;
+    }
   },
 
   /**
@@ -376,44 +770,50 @@ const TokenService = {
    * @returns {boolean} Whether the profile can be updated
    */
   canUpdateProfile(uid, minDays = 1) {
-    if (!uid) return true; // Or false, depending on desired behavior for anonymous users
+    try {
+      if (!uid) return true;
 
-    const lastUpdate = this.getProfileUpdateTime(uid);
-    if (!lastUpdate) return true; // Allow first update
+      const lastUpdate = this.getProfileUpdateTime(uid);
+      if (!lastUpdate) return true;
 
-    const now = new Date();
-    const daysSinceLastUpdate = (now.getTime() - lastUpdate.getTime()) / (1000 * 60 * 60 * 24);
-
-    return daysSinceLastUpdate >= minDays;
-  },
-
-  /**
-   * Basic XOR encryption/decryption for simple obfuscation (NOT secure encryption)
-   * @param {string} text - Text to encrypt/decrypt
-   * @param {string} key - Key for obfuscation
-   * @returns {string} - Obfuscated/de-obfuscated text
-   * @private
-   */
-  simpleEncrypt(text, key) {
-    if (!key) return text; // Cannot encrypt without a key
-    let result = '';
-    for (let i = 0; i < text.length; i++) {
-      // XOR character code with corresponding key character code (wrapping key)
-      const charCode = text.charCodeAt(i) ^ key.charCodeAt(i % key.length);
-      result += String.fromCharCode(charCode);
+      const now = new Date();
+      const daysSinceLastUpdate = (now.getTime() - lastUpdate.getTime()) / (1000 * 60 * 60 * 24);
+      return daysSinceLastUpdate >= minDays;
+    } catch (error) {
+      console.error('Error checking if profile can be updated:', error);
+      return true;
     }
-    return result;
   },
 
   /**
    * Clear all authentication-related data from local storage upon logout
    */
   clearAuth() {
-    localStorage.removeItem(this.tokenKey);
-    localStorage.removeItem(this.tokenExpiryKey);
-    this.clearGoogleAuthCache(); // Clear login hints
-    // Optional: Don't remove currentDeviceKey to potentially recognize the device later
-    console.log('Authentication data cleared.');
+    try {
+      this._storage.removeItem(this.tokenKey);
+      this._storage.removeItem(this.tokenExpiryKey);
+      this._storage.removeItem(this.lastTokenSetTimeKey);
+      this.clearGoogleAuthCache();
+      
+      // Update cookie clearing with secure path
+      const isSecure = window.location.protocol === 'https:';
+      const secureFlag = isSecure ? ';secure' : '';
+      document.cookie = `auth_token_backup=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/${secureFlag};httpOnly`;
+      document.cookie = `auth_uid_backup=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/${secureFlag};httpOnly`;
+      
+      try {
+        sessionStorage.removeItem('google_auth_cache_backup');
+        sessionStorage.removeItem('auth_navigation_pending');
+        sessionStorage.removeItem('auth_navigation_target');
+        sessionStorage.removeItem('verification_redirect');
+      } catch (sessionError) {
+        console.error('Error clearing session storage items:', sessionError);
+      }
+      
+      console.log('Authentication data cleared.');
+    } catch (error) {
+      console.error('Error clearing auth data:', error);
+    }
   }
 };
 

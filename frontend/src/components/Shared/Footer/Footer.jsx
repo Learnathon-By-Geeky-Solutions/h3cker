@@ -16,9 +16,9 @@ const MainFooter = () => {
       base: "m-6 flex items-center",
     },
     groupLink: {
-      base: "flex flex-wrap text-gray-400 dark:text-white",
+      base: "flex flex-wrap text-gray-400",
       link: {
-        base: "mb-3 mr-3 md:mr-6 last:mr-0 hover:text-blue-500 transition-colors",
+        base: "mb-3 mr-3 md:mr-6 last:mr-0 hover:text-blue-500 transition-colors text-white",
       },
     },
     icon: {
@@ -32,11 +32,11 @@ const MainFooter = () => {
     },
     copyright: {
       base: "text-sm text-gray-400 sm:text-center",
-      href: "hover:text-blue-500 transition-colors",
-      span: "ml-1",
+      href: "hover:text-blue-500 transition-colors text-gray-400",
+      span: "ml-1 text-gray-400",
     },
     link: {
-      base: "hover:text-blue-500 transition-colors text-white",
+      base: "hover:text-blue-500 transition-colors text-gray-400",
     }
   };
 
@@ -66,38 +66,38 @@ const MainFooter = () => {
               <Footer.Icon href="#" icon={BsFacebook} />
               <Footer.Icon href="#" icon={BsInstagram} />
               <Footer.Icon href="#" icon={BsTwitter} />
-              <Footer.Icon href="#" icon={BsGithub} />
+              <Footer.Icon href="https://github.com/Learnathon-By-Geeky-Solutions/h3cker" icon={BsGithub} />
               <Footer.Icon href="#" icon={BsLinkedin} />
             </div>
           </div>
           
           <div>
             <Footer.Title title="Products" />
-            <Footer.LinkGroup col>
-              <Footer.Link as={Link} to="/features">Features</Footer.Link>
-              <Footer.Link as={Link} to="/pricing">Pricing</Footer.Link>
-              <Footer.Link as={Link} to="/analytics">Analytics</Footer.Link>
-              <Footer.Link as={Link} to="/api">API</Footer.Link>
+            <Footer.LinkGroup col className="text-gray-400">
+              <Footer.Link as={Link} to="/features" className="text-gray-400 hover:text-blue-500">Features</Footer.Link>
+              <Footer.Link as={Link} to="/pricing" className="text-gray-400 hover:text-blue-500">Pricing</Footer.Link>
+              <Footer.Link as={Link} to="/analytics" className="text-gray-400 hover:text-blue-500">Analytics</Footer.Link>
+              <Footer.Link as={Link} to="/api" className="text-gray-400 hover:text-blue-500">API</Footer.Link>
             </Footer.LinkGroup>
           </div>
           
           <div>
             <Footer.Title title="Resources" />
-            <Footer.LinkGroup col>
-              <Footer.Link as={Link} to="/documentation">Documentation</Footer.Link>
-              <Footer.Link as={Link} to="/guides">Guides</Footer.Link>
-              <Footer.Link as={Link} to="/blog">Blog</Footer.Link>
-              <Footer.Link as={Link} to="/support">Support</Footer.Link>
+            <Footer.LinkGroup col className="text-gray-400">
+              <Footer.Link as={Link} to="/documentation" className="text-gray-400 hover:text-blue-500">Documentation</Footer.Link>
+              <Footer.Link as={Link} to="/guides" className="text-gray-400 hover:text-blue-500">Guides</Footer.Link>
+              <Footer.Link as={Link} to="/blog" className="text-gray-400 hover:text-blue-500">Blog</Footer.Link>
+              <Footer.Link as={Link} to="/support" className="text-gray-400 hover:text-blue-500">Support</Footer.Link>
             </Footer.LinkGroup>
           </div>
           
           <div>
             <Footer.Title title="Company" />
-            <Footer.LinkGroup col>
-              <Footer.Link as={Link} to="/about">About</Footer.Link>
-              <Footer.Link as={Link} to="/careers">Careers</Footer.Link>
-              <Footer.Link as={Link} to="/contact">Contact</Footer.Link>
-              <Footer.Link as={Link} to="/privacy">Privacy Policy</Footer.Link>
+            <Footer.LinkGroup col className="text-gray-400">
+              <Footer.Link as={Link} to="/about" className="text-gray-400 hover:text-blue-500">About</Footer.Link>
+              <Footer.Link as={Link} to="/careers" className="text-gray-400 hover:text-blue-500">Careers</Footer.Link>
+              <Footer.Link as={Link} to="/contact" className="text-gray-400 hover:text-blue-500">Contact</Footer.Link>
+              <Footer.Link as={Link} to="/privacy" className="text-gray-400 hover:text-blue-500">Privacy Policy</Footer.Link>
             </Footer.LinkGroup>
           </div>
         </div>
@@ -105,11 +105,11 @@ const MainFooter = () => {
         <Footer.Divider />
         
         <div className="w-full px-4 py-6 sm:flex sm:items-center sm:justify-between">
-          <Footer.Copyright href="#" by="EngageAnalytics™" year={currentYear} />
+          <Footer.Copyright href="#" by="EngageAnalytics™" year={currentYear} className="text-gray-400" />
           <div className="mt-4 flex space-x-6 sm:mt-0 sm:justify-center">
-            <Footer.Link as={Link} to="/privacy">Privacy Policy</Footer.Link>
-            <Footer.Link as={Link} to="/terms">Terms of Service</Footer.Link>
-            <Footer.Link as={Link} to="/cookie">Cookie Policy</Footer.Link>
+            <Footer.Link as={Link} to="/privacy" className="text-gray-400 hover:text-blue-500">Privacy Policy</Footer.Link>
+            <Footer.Link as={Link} to="/terms" className="text-gray-400 hover:text-blue-500">Terms of Service</Footer.Link>
+            <Footer.Link as={Link} to="/cookie" className="text-gray-400 hover:text-blue-500">Cookie Policy</Footer.Link>
           </div>
         </div>
       </div>
