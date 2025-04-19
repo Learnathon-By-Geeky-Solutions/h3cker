@@ -74,7 +74,7 @@ WSGI_APPLICATION = "backend.wsgi.application"
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
 # Check if running in GitHub Actions CI environment for tests
-if os.getenv('GITHUB_ACTIONS') == 'true':
+if os.getenv('GITHUB_ACTIONS') == 'True':
     # Use in-memory SQLite database for tests in CI
     DATABASES = {
         'default': {
