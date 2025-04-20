@@ -82,11 +82,13 @@ jobs:
           pwd
           ls -la
       
-      - name: Move coverage report for SonarCloud
+      - name: Move coverage report and fix paths for SonarCloud
         run: |
           cp ./backend/coverage.xml ./coverage.xml
-          pwd
-          ls -la
+          sed -i 's|<source>api</source>|<source>backend/api</source>|' coverage.xml
+          sed -i 's|filename="api/|filename="backend/api/|g' coverage.xml
+          echo "First few lines of coverage report:"
+          head -20 coverage.xml
 
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@v2
