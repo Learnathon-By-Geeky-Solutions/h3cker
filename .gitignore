@@ -2,3 +2,6 @@
 .env
 __pycache__
 firebase-credentials.json
+.coverage
+*.xml
+example.md

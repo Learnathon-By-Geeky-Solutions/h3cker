@@ -12,16 +12,83 @@ jobs:
   analyze:
     name: Analyze with SonarCloud
     runs-on: ubuntu-latest
-    
+
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpassword
+          POSTGRES_DB: testdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      ENVIRONMENT: LOCAL
+      LOCAL_DB_NAME: testdb
+      LOCAL_DB_USER: testuser
+      LOCAL_DB_PASSWORD: testpassword
+      LOCAL_DB_HOST: localhost
+      LOCAL_DB_PORT: 5432
+      SECRET_KEY: ${{ secrets.SECRET_KEY }}
+      DEBUG: "False"
+      ALLOWED_HOSTS: "localhost,127.0.0.1"
+      AZURE_STORAGE_ACCOUNT_NAME: ${{ secrets.AZURE_STORAGE_ACCOUNT_NAME }}
+      AZURE_STORAGE_ACCOUNT_KEY: ${{ secrets.AZURE_STORAGE_ACCOUNT_KEY }}
+      AZURE_VIDEO_CONTAINER_NAME: ${{ secrets.AZURE_VIDEO_CONTAINER_NAME }}
+      AZURE_THUMBNAIL_CONTAINER_NAME: ${{ secrets.AZURE_THUMBNAIL_CONTAINER_NAME }}
+      FIREBASE_TYPE: ${{ secrets.FIREBASE_TYPE }}
+      FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+      FIREBASE_PRIVATE_KEY_ID: ${{ secrets.FIREBASE_PRIVATE_KEY_ID }}
+      FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
+      FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
+      FIREBASE_CLIENT_ID: ${{ secrets.FIREBASE_CLIENT_ID }}
+      FIREBASE_AUTH_URI: ${{ secrets.FIREBASE_AUTH_URI }}
+      FIREBASE_TOKEN_URI: ${{ secrets.FIREBASE_TOKEN_URI }}
+      FIREBASE_AUTH_PROVIDER_X509_CERT_URL: ${{ secrets.FIREBASE_AUTH_PROVIDER_X509_CERT_URL }}
+      FIREBASE_CLIENT_X509_CERT_URL: ${{ secrets.FIREBASE_CLIENT_X509_CERT_URL }}
+      FIREBASE_UNIVERSE_DOMAIN: ${{ secrets.FIREBASE_UNIVERSE_DOMAIN }}
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0  # Important for SonarQube to see history
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+          pip install pytest pytest-django pytest-cov
+
+      - name: Run migrations
+        run: python backend/manage.py migrate
+
+      - name: Run tests and generate coverage report
+        run: |
+          cd backend
+          pytest --cov=api --cov-report=xml:coverage.xml
+          pwd
+          ls -la
       
+      - name: Move coverage report for SonarCloud
+        run: |
+          cp ./backend/coverage.xml ./coverage.xml
+          pwd
+          ls -la
+
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@v2
         with:
           projectBaseDir: .
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
