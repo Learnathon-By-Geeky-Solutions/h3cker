@@ -221,7 +221,7 @@ class TestVideoFeedView:
 class TestVideoDetailView:
     def test_video_detail_retrieve(self, api_client, test_video):
         """Test retrieving the details of a specific video."""
-        url = reverse('video-detail', kwargs={'pk': test_video.pk})
+        url = reverse('video-detail', kwargs={'video_identifier': test_video.pk})  # Changed from 'pk' to 'video_identifier'
         response = api_client.get(url)
 
         assert response.status_code == status.HTTP_200_OK
@@ -242,7 +242,7 @@ class TestVideoDetailView:
 
     def test_video_detail_not_found(self, api_client):
         """Test retrieving a video that does not exist."""
-        url = reverse('video-detail', kwargs={'pk': 999}) # Non-existent ID
+        url = reverse('video-detail', kwargs={'video_identifier': 999})  # Changed from 'pk' to 'video_identifier'
         response = api_client.get(url)
         assert response.status_code == status.HTTP_404_NOT_FOUND
 

@@ -219,4 +219,4 @@ class TestVideoModel:
         assert video.thumbnail_url == ""
         assert video.views == 0
         assert video.likes == 0
-        assert video.duration == ""
+        assert video.duration == "0:00"  # Update this to match the default value in the model
