@@ -5,7 +5,6 @@ relative_files = True
 omit = 
     */migrations/*
     */tests/*
-    */admin.py
     */apps.py
     */wsgi.py
     */asgi.py
