@@ -11,7 +11,8 @@ import {
   updateProfile,
   linkWithCredential,
   EmailAuthProvider,
-  sendPasswordResetEmail
+  sendPasswordResetEmail,
+  reauthenticateWithCredential
 } from 'firebase/auth';
 import { doc, setDoc, getDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import PropTypes from 'prop-types';
@@ -43,7 +44,6 @@ const processAuthenticatedUser = async (userCredential, deviceId) => {
 
 // Helper function to check pending navigations
 const checkPendingNavigations = (currentUser) => {
-  // Check for pending navigation in sessionStorage
   const pendingNavigation = sessionStorage.getItem('auth_navigation_pending');
   if (pendingNavigation === 'true') {
     sessionStorage.removeItem('auth_navigation_pending');
@@ -51,7 +51,7 @@ const checkPendingNavigations = (currentUser) => {
     const authPaths = ['/login', '/signup', '/forgetpassword'];
     const currentPath = window.location.pathname;
     
-    // If user is authenticated but still on an auth page, redirect to home
+    // Check if the current path is an auth page
     if (authPaths.some(path => currentPath.includes(path))) {
       const targetPath = sessionStorage.getItem('auth_navigation_target') || '/';
       sessionStorage.removeItem('auth_navigation_target');
@@ -66,7 +66,6 @@ const checkPendingNavigations = (currentUser) => {
   if (verificationRedirect === 'true') {
     sessionStorage.removeItem('verification_redirect');
     
-    // If we've just verified and need to redirect
     if (currentUser.emailVerified) {
       console.log('Email verified, redirecting to home');
       window.location.href = '/';
@@ -107,8 +106,12 @@ const AuthProvider = ({ children }) => {
     
     const isExistingDevice = userDevices.some(device => device.id === deviceId);
     
+    // Check device limit before adding a new device
     if (!isExistingDevice && userDevices.length >= TokenService.maxDevices) {
-      throw new Error('MAX_DEVICES_REACHED');
+      console.error('Max devices reached:', userDevices.length, 'of', TokenService.maxDevices);
+      const error = new Error('MAX_DEVICES_REACHED');
+      error.code = 'MAX_DEVICES_REACHED'; 
+      throw error;
     }
     
     if (isExistingDevice) {
@@ -130,51 +133,77 @@ const AuthProvider = ({ children }) => {
   };
 
   const createUser = async (email, password, firstName, lastName) => {
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    
-    await sendEmailVerification(userCredential.user);
-    
-    await updateProfile(userCredential.user, {
-      displayName: `${firstName} ${lastName}`,
-      photoURL: DEFAULT_AVATAR
-    });
-
-    const deviceId = TokenService.getCurrentDeviceId();
-    const devices = await updateUserDevices(userCredential.user.uid, deviceId, true);
-
-    await setDoc(doc(db, "users", userCredential.user.uid), {
-      firstName,
-      lastName,
-      email,
-      photoURL: DEFAULT_AVATAR,
-      createdAt: serverTimestamp(),
-      role: 'user',
-      emailVerified: userCredential.user.emailVerified,
-      devices
-    });
-
-    return processAuthenticatedUser(userCredential, deviceId);
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      
+      await sendEmailVerification(userCredential.user);
+      
+      await updateProfile(userCredential.user, {
+        displayName: `${firstName} ${lastName}`,
+        photoURL: DEFAULT_AVATAR
+      });
+  
+      const deviceId = TokenService.getCurrentDeviceId();
+      const devices = await updateUserDevices(userCredential.user.uid, deviceId, true);
+  
+      await setDoc(doc(db, "users", userCredential.user.uid), {
+        firstName,
+        lastName,
+        email,
+        photoURL: DEFAULT_AVATAR,
+        createdAt: serverTimestamp(),
+        role: 'user',
+        emailVerified: userCredential.user.emailVerified,
+        devices
+      });
+  
+      return processAuthenticatedUser(userCredential, deviceId);
+    } catch (error) {
+      console.error('Error creating user:', error);
+  
+      if (error.message === 'MAX_DEVICES_REACHED') {
+        error.code = 'MAX_DEVICES_REACHED';
+      }
+      throw error;
+    }
   };
 
   const login = async (email, password) => {
-    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      
+      if (!userCredential.user.emailVerified) {
+        await signOut(auth);
+        throw new Error('EMAIL_NOT_VERIFIED');
+      }
+  
+      const deviceId = TokenService.getCurrentDeviceId();
+      
+      try {
+        const updatedDevices = await updateUserDevices(userCredential.user.uid, deviceId);
+        
+        await updateUserData(userCredential.user.uid, {
+          lastLoginAt: serverTimestamp(),
+          devices: updatedDevices,
+          emailVerified: userCredential.user.emailVerified
+        });
     
-    if (!userCredential.user.emailVerified) {
-      await signOut(auth);
-      throw new Error('EMAIL_NOT_VERIFIED');
+        return processAuthenticatedUser(userCredential, deviceId);
+      } catch (error) {
+        if (error.message === 'MAX_DEVICES_REACHED' || error.code === 'MAX_DEVICES_REACHED') {
+          await signOut(auth);
+          error.code = 'MAX_DEVICES_REACHED';
+        }
+        throw error;
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+  
+      if (error.message === 'MAX_DEVICES_REACHED') {
+        error.code = 'MAX_DEVICES_REACHED';
+      }
+      throw error;
     }
-
-    const deviceId = TokenService.getCurrentDeviceId();
-    
-    const updatedDevices = await updateUserDevices(userCredential.user.uid, deviceId);
-    
-    await updateUserData(userCredential.user.uid, {
-      lastLoginAt: serverTimestamp(),
-      devices: updatedDevices,
-      emailVerified: userCredential.user.emailVerified
-    });
-
-    return processAuthenticatedUser(userCredential, deviceId);
   };
 
   // Handle Google sign-in process
@@ -183,25 +212,34 @@ const AuthProvider = ({ children }) => {
     const userDocRef = doc(db, "users", result.user.uid);
     const userSnapshot = await getDoc(userDocRef);
 
-    if (!userSnapshot.exists()) {
-      // Create new user document
-      await createGoogleUserDocument(result, deviceId);
-    } else {
-      // Update existing user document
-      await updateGoogleUserDocument(result, deviceId);
+    try {
+      if (!userSnapshot.exists()) {
+   
+        await createGoogleUserDocument(result, deviceId);
+      } else {
+        await updateGoogleUserDocument(result, deviceId);
+      }
+  
+      // Set token and cache
+      const token = await result.user.getIdToken();
+      TokenService.setToken(token, result.user.uid);
+      
+      TokenService.setGoogleAuthCache({
+        email: result.user.email,
+        displayName: result.user.displayName,
+        photoURL: result.user.photoURL
+      }, result.user.uid);
+  
+      return result.user;
+    } catch (error) {
+      console.error('Google sign-in processing error:', error);
+
+      if (error.message === 'MAX_DEVICES_REACHED' || error.code === 'MAX_DEVICES_REACHED') {
+        await signOut(auth);
+        error.code = 'MAX_DEVICES_REACHED';
+      }
+      throw error;
     }
-
-    // Set token and cache
-    const token = await result.user.getIdToken();
-    TokenService.setToken(token, result.user.uid);
-    
-    TokenService.setGoogleAuthCache({
-      email: result.user.email,
-      displayName: result.user.displayName,
-      photoURL: result.user.photoURL
-    }, result.user.uid);
-
-    return result.user;
   };
 
   // Create new Google user document
@@ -227,13 +265,22 @@ const AuthProvider = ({ children }) => {
 
   // Update existing Google user document
   const updateGoogleUserDocument = async (result, deviceId) => {
-    const updatedDevices = await updateUserDevices(result.user.uid, deviceId);
-    
-    await updateDoc(doc(db, "users", result.user.uid), { 
-      lastLoginAt: serverTimestamp(),
-      emailVerified: result.user.emailVerified,
-      devices: updatedDevices
-    });
+    try {
+      const updatedDevices = await updateUserDevices(result.user.uid, deviceId);
+      
+      await updateDoc(doc(db, "users", result.user.uid), { 
+        lastLoginAt: serverTimestamp(),
+        emailVerified: result.user.emailVerified,
+        devices: updatedDevices
+      });
+    } catch (error) {
+      if (error.message === 'MAX_DEVICES_REACHED' || error.code === 'MAX_DEVICES_REACHED') {
+        error.code = 'MAX_DEVICES_REACHED'; 
+        throw error; 
+      }
+      console.error('Error updating Google user document:', error);
+      throw error;
+    }
   };
 
   const signInWithGoogle = async () => {
@@ -247,26 +294,50 @@ const AuthProvider = ({ children }) => {
       const result = await signInWithPopup(auth, googleProvider);
       return await handleGoogleSignIn(result);
     } catch (error) {
+      console.error("Google sign-in error:", error);
+      
       if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-disabled') {
         TokenService.clearGoogleAuthCache();
       }
+      
+      if (error.message === 'MAX_DEVICES_REACHED') {
+        error.code = 'MAX_DEVICES_REACHED';
+      }
+      
       throw error;
     }
   };
 
   const resetPassword = async (email) => {
-    await sendPasswordResetEmail(auth, email);
+    try {
+      await sendPasswordResetEmail(auth, email);
+    } catch (error) {
+      console.error('Password reset error:', error);
+      throw error;
+    }
   };
 
   const resendVerificationEmail = async () => {
-    if (auth.currentUser) {
-      await sendEmailVerification(auth.currentUser);
+    try {
+      if (auth.currentUser) {
+        await sendEmailVerification(auth.currentUser);
+      } else {
+        throw new Error('No authenticated user to send verification email');
+      }
+    } catch (error) {
+      console.error('Error resending verification email:', error);
+      throw error;
     }
   };
 
   const linkAccounts = async (email, password) => {
-    const credential = EmailAuthProvider.credential(email, password);
-    await linkWithCredential(auth.currentUser, credential);
+    try {
+      const credential = EmailAuthProvider.credential(email, password);
+      await linkWithCredential(auth.currentUser, credential);
+    } catch (error) {
+      console.error('Error linking accounts:', error);
+      throw error;
+    }
   };
 
   const checkSession = useCallback(() => {
@@ -307,16 +378,59 @@ const AuthProvider = ({ children }) => {
   }, [user, checkSession]);
 
   const logout = async () => {
-    setSessionExpiring(false);
-    setSessionTimeRemaining(null);
-    TokenService.clearAuth();
-    return signOut(auth);
+    try {
+      const deviceId = TokenService.getCurrentDeviceId();
+      const userId = user?.uid;
+    
+      setSessionExpiring(false);
+      setSessionTimeRemaining(null);
+      
+      if (deviceId && userId) {
+        try {
+          const userDocRef = doc(db, "users", userId);
+          const userSnapshot = await getDoc(userDocRef);
+          
+          if (userSnapshot.exists()) {
+            const userData = userSnapshot.data();
+            const updatedDevices = (userData.devices || [])
+              .filter(device => device.id !== deviceId);
+            await updateDoc(userDocRef, {
+              devices: updatedDevices
+            });
+            console.log('Device removed on logout:', deviceId);
+          }
+        } catch (error) {
+          console.error('Error removing device during logout:', error);
+        }
+      }
+
+      TokenService.clearAuth();
+      
+
+      return signOut(auth);
+    } catch (error) {
+      console.error('Error during logout:', error);
+      TokenService.clearAuth();
+      return signOut(auth);
+    }
   };
 
-  const removeDevice = async (deviceId) => {
+  const removeDevice = async (deviceId, password = null) => {
     if (!user?.uid) return false;
     
     try {
+
+      if (password) {
+        try {
+
+          const credential = EmailAuthProvider.credential(user.email, password);
+          await reauthenticateWithCredential(auth.currentUser, credential);
+        } catch (authError) {
+          console.error("Authentication error:", authError);
+          throw new Error('INVALID_PASSWORD');
+        }
+      }
+      
       const userDocRef = doc(db, "users", user.uid);
       const userSnapshot = await getDoc(userDocRef);
       
@@ -338,6 +452,9 @@ const AuthProvider = ({ children }) => {
       return false;
     } catch (error) {
       console.error("Error removing device:", error);
+      if (error.message === 'INVALID_PASSWORD') {
+        throw error;
+      }
       return false;
     }
   };
@@ -451,7 +568,6 @@ const AuthProvider = ({ children }) => {
   
   // Force check on initial load
   useEffect(() => {
-    // Force a check on initial load
     const checkCurrentAuthState = async () => {
       if (auth.currentUser) {
         try {
@@ -465,7 +581,6 @@ const AuthProvider = ({ children }) => {
     
     checkCurrentAuthState();
     
-    // Handle browser back button
     const handleBackNavigation = () => {
       if (auth.currentUser) {
         const authPaths = ['/login', '/signup', '/forgetpassword'];

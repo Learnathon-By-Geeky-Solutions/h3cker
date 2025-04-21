@@ -11,3 +11,4 @@ python-dotenv
 firebase-admin
 django-extensions
 azure-storage-blob
+django-crontab

@@ -1,8 +1,7 @@
 import React, { useContext, useState, useEffect, useRef } from "react";
 import { AuthContext } from "../../../contexts/AuthProvider/AuthProvider";
 import { Link, useNavigate } from "react-router-dom";
-import { HiOutlineBell } from "react-icons/hi";
-import { BarChart3, Menu, X } from "lucide-react";
+import { BarChart3, Menu, X} from "lucide-react";
 import SearchBar from "../SearchBar/SearchBar";
 
 const NavigationBar = () => {
@@ -96,8 +95,8 @@ const NavigationBar = () => {
         <Link to="/dashboard" className="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors">
           Dashboard
         </Link>
-        <Link to="/settings" className="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors">
-          Settings
+        <Link to="/devices" className="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors">
+          Device Manager
         </Link>
         <div className="border-t border-gray-700 my-1"></div>
         <button 
@@ -127,14 +126,6 @@ const NavigationBar = () => {
     
     return (
       <div className="flex items-center space-x-4">
-        {/* Notification Button */}
-        <button 
-          type="button"
-          className="p-1.5 text-gray-300 hover:text-white bg-gray-800/50 hover:bg-gray-800 rounded-full transition-colors"
-        >
-          <HiOutlineBell className="w-5 h-5" />
-        </button>
-
         {/* User Profile Dropdown */}
         <div className="relative" ref={userMenuRef}>
           <button 
@@ -210,11 +201,11 @@ const NavigationBar = () => {
                 Dashboard
               </Link>
               <Link 
-                to="/settings"
+                to="/devices"
                 onClick={() => setIsMobileMenuOpen(false)}
                 className="block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700"
               >
-                Settings
+                Device Manager
               </Link>
               <button
                 onClick={() => {

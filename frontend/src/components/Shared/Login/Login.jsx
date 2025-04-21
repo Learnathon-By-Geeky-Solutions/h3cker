@@ -20,6 +20,8 @@ const Login = () => {
   } = useLoginForm();
 
   const {
+    loading: googleLoading,
+    authError: googleAuthError,
     cachedGoogleAccount,
     setCachedGoogleAccount,
     handleGoogleLogin
@@ -28,11 +30,20 @@ const Login = () => {
   const emailId = useId();
   const passwordId = useId();
 
+  
+  
+  const combinedError = authError || googleAuthError;
+
+  const isDeviceLimitError = 
+    combinedError?.toLowerCase().includes('maximum device limit') || 
+    combinedError?.toLowerCase().includes('device limit') || 
+    combinedError?.includes('MAX_DEVICES_REACHED');
+
   return (
     <AuthForm
       title="Login"
-      error={authError}
-      loading={loading}
+      error={combinedError}
+      loading={loading || googleLoading}
       onGoogleLogin={handleGoogleLogin}
       cachedGoogleAccount={cachedGoogleAccount}
       setCachedGoogleAccount={setCachedGoogleAccount}
@@ -61,7 +72,7 @@ const Login = () => {
         />
 
         <AnimatePresence mode="wait">
-          {authError && <ErrorMessage error={authError} />}
+          {combinedError && !isDeviceLimitError && <ErrorMessage error={combinedError} />}
         </AnimatePresence>
 
         <div className="flex justify-between items-center">
@@ -76,7 +87,7 @@ const Login = () => {
         <SubmitButton
           text="Sign in"
           loadingText="Signing in..."
-          loading={loading}
+          loading={loading || googleLoading}
         />
       </form>
     </AuthForm>

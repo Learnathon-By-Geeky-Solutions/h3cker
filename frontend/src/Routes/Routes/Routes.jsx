@@ -11,6 +11,7 @@ import UploadVideo from "../../components/Pages/Dashboard/UploadVideo.jsx";
 import VideoDetail from "../../components/Shared/VideoPlayer/VideoDetail.jsx";
 import PrivateRoute from "../PrivateRoute/Privateroute.jsx";
 import Video from "../../components/Pages/Video/Video.jsx";
+import DeviceManager from "../../components/Shared/DeviceManager/DeviceManager.jsx";
 
 const router = createBrowserRouter([
   {
@@ -40,6 +41,10 @@ const router = createBrowserRouter([
       {
         path: "/profile",
         element: <PrivateRoute><Profile /></PrivateRoute>,
+      },
+      {
+        path: "/devices",
+        element: <PrivateRoute><DeviceManager /></PrivateRoute>,
       },
       {
         path: "/dashboard",

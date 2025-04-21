@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from .models import User, CompanyProfile, ViewerProfile
+from .models import User, CompanyProfile, ViewerProfile, Video, VideoView, VideoLike, VideoShare
 
 class CompanyProfileInline(admin.StackedInline):
     model = CompanyProfile
@@ -36,6 +36,40 @@ class UserAdmin(BaseUserAdmin):
             elif obj.role == 'user':
                 return [ViewerProfileInline]
         return []
+
+@admin.register(Video)
+class VideoAdmin(admin.ModelAdmin):
+    list_display = ('title', 'uploader', 'visibility', 'views', 'likes', 'upload_date')
+    list_filter = ('visibility', 'upload_date')
+    search_fields = ('title', 'description', 'uploader__email')
+    readonly_fields = ('views', 'likes')
+    fieldsets = (
+        (None, {'fields': ('title', 'description', 'category', 'visibility', 'uploader')}),
+        ('Media', {'fields': ('video_url', 'thumbnail_url', 'duration')}),
+        ('Stats', {'fields': ('views', 'likes')}),
+        ('Limits', {'fields': ('view_limit', 'auto_private_after')}),
+    )
+
+@admin.register(VideoView)
+class VideoViewAdmin(admin.ModelAdmin):
+    list_display = ('video', 'viewer', 'viewed_at')
+    list_filter = ('viewed_at',)
+    search_fields = ('video__title', 'viewer__email')
+    readonly_fields = ('viewed_at',)
+
+@admin.register(VideoLike)
+class VideoLikeAdmin(admin.ModelAdmin):
+    list_display = ('video', 'user', 'liked_at')
+    list_filter = ('liked_at',)
+    search_fields = ('video__title', 'user__email')
+    readonly_fields = ('liked_at',)
+
+@admin.register(VideoShare)
+class VideoShareAdmin(admin.ModelAdmin):
+    list_display = ('video', 'created_by', 'share_token', 'access_count', 'active')
+    list_filter = ('active', 'created_at')
+    search_fields = ('video__title', 'created_by__email', 'share_token')
+    readonly_fields = ('created_at', 'share_token')
 
 admin.site.register(CompanyProfile)
 admin.site.register(ViewerProfile)

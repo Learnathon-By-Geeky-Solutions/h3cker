@@ -107,7 +107,9 @@ const VideoService = {
         description: videoMetadata.description || '',
         category: videoMetadata.category || '',
         visibility: videoMetadata.visibility || 'private',
-        filename: videoMetadata.filename
+        filename: videoMetadata.filename,
+        view_limit: videoMetadata.view_limit || null,
+        auto_private_after: videoMetadata.auto_private_after || null
       };
 
       console.log('Initiating video upload with backend, sending metadata:', payload);
@@ -128,6 +130,83 @@ const VideoService = {
       if (error.message.includes('Failed to connect') || error.message.includes('Network error')) {
         throw new Error('Cannot connect to the backend server to initiate upload. Please check the server status and your connection.');
       }
+      throw error;
+    }
+  },
+  
+  async recordVideoView(videoId) {
+    if (!videoId) {
+      throw new Error("Video ID is required to record a view");
+    }
+    
+    try {
+      console.log(`Recording view for video ID: ${videoId}`);
+      const response = await ApiService.post(`videos/${videoId}/view/`);
+      console.log(`View recorded for video ID: ${videoId}`, response);
+      return response;
+    } catch (error) {
+      console.error(`Error recording view for video ID ${videoId}:`, error);
+      throw error;
+    }
+  },
+  
+  async toggleVideoLike(videoId) {
+    if (!videoId) {
+      throw new Error("Video ID is required to toggle like status");
+    }
+    
+    try {
+      console.log(`Toggling like status for video ID: ${videoId}`);
+      const response = await ApiService.post(`videos/${videoId}/like/`);
+      console.log(`Like status updated for video ID: ${videoId}`, response);
+      return response;
+    } catch (error) {
+      console.error(`Error toggling like for video ID ${videoId}:`, error);
+      throw error;
+    }
+  },
+  
+  async createVideoShare(videoId) {
+    if (!videoId) {
+      throw new Error("Video ID is required to create a share link");
+    }
+    
+    try {
+      console.log(`Creating share link for video ID: ${videoId}`);
+      const response = await ApiService.post(`videos/${videoId}/share/`);
+      console.log(`Share link created for video ID: ${videoId}`, response);
+      return response;
+    } catch (error) {
+      console.error(`Error creating share link for video ID ${videoId}:`, error);
+      throw error;
+    }
+  },
+  
+  async getUserHistory() {
+    try {
+      console.log('Fetching user video history...');
+      const response = await ApiService.get('user/history/');
+      console.log(`Fetched ${response?.length || 0} videos from history.`);
+      
+      return Array.isArray(response) ? response : [];
+    } catch (error) {
+      console.error('Error fetching user history:', error);
+      return [];
+    }
+  },
+  
+  async getSharedVideoByToken(shareToken) {
+    if (!shareToken) {
+      throw new Error("Share token is required");
+    }
+    
+    try {
+      console.log(`Fetching shared video with token: ${shareToken}`);
+      const response = await ApiService.get(`shared/${shareToken}/`);
+      console.log(`Fetched shared video:`, response);
+      return response;
+    } catch (error) {
+      console.error(`Error fetching shared video with token ${shareToken}:`, error);
       throw error;
     }
   },
@@ -369,36 +448,6 @@ const VideoService = {
   
   _formatUnit(value, unit) {
     return `${value} ${unit}${value !== 1 ? 's' : ''} ago`;
-  },
-  
-  async toggleVideoLike(videoId) {
-    if (!videoId) {
-      throw new Error("Video ID is required to toggle like status");
-    }
-    
-    try {
-      console.log(`Toggling like status for video ID: ${videoId}`);
-      const response = await ApiService.post(`video/${videoId}/like/`);
-      console.log(`Like status updated for video ID: ${videoId}`, response);
-      return response;
-    } catch (error) {
-      console.error(`Error toggling like for video ID ${videoId}:`, error);
-      throw error;
-    }
-  },
-  
-  async addComment(videoId, comment) {
-    if (!videoId || !comment) {
-      throw new Error("Video ID and comment text are required");
-    }
-    
-    try {
-      const response = await ApiService.post(`video/${videoId}/comment/`, { text: comment });
-      return response;
-    } catch (error) {
-      console.error(`Error adding comment to video ${videoId}:`, error);
-      throw error;
-    }
   }
 };
 

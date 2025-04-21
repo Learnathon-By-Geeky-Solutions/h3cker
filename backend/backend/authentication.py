@@ -1,7 +1,7 @@
 from rest_framework import authentication
 from rest_framework import exceptions
 from firebase_admin import auth, firestore
-from .models import User  # Import custom User model
+from api.models import User  # Import custom User model
 
 db = firestore.client()
 

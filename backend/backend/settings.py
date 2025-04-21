@@ -35,7 +35,8 @@ INSTALLED_APPS = [
     "api",
     "rest_framework",
     "corsheaders",
-    "django_extensions" # Can remove this for PRODUCTION
+    "django_extensions", # Can remove this for PRODUCTION
+    "django_crontab", 
 ]
 
 MIDDLEWARE = [
@@ -153,11 +154,18 @@ else:
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'api.authentication.FirebaseAuthentication',
+        'backend.authentication.FirebaseAuthentication',
         'rest_framework.authentication.SessionAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ]
 }
+
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
+
+CRONJOBS = [
+    ('0 * * * *', 'django.core.management.call_command', ['check_video_privacy']),  
+]
+
 AUTH_USER_MODEL = 'api.User'

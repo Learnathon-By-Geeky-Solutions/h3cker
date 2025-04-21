@@ -27,6 +27,8 @@ const Signup = () => {
   } = useSignupForm();
 
   const {
+    loading: googleLoading,
+    authError: googleAuthError,
     cachedGoogleAccount,
     setCachedGoogleAccount,
     handleGoogleLogin
@@ -37,6 +39,13 @@ const Signup = () => {
   const emailId = useId();
   const passwordId = useId();
   const confirmPasswordId = useId();
+
+
+  const combinedError = error || googleAuthError;
+  const isDeviceLimitError = 
+    combinedError?.toLowerCase().includes('maximum device limit') || 
+    combinedError?.toLowerCase().includes('device limit') || 
+    combinedError?.includes('MAX_DEVICES_REACHED');
 
   const validateAllFields = useCallback(() => {
     const emailError = validateEmail(formData.email);
@@ -73,8 +82,8 @@ const Signup = () => {
   return (
     <AuthForm
       title="Create Account"
-      error={error}
-      loading={loading}
+      error={combinedError}
+      loading={loading || googleLoading}
       onGoogleLogin={handleGoogleLogin}
       cachedGoogleAccount={cachedGoogleAccount}
       setCachedGoogleAccount={setCachedGoogleAccount}
@@ -142,7 +151,7 @@ const Signup = () => {
         />
 
         <AnimatePresence mode="wait">
-          {error && <ErrorMessage error={error} />}
+          {combinedError && !isDeviceLimitError && <ErrorMessage error={combinedError} />}
         </AnimatePresence>
 
         <SubmitButton

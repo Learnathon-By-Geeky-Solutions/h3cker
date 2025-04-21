@@ -29,7 +29,9 @@ const UploadVideo = () => {
     title: '',
     description: '',
     category: '',
-    visibility: 'private'
+    visibility: 'private',
+    view_limit: '',
+    auto_private_after: ''
   });
   const [videoFile, setVideoFile] = useState(null);
   const [thumbnailFile, setThumbnailFile] = useState(null);
@@ -441,7 +443,14 @@ const UploadVideo = () => {
   };
 
   const handleReset = () => {
-    setFormData({ title: '', description: '', category: '', visibility: 'private' });
+    setFormData({ 
+      title: '', 
+      description: '', 
+      category: '', 
+      visibility: 'private',
+      view_limit: '',
+      auto_private_after: ''
+    });
     setVideoFile(null);
     setThumbnailFile(null);
     setProcessedThumbnailFile(null);
@@ -523,6 +532,41 @@ const UploadVideo = () => {
               Choose who can view your video.
          </p>
       </div>
+      
+      {/* Add view limit options */}
+      <div>
+        <div className="mb-2 block">
+          <Label htmlFor="view_limit" value="View Limit (optional)" className="text-white" />
+        </div>
+        <TextInput
+          id="view_limit"
+          type="number"
+          min="0"
+          value={formData.view_limit || ''}
+          onChange={handleInputChange}
+          placeholder="Maximum number of views before video becomes private"
+        />
+        <p className="mt-1 text-xs text-gray-300">
+          Set a maximum number of views. After reaching this limit, the video will become private.
+        </p>
+      </div>
+
+      {/* Add expiry date option */}
+      <div>
+        <div className="mb-2 block">
+          <Label htmlFor="auto_private_after" value="Auto-Private Date (optional)" className="text-white" />
+        </div>
+        <TextInput
+          id="auto_private_after"
+          type="datetime-local"
+          value={formData.auto_private_after || ''}
+          onChange={handleInputChange}
+        />
+        <p className="mt-1 text-xs text-gray-300">
+          Set a date when this video will automatically become private.
+        </p>
+      </div>
+      
       <div className="flex justify-end space-x-3 pt-5 border-t border-gray-600 mt-5">
         <Button
           type="button"
