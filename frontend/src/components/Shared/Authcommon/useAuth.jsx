@@ -10,7 +10,6 @@ const useAuthNavigation = () => {
     if (!user) return false;
     
     try {
-
       const from = location.state?.from?.pathname || '/';
 
       sessionStorage.setItem('auth_navigation_pending', 'true');
@@ -20,7 +19,6 @@ const useAuthNavigation = () => {
       const isEdge = navigator.userAgent.indexOf("Edg") > -1;
       
       if (isEdge) {
-        // For Edge, use direct navigation immediately
         console.log('Edge browser detected, using direct navigation');
         window.location.href = from;
         return true;
@@ -28,16 +26,13 @@ const useAuthNavigation = () => {
       
       navigate(from, { replace: true });
       
-   
       setTimeout(() => {
- 
         const currentPath = window.location.pathname;
         if (currentPath.includes('/login') || 
             currentPath.includes('/signup') || 
             currentPath.includes('/forgetpassword')) {
           
           console.log('Router navigation may have failed, using direct navigation');
-          // Force direct browser navigation for Edge compatibility
           window.location.href = from;
         }
       }, 200); 
@@ -45,7 +40,6 @@ const useAuthNavigation = () => {
       return true;
     } catch (error) {
       console.error('Navigation error:', error);
-      // Ultimate fallback
       window.location.href = '/';
       return false;
     }
@@ -95,20 +89,21 @@ export const useGoogleAuth = () => {
     setAuthError('');
 
     try {
-
       sessionStorage.removeItem('auth_navigation_pending');
       
       const user = await signInWithGoogle();
       if (user) {
- 
         navigateAfterAuth(user);
       }
     } catch (error) {
-      if (error.message === 'MAX_DEVICES_REACHED') {
+      console.error('Google sign-in error:', error);
+      
+      if (error.message === 'MAX_DEVICES_REACHED' || error.code === 'MAX_DEVICES_REACHED') {
         setAuthError(`You've reached the maximum device limit (${maxDevices}). Please log out from another device to continue.`);
+      } else if (error.code === 'auth/popup-closed-by-user') {
+        setAuthError('Sign-in canceled. Please try again.');
       } else {
-        setAuthError('Failed to sign in with Google');
-        console.error('Google sign-in error:', error);
+        setAuthError('Failed to sign in with Google. Please try again later.');
       }
     } finally {
       setLoading(false);
@@ -136,7 +131,7 @@ export const useLoginForm = () => {
   const handleLoginError = useCallback((error) => {
     if (error.message === 'EMAIL_NOT_VERIFIED') {
       setAuthError('Please verify your email before logging in');
-    } else if (error.message === 'MAX_DEVICES_REACHED') {
+    } else if (error.message === 'MAX_DEVICES_REACHED' || error.code === 'MAX_DEVICES_REACHED') {
       setAuthError(`You've reached the maximum device limit (${maxDevices}). Please log out from another device to continue.`);
     } else {
       setAuthError('Invalid email or password');
@@ -150,10 +145,16 @@ export const useLoginForm = () => {
     setAuthError('');
 
     try {
-  
+      // Clear any pending navigation flags
       sessionStorage.removeItem('auth_navigation_pending');
+    
+      if (!email || !password) {
+        setAuthError('Please enter both email and password');
+        setLoading(false);
+        return;
+      }
       
-      const user = await login(email, password);
+      const user = await login(email.trim(), password);
       if (user) {
         navigateAfterAuth(user);
       }
@@ -241,7 +242,7 @@ export const useSignupForm = () => {
     setLoading(true);
     try {
       const user = await createUser(
-        formData.email,
+        formData.email.trim(),
         formData.password,
         formData.firstName.trim(),
         formData.lastName.trim()

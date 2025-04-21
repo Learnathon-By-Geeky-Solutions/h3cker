@@ -1,9 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import { Button, Spinner } from 'flowbite-react';
-import { Play, Pause, Volume2, VolumeX, Maximize, Settings, RotateCcw } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, Maximize } from 'lucide-react';
 
-const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded }) => {
+
+const BUFFER_AHEAD = 30; 
+const BUFFER_BEHIND = 10; 
+const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded, onPlay }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -12,12 +15,16 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded 
   const [error, setError] = useState(null);
   const [volume, setVolume] = useState(1);
   const [showControls, setShowControls] = useState(true);
+  const [playbackStarted, setPlaybackStarted] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [playbackRate, setPlaybackRate] = useState(1);
 
   const videoRef = useRef(null);
   const videoContainerRef = useRef(null);
   const controlsTimerRef = useRef(null);
+  
+  const bufferCache = useRef({});
+  const segmentsLoaded = useRef(new Set());
+  const lastBufferCheck = useRef(0);
 
   useEffect(() => {
     if (!videoUrl) {
@@ -27,7 +34,48 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded 
     }
 
     const videoElement = videoRef.current;
-    
+
+    const manageBufferCache = () => {
+   
+      const segmentsToRemove = [];
+      segmentsLoaded.current.forEach(segKey => {
+        const [, end] = segKey.split('-').map(Number);
+        if (end < currentTime - BUFFER_BEHIND) {
+          segmentsToRemove.push(segKey);
+        }
+      });
+      
+      segmentsToRemove.forEach(key => {
+        segmentsLoaded.current.delete(key);
+        delete bufferCache.current[key];
+        console.log(`Removed segment: ${key} from buffer cache`);
+      });
+    };
+
+    const handleProgress = () => {
+      if (videoElement.buffered.length > 0) {
+     
+        for (let i = 0; i < videoElement.buffered.length; i++) {
+          const start = videoElement.buffered.start(i);
+          const end = videoElement.buffered.end(i);
+          const segKey = `${Math.floor(start)}-${Math.floor(end)}`;
+          
+          if (!segmentsLoaded.current.has(segKey)) {
+            bufferCache.current[segKey] = true;
+            segmentsLoaded.current.add(segKey);
+            console.log(`Buffered segment: ${segKey}`);
+          }
+        }
+      }
+      
+   
+      const now = Date.now();
+      if (now - lastBufferCheck.current > 2000) {
+        lastBufferCheck.current = now;
+        manageBufferCache();
+      }
+    };
+
     const handleCanPlay = () => {
       setIsLoading(false);
       setDuration(videoElement.duration);
@@ -55,6 +103,10 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded 
 
     const handlePlay = () => {
       setIsPlaying(true);
+      if (!playbackStarted && onPlay) {
+        setPlaybackStarted(true);
+        onPlay();
+      }
     };
 
     const handlePause = () => {
@@ -65,45 +117,8 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded 
       setVolume(videoElement.volume);
       setIsMuted(videoElement.muted);
     };
-
-    const handleKeyDown = (e) => {
-      if (document.activeElement === videoElement || document.activeElement === videoContainerRef.current) {
-        switch (e.key.toLowerCase()) {
-          case ' ':
-          case 'k':
-            e.preventDefault();
-            togglePlay();
-            break;
-          case 'f':
-            e.preventDefault();
-            toggleFullscreen();
-            break;
-          case 'm':
-            e.preventDefault();
-            toggleMute();
-            break;
-          case 'arrowright':
-            e.preventDefault();
-            skip(10);
-            break;
-          case 'arrowleft':
-            e.preventDefault();
-            skip(-10);
-            break;
-          case 'arrowup':
-            e.preventDefault();
-            changeVolume(0.1);
-            break;
-          case 'arrowdown':
-            e.preventDefault();
-            changeVolume(-0.1);
-            break;
-          default:
-            break;
-        }
-      }
-    };
-
+    
+   
     const handleFullscreenChange = () => {
       setIsFullscreen(Boolean(document.fullscreenElement));
     };
@@ -115,9 +130,9 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded 
     videoElement.addEventListener('play', handlePlay);
     videoElement.addEventListener('pause', handlePause);
     videoElement.addEventListener('volumechange', handleVolumeChange);
-    document.addEventListener('keydown', handleKeyDown);
+    videoElement.addEventListener('progress', handleProgress);
     document.addEventListener('fullscreenchange', handleFullscreenChange);
-
+      
     const handleMouseMove = () => {
       setShowControls(true);
       resetControlsTimer();
@@ -133,7 +148,7 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded 
       videoElement.removeEventListener('play', handlePlay);
       videoElement.removeEventListener('pause', handlePause);
       videoElement.removeEventListener('volumechange', handleVolumeChange);
-      document.removeEventListener('keydown', handleKeyDown);
+      videoElement.removeEventListener('progress', handleProgress);
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
       
       if (videoContainerRef.current) {
@@ -143,8 +158,14 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded 
       if (controlsTimerRef.current) {
         clearTimeout(controlsTimerRef.current);
       }
+      
+   
+      segmentsLoaded.current.clear();
+      Object.keys(bufferCache.current).forEach(key => {
+        delete bufferCache.current[key];
+      });
     };
-  }, [videoUrl, autoPlay, onEnded]);
+  }, [videoUrl, autoPlay, onEnded, onPlay, playbackStarted, currentTime]);
 
   useEffect(() => {
     setIsLoading(true);
@@ -152,8 +173,16 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded 
     setCurrentTime(0);
     setDuration(0);
     setIsPlaying(false);
+    setPlaybackStarted(false);
+    
+ 
+    segmentsLoaded.current.clear();
+    Object.keys(bufferCache.current).forEach(key => {
+      delete bufferCache.current[key];
+    });
   }, [videoUrl]);
 
+ 
   const resetControlsTimer = () => {
     if (controlsTimerRef.current) {
       clearTimeout(controlsTimerRef.current);
@@ -165,6 +194,7 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded 
       }, 3000);
     }
   };
+
 
   const togglePlay = () => {
     if (!videoRef.current) return;
@@ -178,32 +208,15 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded 
     }
   };
 
+
   const toggleMute = () => {
     if (!videoRef.current) return;
     videoRef.current.muted = !isMuted;
   };
 
-  const changeVolume = (delta) => {
-    if (!videoRef.current) return;
-    
-    const newVolume = Math.max(0, Math.min(1, volume + delta));
-    videoRef.current.volume = newVolume;
-    if (newVolume > 0 && isMuted) {
-      videoRef.current.muted = false;
-    }
-  };
-
-  const skip = (seconds) => {
-    if (!videoRef.current) return;
-    
-    const newTime = videoRef.current.currentTime + seconds;
-    videoRef.current.currentTime = Math.max(0, Math.min(duration, newTime));
-  };
-
   const toggleFullscreen = () => {
     if (!videoContainerRef.current) return;
     
-    // Fix for Issue #1: Don't use Promise returns in boolean contexts
     if (!document.fullscreenElement) {
       if (videoContainerRef.current.requestFullscreen) {
         videoContainerRef.current.requestFullscreen();
@@ -212,27 +225,13 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded 
       } else if (videoContainerRef.current.msRequestFullscreen) {
         videoContainerRef.current.msRequestFullscreen();
       }
-    } else {
-      // Fix: Call each method separately without using them in a boolean context
-      try {
-        if (document.exitFullscreen) {
-          document.exitFullscreen();
-        } else if (document.webkitExitFullscreen) {
-          document.webkitExitFullscreen();
-        } else if (document.msExitFullscreen) {
-          document.msExitFullscreen();
-        }
-      } catch (error) {
-        console.error('Error exiting fullscreen:', error);
-      }
+    } else if (document.exitFullscreen) {
+      document.exitFullscreen();
+    } else if (document.webkitExitFullscreen) {
+      document.webkitExitFullscreen();
+    } else if (document.msExitFullscreen) {
+      document.msExitFullscreen();
     }
-  };
-
-  const changePlaybackRate = (rate) => {
-    if (!videoRef.current) return;
-    
-    videoRef.current.playbackRate = rate;
-    setPlaybackRate(rate);
   };
 
   const formatTime = (timeInSeconds) => {
@@ -256,6 +255,7 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded 
         </div>
       )}
 
+
       {error && (
         <div className="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-70 z-10">
           <div className="text-center p-4">
@@ -271,12 +271,12 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded 
               }}
               className="mt-2 flex items-center justify-center"
             >
-              <RotateCcw className="mr-2 h-4 w-4" />
               Try Again
             </Button>
           </div>
         </div>
       )}
+
 
       <video
         ref={videoRef}
@@ -292,47 +292,42 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded 
         Your browser does not support the video tag.
       </video>
 
-      {/* Fix for Issues #2 and #3: Replace div with proper button that has keyboard support */}
+
       <button 
-        className={`absolute inset-0 w-full h-full bg-transparent border-0 cursor-default focus:outline-none`}
+        className="absolute inset-0 w-full h-full bg-transparent border-0 cursor-default focus:outline-none"
         onClick={togglePlay}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            togglePlay();
-          }
-        }}
         aria-label={isPlaying ? "Pause video" : "Play video"}
         type="button"
         tabIndex="0"
-        style={{ display: 'block' }}
       />
 
-      <div 
+ 
+      <div
         className={`absolute inset-0 transition-opacity duration-300 bg-gradient-to-t from-black/70 to-transparent flex flex-col justify-end ${showControls || !isPlaying ? 'opacity-100' : 'opacity-0'}`}
         onClick={(e) => e.stopPropagation()}
-        onKeyDown={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          // Allow keyboard interaction only if needed, e.g., for focus management, but prevent default space/enter actions if they bubble up
+          if (e.key === ' ' || e.key === 'Enter') {
+             e.stopPropagation(); 
+          }
+        }}
         role="toolbar"
         aria-label="Video controls"
-        tabIndex="0"
+        tabIndex="-1" 
       >
-        <input
-          type="range"
-          min="0"
-          max={duration || 1}
-          step="0.01"
-          value={currentTime}
-          onChange={(e) => {
-            if (videoRef.current) {
-              videoRef.current.currentTime = parseFloat(e.target.value);
-            }
-          }}
-          className="mx-4 my-2 h-1 bg-gray-600 accent-blue-500 rounded-full overflow-hidden"
-          aria-label="Seek video timeline"
-        />
+    
+        <div className="mx-4 my-2 h-1 bg-gray-600 rounded-full overflow-hidden">
+          <div 
+            className="h-full bg-blue-500" 
+            style={{ width: `${(currentTime / duration) * 100}%` }} 
+            aria-label="Video progress"
+          />
+        </div>
         
+        {/* Control buttons */}
         <div className="flex items-center justify-between p-4">
           <div className="flex items-center space-x-4">
+            {/* Play/Pause button */}
             <button 
               onClick={togglePlay}
               className="text-white focus:outline-none hover:text-blue-400"
@@ -342,6 +337,7 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded 
               {isPlaying ? <Pause size={24} /> : <Play size={24} />}
             </button>
             
+            {/* Volume controls */}
             <div className="flex items-center">
               <button 
                 onClick={toggleMute}
@@ -377,24 +373,8 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded 
             </div>
           </div>
           
-          <div className="flex items-center space-x-4">
-            <div className="relative">
-              <button 
-                onClick={() => {
-                  const speeds = [0.5, 0.75, 1, 1.25, 1.5, 2];
-                  const currentIndex = speeds.indexOf(playbackRate);
-                  const nextIndex = (currentIndex + 1) % speeds.length;
-                  changePlaybackRate(speeds[nextIndex]);
-                }}
-                className="text-white focus:outline-none hover:text-blue-400 flex items-center"
-                aria-label="Change Playback Speed"
-                type="button"
-              >
-                <Settings size={20} />
-                <span className="ml-1 text-xs">{playbackRate}x</span>
-              </button>
-            </div>
-            
+    
+          <div>
             <button 
               onClick={toggleFullscreen}
               className="text-white focus:outline-none hover:text-blue-400"
@@ -426,7 +406,8 @@ VideoPlayer.propTypes = {
   thumbnailUrl: PropTypes.string,
   title: PropTypes.string,
   autoPlay: PropTypes.bool,
-  onEnded: PropTypes.func
+  onEnded: PropTypes.func,
+  onPlay: PropTypes.func
 };
 
 export default VideoPlayer;

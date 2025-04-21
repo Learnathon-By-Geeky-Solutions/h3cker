@@ -7,16 +7,11 @@ const TokenService = {
   profileUpdateTimeKey: 'profile_last_update_time',
   lastTokenSetTimeKey: 'last_token_set_time',
 
-  sessionDuration: 24 * 60 * 60 * 1000, // 24 hours in milliseconds
-  tokenRateLimitMs: 1000, // Minimum time between token sets (1 second)
+  sessionDuration: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds 
+  tokenRateLimitMs: 1000, //1sec
 
-  // Max number of devices allowed to be logged in simultaneously
   maxDevices: 3,
 
-  /**
-   * Safe wrapper for localStorage access
-   * Handles cases where localStorage might be unavailable or blocked
-   */
   _storage: {
     getItem(key) {
       try {
@@ -195,9 +190,7 @@ const TokenService = {
     }
   },
 
-  /**
-   * Update the last token set timestamp
-   */
+
   updateLastTokenSetTime() {
     try {
       this._storage.setItem(this.lastTokenSetTimeKey, Date.now().toString());
@@ -470,7 +463,7 @@ const TokenService = {
 
   /**
    * Get UID from cookie (fallback method)
-   * @returns {string|null} UID from cookie or null
+   * @returns {string|null}
    */
   getUidFromCookie() {
     try {
@@ -522,7 +515,6 @@ const TokenService = {
       this._storage.setItem(this.tokenExpiryKey, expiryTime.toString());
       this.updateLastTokenSetTime();
       
-      // Update session cookie expiry as well with secure and httpOnly flags
       try {
         const cookieToken = this.getTokenFromCookie();
         if (cookieToken) {
@@ -551,9 +543,9 @@ const TokenService = {
 
   /**
    * Encrypt/decrypt data with a secure XOR-based transformation
-   * @param {string} text - Text to encrypt/decrypt
-   * @param {string} key - Key for obfuscation
-   * @returns {string} - Obfuscated/de-obfuscated text
+   * @param {string} text 
+   * @param {string} key
+   * @returns {string} 
    * @private
    */
   simpleEncrypt(text, key) {
@@ -603,8 +595,8 @@ const TokenService = {
 
   /**
    * Store Google authentication state securely for faster login hints
-   * @param {Object} googleAuthState - The Google auth state object
-   * @param {string} uid - The user's ID
+   * @param {Object} googleAuthState 
+   * @param {string} uid 
    */
   setGoogleAuthCache(googleAuthState, uid) {
     try {
@@ -642,11 +634,10 @@ const TokenService = {
       }
     } catch (error) {
       console.error('Error caching Google auth state:', error);
-      // Try to clear cache if setting fails
+  
       try {
         this.clearGoogleAuthCache();
       } catch (clearError) {
-        // If even clearing fails, just log and continue
         console.error('Error clearing Google auth cache:', clearError);
       }
     }
@@ -712,9 +703,8 @@ const TokenService = {
     }
   },
 
-  /**
-   * Clear the Google authentication cache
-   */
+
+   //Clear the Google authentication cache
   clearGoogleAuthCache() {
     try {
       this._storage.removeItem(this.googleAuthCacheKey);
@@ -731,8 +721,8 @@ const TokenService = {
 
   /**
    * Set the last profile update timestamp
-   * @param {string} uid - The user's ID
-   * @param {Date} timestamp - The timestamp of the update (defaults to now)
+   * @param {string} uid 
+   * @param {Date} timestamp 
    */
   setProfileUpdateTime(uid, timestamp = new Date()) {
     try {
@@ -745,8 +735,8 @@ const TokenService = {
 
   /**
    * Get the last profile update timestamp
-   * @param {string} uid - The user's ID
-   * @returns {Date|null} The timestamp of the last update or null if not found
+   * @param {string} uid 
+   * @returns {Date|null} 
    */
   getProfileUpdateTime(uid) {
     try {
@@ -765,9 +755,9 @@ const TokenService = {
 
   /**
    * Check if profile can be updated (based on time restriction)
-   * @param {string} uid - The user's ID
-   * @param {number} minDays - Minimum days between updates (default: 1)
-   * @returns {boolean} Whether the profile can be updated
+   * @param {string} uid 
+   * @param {number} minDays 
+   * @returns {boolean} 
    */
   canUpdateProfile(uid, minDays = 1) {
     try {
@@ -785,9 +775,7 @@ const TokenService = {
     }
   },
 
-  /**
-   * Clear all authentication-related data from local storage upon logout
-   */
+
   clearAuth() {
     try {
       this._storage.removeItem(this.tokenKey);
@@ -795,7 +783,7 @@ const TokenService = {
       this._storage.removeItem(this.lastTokenSetTimeKey);
       this.clearGoogleAuthCache();
       
-      // Update cookie clearing with secure path
+
       const isSecure = window.location.protocol === 'https:';
       const secureFlag = isSecure ? ';secure' : '';
       document.cookie = `auth_token_backup=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/${secureFlag};httpOnly`;

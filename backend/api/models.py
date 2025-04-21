@@ -1,18 +1,19 @@
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.utils import timezone
-from django.core.validators import MinValueValidator 
+from django.core.validators import MinValueValidator
+import uuid
 
 class CustomUserManager(BaseUserManager):
     def create_user(self, email, firebase_uid, password=None, **extra_fields):
         if not email:
             raise ValueError('Users must have an email address')
         if not firebase_uid:
-            raise ValueError('Users must have a Firebase UID') # Added check
+            raise ValueError('Users must have a Firebase UID')
         email = self.normalize_email(email)
         user = self.model(email=email, firebase_uid=firebase_uid, **extra_fields)
         if password:
-            user.set_password(password)  # Mostly for admin interface
+            user.set_password(password)
         user.save(using=self._db)
         return user
 
@@ -44,7 +45,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='user')
     date_joined = models.DateTimeField(default=timezone.now)
     is_active = models.BooleanField(default=True)
-    is_staff = models.BooleanField(default=False)  # For Django admin access
+    is_staff = models.BooleanField(default=False)
 
     objects = CustomUserManager()
 
@@ -61,8 +62,7 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     def get_full_name(self):
         full_name = f"{self.first_name} {self.last_name}".strip()
-        return full_name if full_name else self.email # Fallback to email if no name
-
+        return full_name if full_name else self.email
 
 class CompanyProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, primary_key=True, related_name='company_profile')
@@ -107,7 +107,6 @@ class Video(models.Model):
     title = models.CharField(max_length=200)
     description = models.TextField(blank=True)
     category = models.CharField(max_length=100, blank=True)
-    # Ensure default matches frontend, use choices
     visibility = models.CharField(
         max_length=20,
         choices=VISIBILITY_CHOICES,
@@ -117,17 +116,61 @@ class Video(models.Model):
     thumbnail_url = models.URLField(max_length=1024, blank=True)
     upload_date = models.DateTimeField(auto_now_add=True, db_index=True) 
     uploader = models.ForeignKey(User, on_delete=models.CASCADE, related_name='videos')
-
-  
     views = models.PositiveIntegerField(default=0, validators=[MinValueValidator(0)])
     likes = models.PositiveIntegerField(default=0, validators=[MinValueValidator(0)])
-    duration = models.CharField(max_length=50, blank=True) 
+    duration = models.CharField(max_length=50, blank=True, default="0:00")
+    
+    # New fields for view limiting and expiry
+    view_limit = models.PositiveIntegerField(null=True, blank=True)
+    auto_private_after = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         db_table = 'videos'
-        ordering = ['-upload_date'] # Default ordering
+        ordering = ['-upload_date']
         verbose_name = 'Video'
         verbose_name_plural = 'Videos'
 
     def __str__(self):
         return self.title
+
+class VideoView(models.Model):
+    video = models.ForeignKey(Video, on_delete=models.CASCADE, related_name='video_views')
+    viewer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='viewed_videos')
+    viewed_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'video_views'
+        indexes = [
+            models.Index(fields=['video', 'viewer']),
+            models.Index(fields=['viewed_at']),
+        ]
+        
+    def __str__(self):
+        return f"{self.viewer.email} viewed {self.video.title}"
+
+class VideoLike(models.Model):
+    video = models.ForeignKey(Video, on_delete=models.CASCADE, related_name='video_likes')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='liked_videos')
+    liked_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'video_likes'
+        unique_together = ('video', 'user')
+        
+    def __str__(self):
+        return f"{self.user.email} liked {self.video.title}"
+
+class VideoShare(models.Model):
+    video = models.ForeignKey(Video, on_delete=models.CASCADE, related_name='shares')
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='shared_videos')
+    share_token = models.CharField(max_length=64, unique=True, default=uuid.uuid4)
+    created_at = models.DateTimeField(auto_now_add=True)
+    access_count = models.PositiveIntegerField(default=0)
+    active = models.BooleanField(default=True)
+    
+    class Meta:
+        db_table = 'video_shares'
+        indexes = [models.Index(fields=['share_token'])]
+        
+    def __str__(self):
+        return f"Share for {self.video.title}"

@@ -677,12 +677,10 @@ const Profile = () => {
     );
   }
 
-  // Check if emailVerified is properly set from the auth object
   const isEmailVerified = user.emailVerified === true;
 
   return (
     <div className="min-h-screen w-full flex flex-col items-center py-6 px-4 bg-gray-900 relative">
-      {/* Background blur elements */}
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0">
         <div className="absolute top-10 -left-40 w-96 h-96 bg-blue-700 opacity-20 rounded-full filter blur-3xl" />
         <div className="absolute bottom-10 -right-40 w-96 h-96 bg-purple-600 opacity-20 rounded-full filter blur-3xl" />
@@ -690,8 +688,7 @@ const Profile = () => {
       
       <div className="container max-w-3xl z-10 mt-16">
         <h1 className="text-2xl md:text-3xl font-bold mb-6 text-center text-white">Your Profile</h1>
-        
-        {/* Toast notification */}
+
         <ToastMessage 
           toast={toast} 
           onDismiss={dismissToast} 
@@ -699,7 +696,6 @@ const Profile = () => {
         
         <Card className="shadow-lg border-0 bg-gray-800 bg-opacity-70 backdrop-blur-sm">
           <div className="flex flex-col items-center mb-6 relative">
-            {/* Profile picture with overlay for editing */}
             <ProfileAvatar
               photoURL={formState.photoURL}
               isEditing={isEditing}
@@ -707,13 +703,11 @@ const Profile = () => {
               previewImage={previewImage}
             />
             
-            {/* User name display */}
             <h2 className="text-lg md:text-xl font-semibold mt-3 text-white">
               {formState.firstName ? `${formState.firstName} ${formState.lastName}` : (user.displayName || 'User')}
             </h2>
             <p className="text-sm text-gray-400">{formState.email || user.email}</p>
             
-            {/* Photo URL edit popup */}
             {showPhotoOptions && (
               <PhotoOptionsPanel
                 photoURL={formState.photoURL}
