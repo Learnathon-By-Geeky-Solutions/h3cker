@@ -3,5 +3,6 @@
 __pycache__
 firebase-credentials.json
 .coverage
-*.xml
+coverage.xml
+pytest-*.xml
 example.md

@@ -1,6 +1,5 @@
 import pytest
-from django.core.exceptions import ValidationError
-from api.models import User, CustomUserManager, CompanyProfile, ViewerProfile, Video
+from api.models import User, CompanyProfile, ViewerProfile, Video
 
 @pytest.mark.django_db
 class TestUserModel:
@@ -71,7 +70,7 @@ class TestUserModel:
         )
 
         assert user1.get_full_name() == "John Doe"
-        assert user2.get_full_name() == "test2@example.com"  # Fallback to email
+        assert user2.get_full_name() == "test2@example.com" 
 
 @pytest.mark.django_db
 class TestCompanyProfileModel:
@@ -219,4 +218,4 @@ class TestVideoModel:
         assert video.thumbnail_url == ""
         assert video.views == 0
         assert video.likes == 0
-        assert video.duration == "0:00"  # Update this to match the default value in the model
+        assert video.duration == "0:00"
