@@ -1,12 +1,15 @@
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useState, useContext, useEffect, lazy, Suspense } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { AuthContext } from '../../../contexts/AuthProvider/AuthProvider';
-import { Alert } from 'flowbite-react';
+import { Alert, Spinner } from 'flowbite-react';
 import { AlertCircle } from 'lucide-react';
 import DashboardSideNavbar from '../../Shared/DashboardSideNavbar/DashboardSideNavbar';
 import VideoService from '../../../utils/VideoService';
 import { LoadingState } from '../../Shared/VideoLoadingStates/VideoLoadingStates';
 import DashboardHome from './DashboardHome';
+
+// Lazy load the AdminDashboard component
+const AdminDashboard = lazy(() => import('./AdminDashboard'));
 
 const Dashboard = () => {
   const { user } = useContext(AuthContext);
@@ -45,7 +48,10 @@ const Dashboard = () => {
 
     const fetchDashboardData = async () => {
       try {
-        const allVideos = await VideoService.getVideoFeed();
+        // Admin users get all videos, regular users only get their own
+        const allVideos = user?.role === 'admin' ? 
+          await VideoService.adminGetAllVideos() : 
+          await VideoService.getVideoFeed();
         
         if (!isMounted) return;
         
@@ -54,13 +60,16 @@ const Dashboard = () => {
           throw new Error("Invalid data format received from server.");
         }
         
-        // Filter videos by user email
-        const userEmailLower = user.email.toLowerCase();
-        const userVideos = allVideos.filter(video =>
-          video &&
-          (video.uploader_email?.toLowerCase() === userEmailLower ||
-           video.uploader?.email?.toLowerCase() === userEmailLower)
-        );
+        // Filter videos by user email for non-admin users
+        let userVideos = allVideos;
+        if (user.role !== 'admin') {
+          const userEmailLower = user.email.toLowerCase();
+          userVideos = allVideos.filter(video =>
+            video &&
+            (video.uploader_email?.toLowerCase() === userEmailLower ||
+             video.uploader?.email?.toLowerCase() === userEmailLower)
+          );
+        }
 
         // Sort videos for display
         const sortedByDate = [...userVideos].sort(
@@ -71,7 +80,7 @@ const Dashboard = () => {
           (a, b) => (b.views || 0) - (a.views || 0)
         );
 
-        // Calculate simulated storage usage
+        // Calculate simulated storage usage (only for company/admin users)
         const simulatedStorageUsed = Math.min(95, userVideos.length * 5);
 
         // Update state with video stats
@@ -104,7 +113,7 @@ const Dashboard = () => {
     fetchDashboardData();
     
     return () => { isMounted = false; };
-  }, [isMainDashboard, user?.email]);
+  }, [isMainDashboard, user?.email, user?.role]);
 
   const renderDashboardContent = () => {
     if (!isMainDashboard) {
@@ -114,6 +123,8 @@ const Dashboard = () => {
     if (loading) {
       return <LoadingState message="Loading dashboard data..." />;
     }
+    
+    const isAdmin = user?.role === 'admin';
     
     return (
       <>
@@ -127,7 +138,25 @@ const Dashboard = () => {
             <span className="font-medium">Error:</span> {error}
           </Alert>
         )}
-        <DashboardHome user={user} stats={stats} />
+        
+        {isAdmin ? (
+          <div className="space-y-8">
+            <div className="mb-6">
+              <h1 className="text-3xl font-bold text-white">
+                Admin Dashboard
+              </h1>
+              <p className="text-gray-400 mt-1">
+                Manage users, videos, and platform settings.
+              </p>
+            </div>
+            
+            <Suspense fallback={<div className="flex justify-center py-12"><Spinner size="xl" /></div>}>
+              <AdminDashboard />
+            </Suspense>
+          </div>
+        ) : (
+          <DashboardHome user={user} stats={stats} />
+        )}
       </>
     );
   };

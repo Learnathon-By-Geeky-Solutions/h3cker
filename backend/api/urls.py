@@ -3,7 +3,10 @@ from .views import (
     TestAuthView, OnboardingAPIView, SetFirebaseTokenView, 
     UploadVideoView, VideoFeedView, VideoDetailView,
     RecordVideoViewAPI, ToggleVideoLikeAPI, 
-    CreateVideoShareAPI, UserHistoryAPI
+    CreateVideoShareAPI, UserHistoryAPI, UserLikedVideosAPI
+)
+from .admin_views import (
+    UserSearchView, PromoteToAdminView, VideoManagementView, VideoStatsView
 )
 
 urlpatterns = [
@@ -21,6 +24,14 @@ urlpatterns = [
     path('videos/<int:video_id>/like/', ToggleVideoLikeAPI.as_view(), name='toggle-video-like'),
     path('videos/<int:video_id>/share/', CreateVideoShareAPI.as_view(), name='create-video-share'),
     
-    # User history endpoint
+    # User history endpoints
     path('user/history/', UserHistoryAPI.as_view(), name='user-history'),
+    path('user/liked/', UserLikedVideosAPI.as_view(), name='user-liked-videos'),
+    
+    # Admin endpoints
+    path('admin/users/search/', UserSearchView.as_view(), name='admin-user-search'),
+    path('admin/users/promote/', PromoteToAdminView.as_view(), name='admin-promote-user'),
+    path('admin/videos/', VideoManagementView.as_view(), name='admin-videos-list'),
+    path('admin/videos/<int:video_id>/', VideoManagementView.as_view(), name='admin-video-delete'),
+    path('admin/video-stats/', VideoStatsView.as_view(), name='admin-video-stats'),
 ]

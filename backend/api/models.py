@@ -120,7 +120,7 @@ class Video(models.Model):
     likes = models.PositiveIntegerField(default=0, validators=[MinValueValidator(0)])
     duration = models.CharField(max_length=50, blank=True, default="0:00")
     
-    # New fields for view limiting and expiry
+    # Fields for view limiting and expiry
     view_limit = models.PositiveIntegerField(null=True, blank=True)
     auto_private_after = models.DateTimeField(null=True, blank=True)
 

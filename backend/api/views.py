@@ -17,6 +17,7 @@ from .serializers import (OnboardingSerializer, FirebaseTokenSerializer,
                          VideoSerializer, VideoFeedSerializer, VideoDetailSerializer,
                          VideoViewSerializer, VideoLikeSerializer, VideoShareSerializer)
 from .utils import should_make_private, make_video_private, record_user_view, increment_video_views
+from .permissions import IsCompanyOrAdmin, IsOwnerOrAdmin
 from azure.storage.blob import generate_blob_sas, BlobSasPermissions
 import uuid
 
@@ -29,6 +30,7 @@ class TestAuthView(generics.RetrieveAPIView):
         return Response({
             "success": True,
             "message": "Authentication successful!",
+            "user_role": request.user.role
         })
 
 
@@ -87,7 +89,7 @@ class SetFirebaseTokenView(generics.CreateAPIView):
 
 class VideoFeedView(generics.ListAPIView):
     """List all publicly available videos for feed."""
-    queryset = Video.objects.all()
+    queryset = Video.objects.filter(visibility='public')
     serializer_class = VideoFeedSerializer
     permission_classes = [AllowAny]
 
@@ -96,7 +98,7 @@ class VideoDetailView(generics.RetrieveAPIView):
     """Retrieve detailed information about a specific video."""
     queryset = Video.objects.all()
     serializer_class = VideoDetailSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [AllowAny]  # We'll check permissions in the view
     lookup_url_kwarg = 'video_identifier'
     
     def get_video_by_id(self, video_id):
@@ -129,7 +131,6 @@ class VideoDetailView(generics.RetrieveAPIView):
                 uuid.UUID(identifier, version=4)
                 return self.get_video_by_token(identifier)
             except ValueError:
-
                 raise Http404("Invalid video identifier format")
                 
         except VideoShare.DoesNotExist:
@@ -139,6 +140,14 @@ class VideoDetailView(generics.RetrieveAPIView):
     
     def check_video_availability(self, video):
         """Check if the video is available for viewing."""
+        # Admin users can always view videos
+        if self.request.user.is_authenticated and self.request.user.role == 'admin':
+            return True
+            
+        # Owner can view their own videos regardless of visibility
+        if self.request.user.is_authenticated and video.uploader == self.request.user:
+            return True
+            
         # Checking if video is private
         if video.visibility == 'private':
             return False
@@ -235,6 +244,13 @@ class CreateVideoShareAPI(APIView):
     def post(self, request, video_id):
         video = get_object_or_404(Video, id=video_id)
         
+        # Check if user is owner or admin
+        if video.uploader != request.user and request.user.role != 'admin':
+            return Response(
+                {"error": "You don't have permission to share this video"}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
         # Create a new share link
         share = VideoShare.objects.create(
             video=video,
@@ -256,9 +272,14 @@ class UserHistoryAPI(generics.ListAPIView):
     serializer_class = VideoDetailSerializer
     
     def get_queryset(self):
-        viewed_video_ids = VideoView.objects.filter(
-            viewer=self.request.user
-        ).values_list('video_id', flat=True)
+        # For admin users, they can see all viewed videos
+        if self.request.user.role == 'admin':
+            viewed_video_ids = VideoView.objects.values_list('video_id', flat=True).distinct()
+        else:
+            # Regular users see only their viewed videos
+            viewed_video_ids = VideoView.objects.filter(
+                viewer=self.request.user
+            ).values_list('video_id', flat=True)
         
         return Video.objects.filter(id__in=viewed_video_ids).order_by('-upload_date')
     
@@ -268,9 +289,33 @@ class UserHistoryAPI(generics.ListAPIView):
         return context
 
 
-class UploadVideoView(generics.CreateAPIView):
-    """Create a new video and generate SAS upload URLs."""
+class UserLikedVideosAPI(generics.ListAPIView):
+    """List videos the user has liked."""
     permission_classes = [IsAuthenticated]
+    serializer_class = VideoDetailSerializer
+    
+    def get_queryset(self):
+        # For admin users, they can see all liked videos
+        if self.request.user.role == 'admin':
+            liked_video_ids = VideoLike.objects.values_list('video_id', flat=True).distinct()
+        else:
+            # Regular users see only their liked videos
+            liked_video_ids = VideoLike.objects.filter(
+                user=self.request.user
+            ).values_list('video_id', flat=True)
+        
+        return Video.objects.filter(id__in=liked_video_ids).order_by('-upload_date')
+    
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['frontend_url'] = settings.FRONTEND_URL
+        return context
+
+
+class UploadVideoView(generics.CreateAPIView):
+    """Create a new video and generate SAS upload URLs.
+    Only admin and company users can upload videos."""
+    permission_classes = [IsAuthenticated, IsCompanyOrAdmin]
     serializer_class = VideoSerializer
 
     def create(self, request, *args, **kwargs):
@@ -331,7 +376,6 @@ class UploadVideoView(generics.CreateAPIView):
                 account_name, thumbnail_container, thumbnail_name,
                 account_key, view_permission, 24 * 60 
             )
-
 
             serializer.save(
                 uploader=self.request.user,

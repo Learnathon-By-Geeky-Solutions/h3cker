@@ -14,19 +14,46 @@ import {
   Menu, 
   X, 
   Video,
+  Users,
+  Settings
 } from 'lucide-react';
 
 // Default avatar fallback
 const DEFAULT_AVATAR = "https://flowbite.com/docs/images/people/profile-picture-5.jpg";
 
-// Navigation items data
-const navItems = [
-  { path: '/dashboard', name: 'Dashboard', icon: <Home size={20} /> },
-  { path: '/dashboard/upload', name: 'Upload Video', icon: <Upload size={20} /> },
-  { path: '/dashboard/videos', name: 'My Videos', icon: <Video size={20} /> },
-  { path: '/dashboard/analytics', name: 'Analytics', icon: <BarChart2 size={20} /> },
-  { path: '/profile', name: 'Profile', icon: <User size={20} /> },
-];
+// Navigation items data generator function
+const getNavItems = (role) => {
+  const baseItems = [
+    { path: '/dashboard', name: 'Dashboard', icon: <Home size={20} /> },
+    { path: '/profile', name: 'Profile', icon: <User size={20} /> },
+  ];
+  
+  // Items visible to companies and admins
+  if (role === 'admin' || role === 'company') {
+    baseItems.push(
+      { path: '/dashboard/upload', name: 'Upload Video', icon: <Upload size={20} /> },
+      { path: '/dashboard/videos', name: 'My Videos', icon: <Video size={20} /> },
+      { path: '/dashboard/analytics', name: 'Analytics', icon: <BarChart2 size={20} /> }
+    );
+  }
+  
+  // Items only visible to regular users
+  if (role === 'user') {
+    baseItems.push(
+      { path: '/dashboard/history', name: 'View History', icon: <Video size={20} /> }
+    );
+  }
+  
+  // Admin-only items
+  if (role === 'admin') {
+    baseItems.push(
+      { path: '/dashboard/admin/users', name: 'Manage Users', icon: <Users size={20} /> },
+      { path: '/dashboard/admin/settings', name: 'Settings', icon: <Settings size={20} /> }
+    );
+  }
+  
+  return baseItems;
+};
 
 // Common classes for navigation items
 const navItemBaseClasses = "flex items-center rounded-lg p-2 text-gray-300 hover:bg-gray-700 group transition-all duration-200";
@@ -78,27 +105,31 @@ const DashboardSideNavbar = ({ isOpen, setIsOpen }) => {
   };
 
   // Render navigation items
-  const renderNavItems = () => (
-    <ul className="space-y-1">
-      {navItems.map((item) => (
-        <li key={item.path}>
-          <NavLink
-            to={item.path}
-            className={({ isActive }) => {
-              const activeClass = isActive ? navItemActiveClasses : '';
-              const justifyClass = !isOpen && !isHovering ? 'justify-center' : 'justify-start';
-              return `${navItemBaseClasses} ${activeClass} ${justifyClass} mb-1`;
-            }}
-          >
-            {item.icon}
-            {(isOpen || isHovering) && (
-              <span className="ml-3 text-sm">{item.name}</span>
-            )}
-          </NavLink>
-        </li>
-      ))}
-    </ul>
-  );
+  const renderNavItems = () => {
+    const navItems = getNavItems(user?.role || 'user');
+    
+    return (
+      <ul className="space-y-1">
+        {navItems.map((item) => (
+          <li key={item.path}>
+            <NavLink
+              to={item.path}
+              className={({ isActive }) => {
+                const activeClass = isActive ? navItemActiveClasses : '';
+                const justifyClass = !isOpen && !isHovering ? 'justify-center' : 'justify-start';
+                return `${navItemBaseClasses} ${activeClass} ${justifyClass} mb-1`;
+              }}
+            >
+              {item.icon}
+              {(isOpen || isHovering) && (
+                <span className="ml-3 text-sm">{item.name}</span>
+              )}
+            </NavLink>
+          </li>
+        ))}
+      </ul>
+    );
+  };
 
   // Render user profile
   const renderUserProfile = () => {
@@ -128,6 +159,11 @@ const DashboardSideNavbar = ({ isOpen, setIsOpen }) => {
               <p className="text-xs text-gray-400 truncate max-w-[160px]">
                 {user?.email || 'user@example.com'}
               </p>
+              {user?.role && (
+                <p className="text-xs text-blue-400 font-medium capitalize">
+                  {user.role}
+                </p>
+              )}
             </div>
           )}
         </div>

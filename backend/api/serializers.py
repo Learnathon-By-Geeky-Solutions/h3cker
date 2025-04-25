@@ -24,6 +24,16 @@ class UserBasicSerializer(serializers.ModelSerializer):
         fields = ["id", "email", "first_name", "last_name", "role"]
         read_only_fields = fields 
 
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ["id", "email", "first_name", "last_name", "role", "firebase_uid", "is_active", "date_joined"]
+        read_only_fields = ["firebase_uid", "is_active", "date_joined"]
+
+class AdminActionSerializer(serializers.Serializer):
+    user_id = serializers.IntegerField(required=True)
+    admin_password = serializers.CharField(required=True, write_only=True)
+
 class FirebaseTokenSerializer(serializers.Serializer):
     token = serializers.CharField(required=True)
 
@@ -88,10 +98,10 @@ class VideoDetailSerializer(serializers.ModelSerializer):
             "description",
             "category",
             "visibility",
-            "video_url",         # This should be the viewable URL (long-lived SAS)
+            "video_url",
             "thumbnail_url",
             "upload_date",
-            "uploader",          # Include uploader details
+            "uploader",
             "views",
             "likes",
             "duration",

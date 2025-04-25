@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useContext } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import PropTypes from 'prop-types';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -6,7 +6,8 @@ import {
   Avatar,
   Modal,
   TextInput,
-  Alert
+  Alert,
+  Button as FlowbiteButton
 } from 'flowbite-react';
 import { 
   ThumbsUp, 
@@ -16,11 +17,16 @@ import {
   Tag,
   Copy, 
   MessageSquare,
-  Link as LinkIcon
+  Link as LinkIcon,
+  Edit,
+  Trash,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import VideoService from '../../../utils/VideoService';
 import VideoPlayer from '../../Shared/VideoPlayer/VideoPlayer';
 import { LoadingState, ErrorState } from '../../Shared/VideoLoadingStates/VideoLoadingStates';
+import { AuthContext } from '../../../contexts/AuthProvider/AuthProvider';
 
 // Modern primary action button component
 const PrimaryButton = ({ icon, label, onClick, disabled = false, count, active = false }) => {
@@ -429,6 +435,7 @@ const RelatedVideos = ({ videos, navigate }) => (
 const VideoDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useContext(AuthContext);
   const [video, setVideo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -436,7 +443,7 @@ const VideoDetail = () => {
   const [relatedVideos, setRelatedVideos] = useState([]);
   const [viewRecorded, setViewRecorded] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
-
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
   useEffect(() => {
     const fetchVideoDetails = async () => {
@@ -487,7 +494,6 @@ const VideoDetail = () => {
         }
       } catch (relatedError) {
         console.error('Error fetching related videos:', relatedError);
-       
       }
     };
 
@@ -499,12 +505,10 @@ const VideoDetail = () => {
     }
   }, [id]);
 
- 
   const handleBack = () => {
     navigate(-1); 
   };
 
-  
   const recordView = useCallback(async () => {
     if (!id || viewRecorded) return;
     
@@ -512,17 +516,14 @@ const VideoDetail = () => {
       await VideoService.recordVideoView(id);
       setViewRecorded(true);
       
-    
       setVideo(prev => ({
         ...prev,
         views: (prev.views || 0) + 1
       }));
     } catch (error) {
       console.error('Error recording view:', error);
-  
     }
   }, [id, viewRecorded]);
-
 
   const handleLike = async () => {
     if (!id) return;
@@ -530,12 +531,10 @@ const VideoDetail = () => {
     try {
       const response = await VideoService.toggleVideoLike(id);
       
-  
       if (response) {
         const newLikedStatus = response.liked;
         setLiked(newLikedStatus);
         
-
         setVideo(prev => ({
           ...prev,
           likes: response.likes
@@ -547,22 +546,72 @@ const VideoDetail = () => {
     }
   };
 
-
   const handleShare = () => {
     setShareModalOpen(true);
   };
 
-
   const handleVideoEnded = () => {
     console.log('Video playback ended');
-
   };
 
+  // Admin functions
+  const handleToggleVisibility = async () => {
+    try {
+      const newVisibility = video.visibility === 'private' ? 'public' : 'private';
+      await VideoService.adminUpdateVideoVisibility(id, newVisibility);
+      setVideo({
+        ...video,
+        visibility: newVisibility
+      });
+      setError(null);
+    } catch (error) {
+      console.error('Error updating video visibility:', error);
+      setError('Failed to update video visibility. Please try again.');
+    }
+  };
+
+  const handleDeleteVideo = async () => {
+    try {
+      await VideoService.adminDeleteVideo(id);
+      navigate('/dashboard', { replace: true });
+    } catch (error) {
+      console.error('Error deleting video:', error);
+      setError('Failed to delete video. Please try again.');
+      setDeleteModalOpen(false);
+    }
+  };
+
+  const renderAdminControls = () => {
+    // Only show for admin users
+    if (!user || user.role !== 'admin') return null;
+    
+    return (
+      <div className="bg-gray-800/80 backdrop-blur-md rounded-[16px] border border-gray-700 shadow-md p-5 mb-6">
+        <h3 className="text-lg font-medium text-white mb-4">Admin Controls</h3>
+        <div className="flex flex-wrap gap-3">
+          <PrimaryButton 
+            icon={Edit}
+            label="Edit Video"
+            onClick={() => navigate(`/dashboard/edit-video/${id}`)}
+          />
+          <SecondaryButton
+            icon={Trash}
+            label="Delete Video"
+            onClick={() => setDeleteModalOpen(true)}
+          />
+          <SecondaryButton
+            icon={video?.visibility === 'private' ? Eye : EyeOff}
+            label={video?.visibility === 'private' ? 'Make Public' : 'Make Private'}
+            onClick={handleToggleVisibility}
+          />
+        </div>
+      </div>
+    );
+  };
 
   if (loading) {
     return <LoadingState message="Loading video..." />;
   }
-
 
   if (error) {
     return (
@@ -573,7 +622,6 @@ const VideoDetail = () => {
     );
   }
 
- 
   if (!video) {
     return (
       <ErrorState 
@@ -601,6 +649,8 @@ const VideoDetail = () => {
             />
           </motion.div>
 
+          {/* Admin Controls - Only visible for admins */}
+          {renderAdminControls()}
     
           <motion.div 
             initial={{ opacity: 0, y: 10 }}
@@ -633,6 +683,25 @@ const VideoDetail = () => {
         videoId={id}
         videoTitle={video.title} 
       />
+      
+      {/* Delete Video Confirmation Modal */}
+      <Modal show={deleteModalOpen} onClose={() => setDeleteModalOpen(false)}>
+        <Modal.Header className="bg-gray-800 text-white border-b border-gray-700">
+          Delete Video
+        </Modal.Header>
+        <Modal.Body className="bg-gray-800 text-white">
+          <p className="mb-2">Are you sure you want to delete "{video?.title}"?</p>
+          <p className="text-red-400">This action cannot be undone.</p>
+        </Modal.Body>
+        <Modal.Footer className="bg-gray-800 border-t border-gray-700">
+          <FlowbiteButton color="failure" onClick={handleDeleteVideo}>
+            Delete Permanently
+          </FlowbiteButton>
+          <FlowbiteButton color="gray" onClick={() => setDeleteModalOpen(false)}>
+            Cancel
+          </FlowbiteButton>
+        </Modal.Footer>
+      </Modal>
     </div>
   );
 };
