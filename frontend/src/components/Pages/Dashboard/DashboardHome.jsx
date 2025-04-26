@@ -10,6 +10,7 @@ import {
   EmptyAdRow, 
   AnalyticsPreview 
 } from '../../Shared/DashboardComponents/DashboardComponents';
+import UserPointsCard from './UserPointsCard';
 
 const DashboardHome = ({ user, stats }) => {
   const totalVideos = stats?.totalVideos || 0;
@@ -23,6 +24,7 @@ const DashboardHome = ({ user, stats }) => {
   const isAdmin = user?.role === 'admin';
   const isCompany = user?.role === 'company';
   const canUpload = isAdmin || isCompany;
+  const isViewer = user?.role === 'user';
 
   // Determine welcome message based on user role
   let welcomeMessage;
@@ -124,6 +126,9 @@ const DashboardHome = ({ user, stats }) => {
         </div>
       )}
 
+      {/* User Points Card for Viewers */}
+      {isViewer && <UserPointsCard compact={true} />}
+
       <StatsOverview stats={stats} />
 
       <div>
@@ -150,6 +155,12 @@ const DashboardHome = ({ user, stats }) => {
            )
          )}
       </div>
+
+      {isViewer && (
+        <div>
+          <UserPointsCard />
+        </div>
+      )}
 
       <AnalyticsPreview hasVideos={hasVideos} />
     </div>

@@ -13,6 +13,7 @@ import PrivateRoute from "../PrivateRoute/Privateroute.jsx";
 import Video from "../../components/Pages/Video/Video.jsx";
 import DeviceManager from "../../components/Shared/DeviceManager/DeviceManager.jsx";
 
+
 const router = createBrowserRouter([
   {
     path: "/",
@@ -61,7 +62,7 @@ const router = createBrowserRouter([
       {
         path: "/videos",
         element: <PrivateRoute><Video /></PrivateRoute>,
-      }
+      },
     ]
   }
 ]);

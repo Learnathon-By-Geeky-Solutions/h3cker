@@ -5,7 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 from firebase_admin import auth as firebase_auth
 from firebase_admin import firestore
-from django.db.models import Count
+from django.db.models import Count, Sum, Avg
 
 from .models import User, Video, CompanyProfile, ViewerProfile
 from .permissions import IsAdmin
@@ -14,10 +14,9 @@ from .serializers import UserSerializer, AdminActionSerializer, VideoSerializer,
 db = firestore.client()
 
 class UserSearchView(APIView):
-    """
-    API endpoint to search for users by email.
-    Only accessible by admin users.
-    """
+
+    #API endpoint to search for users by email.Only accessible by admin users.
+   
     permission_classes = [IsAuthenticated, IsAdmin]
     
     def get(self, request):
@@ -105,9 +104,8 @@ class VideoManagementView(APIView):
             return Response(serializer.data)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
+    #admin dlt functionality
     def delete(self, request, video_id):
-        # Admin-only delete video function
         video = get_object_or_404(Video, id=video_id)
         video.delete()
         return Response({"message": "Video successfully deleted"}, status=status.HTTP_204_NO_CONTENT)
@@ -116,24 +114,21 @@ class VideoStatsView(APIView):
     permission_classes = [IsAuthenticated, IsAdmin]
     
     def get(self, request):
-        # Count videos by visibility
         total_videos = Video.objects.count()
         public_videos = Video.objects.filter(visibility='public').count()
         private_videos = Video.objects.filter(visibility='private').count()
         unlisted_videos = Video.objects.filter(visibility='unlisted').count()
-        
-        # Count videos by category
+    
         categories = Video.objects.exclude(category='').values('category').annotate(count=Count('id'))
         
-        # Get most viewed videos
+
         most_viewed = Video.objects.order_by('-views')[:5]
         most_viewed_serializer = VideoFeedSerializer(most_viewed, many=True)
         
-        # Get most liked videos
+  
         most_liked = Video.objects.order_by('-likes')[:5]
         most_liked_serializer = VideoFeedSerializer(most_liked, many=True)
-        
-        # Get recent videos
+
         recent_videos = Video.objects.order_by('-upload_date')[:5]
         recent_serializer = VideoFeedSerializer(recent_videos, many=True)
         
@@ -148,4 +143,62 @@ class VideoStatsView(APIView):
             'most_viewed': most_viewed_serializer.data,
             'most_liked': most_liked_serializer.data,
             'recent': recent_serializer.data
+        })
+
+class EvaluationStatsView(APIView):
+    #API endpoint for admin to view evaluation form statistics.
+    permission_classes = [IsAuthenticated, IsAdmin]
+    
+    def get(self, request):
+        from .models import EvaluationForm, EvaluationResponse, EvaluationQuestion
+        from django.db.models import Count, Avg
+
+        total_forms = EvaluationForm.objects.count()
+        total_questions = EvaluationQuestion.objects.count()
+        total_responses = EvaluationResponse.objects.count()
+ 
+        popular_forms = EvaluationForm.objects.annotate(
+            response_count=Count('responses')
+        ).order_by('-response_count')[:5]
+        
+        popular_forms_data = []
+        for form in popular_forms:
+            popular_forms_data.append({
+                'id': form.id,
+                'title': form.title,
+                'video_title': form.video.title,
+                'response_count': form.response_count,
+                'video_id': form.video.id
+            })
+ 
+        question_types = EvaluationQuestion.objects.values('question_type').annotate(
+            count=Count('id')
+        )
+        
+
+        recent_responses = EvaluationResponse.objects.order_by('-submitted_at')[:10]
+        recent_response_data = []
+        
+        for response in recent_responses:
+            recent_response_data.append({
+                'id': response.id,
+                'form_title': response.form.title,
+                'video_title': response.form.video.title,
+                'user_email': response.user.email,
+                'submitted_at': response.submitted_at,
+                'points_awarded': response.points_awarded
+            })
+
+        total_points = EvaluationResponse.objects.aggregate(
+            total=Sum('points_awarded')
+        )['total'] or 0
+        
+        return Response({
+            'total_forms': total_forms,
+            'total_questions': total_questions,
+            'total_responses': total_responses,
+            'popular_forms': popular_forms_data,
+            'question_types': question_types,
+            'recent_responses': recent_response_data,
+            'total_points_awarded': total_points
         })

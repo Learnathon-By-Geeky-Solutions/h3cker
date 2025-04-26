@@ -21,12 +21,14 @@ import {
   Edit,
   Trash,
   Eye,
-  EyeOff
+  EyeOff,
+  Award
 } from 'lucide-react';
 import VideoService from '../../../utils/VideoService';
 import VideoPlayer from '../../Shared/VideoPlayer/VideoPlayer';
 import { LoadingState, ErrorState } from '../../Shared/VideoLoadingStates/VideoLoadingStates';
 import { AuthContext } from '../../../contexts/AuthProvider/AuthProvider';
+import EvaluationForm from '../../Pages/Dashboard/EvaluationForm';
 
 // Modern primary action button component
 const PrimaryButton = ({ icon, label, onClick, disabled = false, count, active = false }) => {
@@ -444,6 +446,8 @@ const VideoDetail = () => {
   const [viewRecorded, setViewRecorded] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [evaluationModalOpen, setEvaluationModalOpen] = useState(false);
+  const [evaluationCompleted, setEvaluationCompleted] = useState(false);
 
   useEffect(() => {
     const fetchVideoDetails = async () => {
@@ -552,6 +556,16 @@ const VideoDetail = () => {
 
   const handleVideoEnded = () => {
     console.log('Video playback ended');
+    // Show evaluation form automatically when video ends for regular users, not admins
+    if (user && user.role !== 'admin' && !evaluationCompleted) {
+      setEvaluationModalOpen(true);
+    }
+  };
+
+  const handleEvaluationComplete = (response) => {
+    setEvaluationCompleted(true);
+    setEvaluationModalOpen(false);
+    // You can add success notification or update UI to show user earned points here
   };
 
   // Admin functions
@@ -701,6 +715,23 @@ const VideoDetail = () => {
             Cancel
           </FlowbiteButton>
         </Modal.Footer>
+      </Modal>
+
+      {/* Evaluation Form Modal */}
+      <Modal show={evaluationModalOpen} onClose={() => setEvaluationModalOpen(false)} size="lg">
+        <Modal.Header className="bg-gray-800 text-white border-b border-gray-700">
+          <div className="flex items-center">
+            <Award className="text-yellow-400 mr-2" size={20} />
+            Evaluate Video & Earn Points
+          </div>
+        </Modal.Header>
+        <Modal.Body className="bg-gray-800 text-white">
+          <EvaluationForm 
+            videoId={id} 
+            onComplete={handleEvaluationComplete} 
+            onBack={() => setEvaluationModalOpen(false)}
+          />
+        </Modal.Body>
       </Modal>
     </div>
   );

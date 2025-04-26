@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, Button, Alert } from 'flowbite-react';
 import { Heart, AlertCircle } from 'lucide-react';
 import VideoService from '../../../utils/VideoService';
-import { LoadingState, ErrorState, EmptyState } from '../../Shared/VideoLoadingStates/VideoLoadingStates';
+import { LoadingState, EmptyState } from '../../Shared/VideoLoadingStates/VideoLoadingStates';
 import AdRow from '../../Shared/AdRow/AdRow';
 
 const UserLikedVideos = () => {

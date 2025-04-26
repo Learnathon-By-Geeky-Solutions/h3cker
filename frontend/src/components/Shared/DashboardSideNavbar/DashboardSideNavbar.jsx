@@ -9,26 +9,20 @@ import {
   Home, 
   Upload, 
   BarChart2, 
-  User, 
   LogOut, 
   Menu, 
   X, 
   Video,
-  Users,
-  Settings
 } from 'lucide-react';
 
-// Default avatar fallback
 const DEFAULT_AVATAR = "https://flowbite.com/docs/images/people/profile-picture-5.jpg";
 
-// Navigation items data generator function
 const getNavItems = (role) => {
   const baseItems = [
     { path: '/dashboard', name: 'Dashboard', icon: <Home size={20} /> },
-    { path: '/profile', name: 'Profile', icon: <User size={20} /> },
   ];
   
-  // Items visible to companies and admins
+
   if (role === 'admin' || role === 'company') {
     baseItems.push(
       { path: '/dashboard/upload', name: 'Upload Video', icon: <Upload size={20} /> },
@@ -36,26 +30,15 @@ const getNavItems = (role) => {
       { path: '/dashboard/analytics', name: 'Analytics', icon: <BarChart2 size={20} /> }
     );
   }
-  
-  // Items only visible to regular users
+
   if (role === 'user') {
     baseItems.push(
       { path: '/dashboard/history', name: 'View History', icon: <Video size={20} /> }
     );
-  }
-  
-  // Admin-only items
-  if (role === 'admin') {
-    baseItems.push(
-      { path: '/dashboard/admin/users', name: 'Manage Users', icon: <Users size={20} /> },
-      { path: '/dashboard/admin/settings', name: 'Settings', icon: <Settings size={20} /> }
-    );
-  }
-  
+  } 
   return baseItems;
 };
 
-// Common classes for navigation items
 const navItemBaseClasses = "flex items-center rounded-lg p-2 text-gray-300 hover:bg-gray-700 group transition-all duration-200";
 const navItemActiveClasses = "bg-blue-600 text-white hover:bg-blue-700";
 
@@ -74,7 +57,7 @@ const DashboardSideNavbar = ({ isOpen, setIsOpen }) => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Handle logout
+
   const handleLogout = async () => {
     try {
       await logOut();
@@ -171,7 +154,6 @@ const DashboardSideNavbar = ({ isOpen, setIsOpen }) => {
     );
   };
 
-  //toggle button
   const renderToggleButton = () => {
     if (isMobile) return null;
     
@@ -208,15 +190,13 @@ const DashboardSideNavbar = ({ isOpen, setIsOpen }) => {
             {renderToggleButton()}
           </div>
 
-          {/* User Profile */}
+  
           {renderUserProfile()}
 
-          {/* Navigation Items */}
+   
           <div className="flex-grow">
             {renderNavItems()}
           </div>
-
-          {/* Logout Button */}
           <div className={`mt-6 ${!isOpen && !isHovering ? 'flex justify-center' : 'px-2'}`}>
             <button
               onClick={handleLogout}
@@ -241,7 +221,6 @@ const DashboardSideNavbar = ({ isOpen, setIsOpen }) => {
         </button>
       )}
 
-      {/* Backdrop overlay for mobile menu */}
       {isMobile && isOpen && (
         <button 
           className="fixed inset-0 bg-gray-900 bg-opacity-50 z-20"
