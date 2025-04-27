@@ -211,6 +211,112 @@ const VideoService = {
     }
   },
 
+  // Admin-specific methods
+  async adminGetAllVideos() {
+    try {
+      console.log('Fetching all videos (admin)');
+      const response = await ApiService.get('admin/videos/');
+      console.log(`Fetched ${response?.length || 0} videos (admin).`);
+      return Array.isArray(response) ? response : [];
+    } catch (error) {
+      console.error('Error fetching admin videos:', error);
+      throw error;
+    }
+  },
+  
+  async adminDeleteVideo(videoId) {
+    if (!videoId) {
+      throw new Error("Video ID is required for deletion");
+    }
+    
+    try {
+      console.log(`Deleting video ID: ${videoId} (admin)`);
+      return await ApiService.delete(`admin/videos/${videoId}/`);
+    } catch (error) {
+      console.error(`Error deleting video ID ${videoId}:`, error);
+      throw error;
+    }
+  },
+  
+  async adminUpdateVideoVisibility(videoId, visibility) {
+    if (!videoId || !visibility) {
+      throw new Error("Video ID and visibility are required");
+    }
+    
+    if (!['public', 'private', 'unlisted'].includes(visibility)) {
+      throw new Error("Invalid visibility option");
+    }
+    
+    try {
+      console.log(`Updating visibility for video ID: ${videoId} to ${visibility} (admin)`);
+      return await ApiService.patch(`admin/videos/${videoId}/`, {
+        visibility: visibility
+      });
+    } catch (error) {
+      console.error(`Error updating video visibility for ID ${videoId}:`, error);
+      throw error;
+    }
+  },
+
+  async adminEditVideo(videoId, videoData) {
+    if (!videoId) {
+      throw new Error("Video ID is required for updating");
+    }
+    
+    try {
+      console.log(`Updating video ID: ${videoId} (admin)`);
+      return await ApiService.patch(`admin/videos/${videoId}/`, videoData);
+    } catch (error) {
+      console.error(`Error updating video ID ${videoId}:`, error);
+      throw error;
+    }
+  },
+
+  async adminGetVideoStats() {
+    try {
+      console.log('Fetching video statistics (admin)');
+      return await ApiService.get('admin/video-stats/');
+    } catch (error) {
+      console.error('Error fetching video statistics:', error);
+      throw error;
+    }
+  },
+  
+  async adminSearchUser(email) {
+    if (!email) {
+      throw new Error("Email is required for user search");
+    }
+    
+    try {
+      console.log(`Searching for user with email: ${email} (admin)`);
+      return await ApiService.get(`admin/users/search/?email=${encodeURIComponent(email)}`);
+    } catch (error) {
+      console.error(`Error searching for user with email ${email}:`, error);
+      throw error;
+    }
+  },
+  
+  async adminPromoteToAdmin(userId, adminPassword) {
+    if (!userId) {
+      throw new Error("User ID is required");
+    }
+    
+    if (!adminPassword) {
+      throw new Error("Admin password is required for security verification");
+    }
+    
+    try {
+      console.log(`Promoting user ID: ${userId} to admin (admin)`);
+      return await ApiService.post('admin/users/promote/', {
+        user_id: userId,
+        admin_password: adminPassword
+      });
+    } catch (error) {
+      console.error(`Error promoting user ID ${userId} to admin:`, error);
+      throw error;
+    }
+  },
+
   async uploadFileToBlob(sasUrl, file, progressCallback = null) {
     return new Promise((resolve, reject) => {
       if (!sasUrl || !file) {

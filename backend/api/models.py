@@ -88,6 +88,9 @@ class ViewerProfile(models.Model):
     education_level = models.CharField(max_length=100, blank=True)
     occupation = models.CharField(max_length=100, blank=True)
     content_preferences = models.JSONField(default=list, blank=True)
+    points = models.PositiveIntegerField(default=0)
+    points_earned = models.PositiveIntegerField(default=0)
+    points_redeemed = models.PositiveIntegerField(default=0)
 
     class Meta:
         db_table = 'viewer_profiles'
@@ -96,6 +99,9 @@ class ViewerProfile(models.Model):
 
     def __str__(self):
         return f"Profile for {self.user.email}"
+        
+    def calculate_points_value(self):
+        return self.points * 10  # 10 BDT per point
 
 class Video(models.Model):
     VISIBILITY_CHOICES = (
@@ -120,7 +126,7 @@ class Video(models.Model):
     likes = models.PositiveIntegerField(default=0, validators=[MinValueValidator(0)])
     duration = models.CharField(max_length=50, blank=True, default="0:00")
     
-    # New fields for view limiting and expiry
+    # Fields for view limiting and expiry
     view_limit = models.PositiveIntegerField(null=True, blank=True)
     auto_private_after = models.DateTimeField(null=True, blank=True)
 
@@ -198,3 +204,52 @@ class WebcamRecording(models.Model):
     
     def __str__(self):
         return f"Webcam Recording for Video {self.video.id} by {self.recorder.email}"
+
+class EvaluationForm(models.Model):
+    video = models.OneToOneField(Video, on_delete=models.CASCADE, related_name='evaluation_form')
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='created_forms')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'evaluation_forms'
+        
+    def __str__(self):
+        return f"Form for {self.video.title}"
+
+class EvaluationQuestion(models.Model):
+    QUESTION_TYPES = (
+        ('rating', 'Rating'),
+        ('text', 'Text'),
+        ('multiple_choice', 'Multiple Choice'),
+    )
+    
+    form = models.ForeignKey(EvaluationForm, on_delete=models.CASCADE, related_name='questions')
+    question_text = models.CharField(max_length=500)
+    question_type = models.CharField(max_length=20, choices=QUESTION_TYPES, default='rating')
+    options = models.JSONField(null=True, blank=True)  # For multiple choice questions
+    required = models.BooleanField(default=True)
+    order = models.PositiveIntegerField(default=0)
+    
+    class Meta:
+        db_table = 'evaluation_questions'
+        ordering = ['order']
+        
+    def __str__(self):
+        return self.question_text
+
+class EvaluationResponse(models.Model):
+    form = models.ForeignKey(EvaluationForm, on_delete=models.CASCADE, related_name='responses')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='form_responses')
+    answers = models.JSONField()
+    submitted_at = models.DateTimeField(auto_now_add=True)
+    points_awarded = models.PositiveIntegerField(default=10)
+    
+    class Meta:
+        db_table = 'evaluation_responses'
+        unique_together = ('form', 'user')
+        
+    def __str__(self):
+        return f"Response from {self.user.email} for {self.form.video.title}"
