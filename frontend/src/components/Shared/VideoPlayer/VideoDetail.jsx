@@ -91,7 +91,7 @@ const SecondaryButton = ({ icon, label, onClick, disabled = false }) => {
   );
 };
 
-const VideoHeader = ({ video, handleBack, handleLike, handleShare, liked }) => {
+const VideoHeader = ({ video, handleBack, handleLike, handleShare, handleEvaluate, liked, hasEvaluationForm, hasSubmittedEvaluation }) => {
   const formattedDate = video.upload_date 
     ? new Date(video.upload_date).toLocaleDateString('en-US', {
         year: 'numeric',
@@ -147,6 +147,14 @@ const VideoHeader = ({ video, handleBack, handleLike, handleShare, liked }) => {
             label="Share"
             onClick={handleShare}
           />
+
+          {hasEvaluationForm && !hasSubmittedEvaluation && (
+            <SecondaryButton
+              icon={Award}
+              label="Evaluate & Earn Points"
+              onClick={handleEvaluate}
+            />
+          )}
         </div>
       </div>
     </>
@@ -366,9 +374,6 @@ const ShareModal = ({ isOpen, onClose, videoId, videoTitle }) => {
           </>
         )}
       </Modal.Body>
-      <Modal.Footer className="bg-gray-800 border-t border-gray-700">
-        <SecondaryButton icon={ArrowLeft} label="Close" onClick={onClose} />
-      </Modal.Footer>
     </Modal>
   );
 };
@@ -448,6 +453,9 @@ const VideoDetail = () => {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [evaluationModalOpen, setEvaluationModalOpen] = useState(false);
   const [evaluationCompleted, setEvaluationCompleted] = useState(false);
+  const [hasEvaluationForm, setHasEvaluationForm] = useState(false);
+  const [hasSubmittedEvaluation, setHasSubmittedEvaluation] = useState(false);
+  const [showEvaluationNotification, setShowEvaluationNotification] = useState(false);
 
   useEffect(() => {
     const fetchVideoDetails = async () => {
@@ -459,6 +467,16 @@ const VideoDetail = () => {
         const videoData = await VideoService.getVideoDetails(id);
         setVideo(videoData);
         setLiked(!!videoData.is_liked);
+        
+        // Check if video has evaluation form and if user has submitted it
+        if (videoData.has_evaluation_form) {
+          setHasEvaluationForm(true);
+        }
+        
+        if (videoData.has_submitted_evaluation) {
+          setHasSubmittedEvaluation(true);
+          setEvaluationCompleted(true);
+        }
        
         await fetchRelatedVideos(videoData);
         
@@ -554,18 +572,38 @@ const VideoDetail = () => {
     setShareModalOpen(true);
   };
 
+  const handleEvaluate = () => {
+    setEvaluationModalOpen(true);
+  };
+
   const handleVideoEnded = () => {
     console.log('Video playback ended');
-    // Show evaluation form automatically when video ends for regular users, not admins
-    if (user && user.role !== 'admin' && !evaluationCompleted) {
+    // Only show evaluation form automatically if:
+    // 1. User is not an admin
+    // 2. Video has an evaluation form
+    // 3. User hasn't already submitted an evaluation
+    // 4. User is logged in
+    if (user && 
+        user.role !== 'admin' && 
+        hasEvaluationForm && 
+        !hasSubmittedEvaluation && 
+        !evaluationCompleted) {
       setEvaluationModalOpen(true);
     }
   };
 
   const handleEvaluationComplete = (response) => {
     setEvaluationCompleted(true);
+    setHasSubmittedEvaluation(true);
     setEvaluationModalOpen(false);
-    // You can add success notification or update UI to show user earned points here
+    
+    // Show notification about points awarded
+    if (response?.points_awarded) {
+      setShowEvaluationNotification(true);
+      setTimeout(() => {
+        setShowEvaluationNotification(false);
+      }, 5000); // Hide after 5 seconds
+    }
   };
 
   // Admin functions
@@ -647,6 +685,16 @@ const VideoDetail = () => {
 
   return (
     <div className="max-w-6xl mx-auto px-4">
+      {showEvaluationNotification && (
+        <div className="fixed top-5 right-5 bg-green-600 text-white p-4 rounded-lg shadow-lg z-50 flex items-center">
+          <Award className="mr-2" />
+          <div>
+            <p className="font-bold">Evaluation Submitted!</p>
+            <p>You've earned 10 points (worth 100 BDT)</p>
+          </div>
+        </div>
+      )}
+      
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
           <motion.div 
@@ -658,6 +706,7 @@ const VideoDetail = () => {
               videoUrl={video.video_url}
               thumbnailUrl={video.thumbnail_url}
               title={video.title}
+              videoId={id}
               onPlay={recordView}
               onEnded={handleVideoEnded}
             />
@@ -676,7 +725,10 @@ const VideoDetail = () => {
               handleBack={handleBack} 
               handleLike={handleLike}
               handleShare={handleShare}
-              liked={liked} 
+              handleEvaluate={handleEvaluate}
+              liked={liked}
+              hasEvaluationForm={hasEvaluationForm}
+              hasSubmittedEvaluation={hasSubmittedEvaluation}
             />
             
             <hr className="border-gray-700 my-4" />
@@ -765,7 +817,10 @@ VideoHeader.propTypes = {
   handleBack: PropTypes.func.isRequired,
   handleLike: PropTypes.func.isRequired,
   handleShare: PropTypes.func.isRequired,
-  liked: PropTypes.bool.isRequired
+  handleEvaluate: PropTypes.func.isRequired,
+  liked: PropTypes.bool.isRequired,
+  hasEvaluationForm: PropTypes.bool,
+  hasSubmittedEvaluation: PropTypes.bool
 };
 
 RelatedVideoCard.propTypes = {

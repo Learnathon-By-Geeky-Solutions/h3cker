@@ -2,11 +2,11 @@ import React, { useEffect, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import { Button, Spinner } from 'flowbite-react';
 import { Play, Pause, Volume2, VolumeX, Maximize } from 'lucide-react';
-
+import WebcamRecorder from './WebcamRecorder';
 
 const BUFFER_AHEAD = 30; 
 const BUFFER_BEHIND = 10; 
-const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded, onPlay }) => {
+const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded, onPlay, videoId }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -17,10 +17,13 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded,
   const [showControls, setShowControls] = useState(true);
   const [playbackStarted, setPlaybackStarted] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showRecordingPausedIndicator, setShowRecordingPausedIndicator] = useState(false);
+  const [webcamPermissionState, setWebcamPermissionState] = useState(null);
 
   const videoRef = useRef(null);
   const videoContainerRef = useRef(null);
   const controlsTimerRef = useRef(null);
+  const webcamRecorderRef = useRef(null);
   
   const bufferCache = useRef({});
   const segmentsLoaded = useRef(new Set());
@@ -36,7 +39,6 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded,
     const videoElement = videoRef.current;
 
     const manageBufferCache = () => {
-   
       const segmentsToRemove = [];
       segmentsLoaded.current.forEach(segKey => {
         const [, end] = segKey.split('-').map(Number);
@@ -54,7 +56,6 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded,
 
     const handleProgress = () => {
       if (videoElement.buffered.length > 0) {
-     
         for (let i = 0; i < videoElement.buffered.length; i++) {
           const start = videoElement.buffered.start(i);
           const end = videoElement.buffered.end(i);
@@ -68,7 +69,6 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded,
         }
       }
       
-   
       const now = Date.now();
       if (now - lastBufferCheck.current > 2000) {
         lastBufferCheck.current = now;
@@ -99,6 +99,9 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded,
     const handleEnded = () => {
       setIsPlaying(false);
       if (onEnded) onEnded();
+      
+      // Handle webcam recording completion when video ends
+      handleVideoComplete();
     };
 
     const handlePlay = () => {
@@ -107,10 +110,18 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded,
         setPlaybackStarted(true);
         onPlay();
       }
+      
+      // Hide paused indicator when video plays
+      setShowRecordingPausedIndicator(false);
     };
 
     const handlePause = () => {
       setIsPlaying(false);
+      
+      // Show paused indicator when video is paused
+      if (webcamPermissionState === 'granted') {
+        setShowRecordingPausedIndicator(true);
+      }
     };
 
     const handleVolumeChange = () => {
@@ -118,7 +129,6 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded,
       setIsMuted(videoElement.muted);
     };
     
-   
     const handleFullscreenChange = () => {
       setIsFullscreen(Boolean(document.fullscreenElement));
     };
@@ -140,6 +150,18 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded,
 
     videoContainerRef.current.addEventListener('mousemove', handleMouseMove);
 
+    // Handle page unload to ensure recording is saved
+    const handleBeforeUnload = (e) => {
+      if (webcamPermissionState === 'granted' && isPlaying) {
+        // Notify the user that navigating away might lose their recording
+        e.preventDefault();
+        e.returnValue = 'Recording in progress - are you sure you want to leave?';
+        return e.returnValue;
+      }
+    };
+    
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
     return () => {
       videoElement.removeEventListener('canplay', handleCanPlay);
       videoElement.removeEventListener('error', handleError);
@@ -150,6 +172,7 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded,
       videoElement.removeEventListener('volumechange', handleVolumeChange);
       videoElement.removeEventListener('progress', handleProgress);
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
       
       if (videoContainerRef.current) {
         videoContainerRef.current.removeEventListener('mousemove', handleMouseMove);
@@ -159,13 +182,12 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded,
         clearTimeout(controlsTimerRef.current);
       }
       
-   
       segmentsLoaded.current.clear();
       Object.keys(bufferCache.current).forEach(key => {
         delete bufferCache.current[key];
       });
     };
-  }, [videoUrl, autoPlay, onEnded, onPlay, playbackStarted, currentTime]);
+  }, [videoUrl, autoPlay, onEnded, onPlay, playbackStarted, currentTime, webcamPermissionState, isPlaying]);
 
   useEffect(() => {
     setIsLoading(true);
@@ -175,14 +197,12 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded,
     setIsPlaying(false);
     setPlaybackStarted(false);
     
- 
     segmentsLoaded.current.clear();
     Object.keys(bufferCache.current).forEach(key => {
       delete bufferCache.current[key];
     });
   }, [videoUrl]);
 
- 
   const resetControlsTimer = () => {
     if (controlsTimerRef.current) {
       clearTimeout(controlsTimerRef.current);
@@ -195,7 +215,6 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded,
     }
   };
 
-
   const togglePlay = () => {
     if (!videoRef.current) return;
     
@@ -207,7 +226,6 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded,
       });
     }
   };
-
 
   const toggleMute = () => {
     if (!videoRef.current) return;
@@ -241,6 +259,30 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded,
     const seconds = Math.floor(timeInSeconds % 60);
     return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
   };
+  
+  // Handle webcam permission change
+  const handleWebcamPermissionChange = (state) => {
+    setWebcamPermissionState(state);
+  };
+  
+  // Handle recording error
+  const handleRecordingError = (errorMessage) => {
+    console.error('Recording error:', errorMessage);
+    // We don't need to stop video playback on recording error,
+    // just log the error and allow the video to continue playing
+  };
+  
+  // Handle video complete (end of playback or user navigating away)
+  const handleVideoComplete = async () => {
+    try {
+      if (webcamRecorderRef.current && webcamRecorderRef.current.stopAndUploadRecording) {
+        // This will be called from the WebcamRecorder's ref
+        await webcamRecorderRef.current.stopAndUploadRecording();
+      }
+    } catch (error) {
+      console.error('Error processing recording on video completion:', error);
+    }
+  };
 
   return (
     <div 
@@ -254,7 +296,6 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded,
           <Spinner size="xl" color="info" />
         </div>
       )}
-
 
       {error && (
         <div className="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-70 z-10">
@@ -277,7 +318,6 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded,
         </div>
       )}
 
-
       <video
         ref={videoRef}
         className="w-full h-full"
@@ -291,7 +331,25 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded,
         <track kind="captions" src="" label="English" />
         Your browser does not support the video tag.
       </video>
-
+      
+      {/* Webcam recorder component */}
+      {videoId && (
+        <WebcamRecorder
+          ref={webcamRecorderRef}
+          isVideoPlaying={isPlaying}
+          videoId={videoId}
+          onPermissionChange={handleWebcamPermissionChange}
+          onError={handleRecordingError}
+        />
+      )}
+      
+      {/* Recording paused indicator */}
+      {showRecordingPausedIndicator && (
+        <div className="absolute top-4 left-4 z-20 flex items-center bg-black/50 backdrop-blur-sm px-3 py-1.5 rounded-full">
+          <div className="h-3 w-3 bg-yellow-500 rounded-full mr-2" />
+          <span className="text-white text-sm font-medium">Recording paused</span>
+        </div>
+      )}
 
       <button 
         className="absolute inset-0 w-full h-full bg-transparent border-0 cursor-default focus:outline-none"
@@ -301,7 +359,6 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded,
         tabIndex="0"
       />
 
- 
       <div
         className={`absolute inset-0 transition-opacity duration-300 bg-gradient-to-t from-black/70 to-transparent flex flex-col justify-end ${showControls || !isPlaying ? 'opacity-100' : 'opacity-0'}`}
         onClick={(e) => e.stopPropagation()}
@@ -315,7 +372,6 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded,
         aria-label="Video controls"
         tabIndex="-1" 
       >
-    
         <div className="mx-4 my-2 h-1 bg-gray-600 rounded-full overflow-hidden">
           <div 
             className="h-full bg-blue-500" 
@@ -373,7 +429,6 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded,
             </div>
           </div>
           
-    
           <div>
             <button 
               onClick={toggleFullscreen}
@@ -407,7 +462,8 @@ VideoPlayer.propTypes = {
   title: PropTypes.string,
   autoPlay: PropTypes.bool,
   onEnded: PropTypes.func,
-  onPlay: PropTypes.func
+  onPlay: PropTypes.func,
+  videoId: PropTypes.oneOfType([PropTypes.string, PropTypes.number])
 };
 
 export default VideoPlayer;
