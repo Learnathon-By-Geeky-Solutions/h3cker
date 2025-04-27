@@ -367,9 +367,9 @@ const UploadVideo = () => {
     return { valid: true, message: '' };
   };
 
-  // New function to ensure stable progress updates
+
   const updateProgressWithDelay = (value, message = null) => {
-    // Ensure progress only increases, never decreases
+
     setUploadProgress(prevProgress => Math.max(prevProgress, value));
     
     if (message) {
@@ -386,7 +386,7 @@ const UploadVideo = () => {
       return;
     }
 
-    // Reset progress tracking
+
     setUploadStatus('uploading');
     setUploadProgress(0);
     setUploadStage('preparing');
@@ -402,7 +402,7 @@ const UploadVideo = () => {
     }
 
     try {
-      // Upload video first (70% of total progress)
+
       setUploadStage('video');
       setStatusMessage(`Uploading video: ${videoFile.name}...`);
       updateProgressWithDelay(1, 'Starting video upload...');
@@ -412,10 +412,8 @@ const UploadVideo = () => {
         updateProgressWithDelay(actualProgress, `Uploading video: ${Math.min(Math.round(progress * 100), 100)}%`);
       });
 
-      // Ensure we reach exactly 70% when video upload is complete
       updateProgressWithDelay(70, 'Video upload complete. Preparing thumbnail...');
       
-      // Upload thumbnail next (remaining 30% of progress)
       setUploadStage('thumbnail');
       const thumbnailToUpload = processedThumbnailFile || thumbnailFile;
       setStatusMessage(`Uploading thumbnail: ${thumbnailToUpload.name}...`);
@@ -425,20 +423,20 @@ const UploadVideo = () => {
         updateProgressWithDelay(actualProgress, `Uploading thumbnail: ${Math.min(Math.round(progress * 100), 100)}%`);
       });
 
-      // Ensure we reach exactly 100% when all uploads complete
+   
       setUploadProgress(100);
       setUploadStage('complete');
       setUploadStatus('success');
       setStatusMessage('Video and thumbnail uploaded successfully!');
-      
-      // Short delay before moving to success step
+
       setTimeout(() => {
         setCurrentStep(3);
       }, 500);
     } catch (error) {
       console.error('File upload failed:', error);
       setUploadStatus('error');
-      setStatusMessage(`Upload failed: ${error.message || 'An unknown error occurred during upload.'}`);
+      const errorMessage = error.message || 'An unknown error occurred during upload.';
+      setStatusMessage(`Upload failed: ${sanitizeText(errorMessage)}`);
     }
   };
 
@@ -768,6 +766,16 @@ const UploadVideo = () => {
     </div>
   );
 
+  // Create a sanitize function to prevent XSS attacks
+  const sanitizeText = (text) => {
+    // Create a temporary div element
+    const tempDiv = document.createElement('div');
+    // Set the text as textContent to ensure it's treated as plain text
+    tempDiv.textContent = text;
+    // Return the sanitized text
+    return tempDiv.textContent;
+  };
+
   const renderSuccessMessage = () => (
     <div className="py-8 text-center">
       <div className="w-16 h-16 rounded-full bg-green-500 text-white mx-auto flex items-center justify-center mb-5 ring-4 ring-green-500/30">
@@ -777,7 +785,7 @@ const UploadVideo = () => {
         Upload Complete!
       </h3>
       <p className="text-gray-300 max-w-md mx-auto mb-8">
-        Your video <span className="font-medium text-white">"{formData.title}"</span> has been successfully uploaded. It may take a few moments to process before it's available.
+        Your video <span className="font-medium text-white">{sanitizeText(`"${formData.title}"`)}</span> has been successfully uploaded. It may take a few moments to process before it's available.
       </p>
       <div className="flex flex-col sm:flex-row justify-center items-center gap-4">
         <Button onClick={handleReset} color="gray" outline>

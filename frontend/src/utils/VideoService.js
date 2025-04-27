@@ -1,7 +1,14 @@
 import ApiService from './ApiService';
 
-const VideoService = {
-  async getVideoFeed() {
+/**
+ * Service for managing video-related operations
+ */
+class VideoService {
+  /**
+   * Fetch public videos for the feed
+   * @returns {Array} Array of videos
+   */
+  static async getVideoFeed() {
     try {
       console.log('Fetching public video feed...');
       const response = await ApiService.get('video-feed/');
@@ -12,9 +19,13 @@ const VideoService = {
       console.error('Error fetching video feed:', error);
       return [];
     }
-  },
+  }
 
-  async testBackendConnection() {
+  /**
+   * Test the backend connection
+   * @returns {Object} Connection test results
+   */
+  static async testBackendConnection() {
     try {
       const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
       const testUrl = `${apiBaseUrl}/video-feed/`;
@@ -41,59 +52,114 @@ const VideoService = {
         error: error.message
       };
     }
-  },
+  }
 
-  async getVideoDetails(videoId) {
+  /**
+   * Get detailed information about a specific video
+   * @param {string|number} videoId - The ID of the video
+   * @returns {Object} Video details
+   */
+  static async getVideoDetails(videoId) {
     if (!videoId) {
       console.error("getVideoDetails requires a videoId.");
       throw new Error("Video ID is required.");
     }
     try {
-      console.log(`Fetching details for video ID: ${videoId}`);
+
+      const safeVideoId = String(videoId).replace(/[^\w-]/g, '');
+      console.log(`Fetching details for video ID: ${safeVideoId}`);
       const response = await ApiService.get(`video/${videoId}/`);
-      console.log(`Fetched details for video ID: ${videoId}`, response);
+      console.log(`Fetched details for video ID: ${safeVideoId}`, response);
       return response;
     } catch (error) {
-      console.error(`Error fetching details for video ID ${videoId}:`, error);
+      const safeVideoId = String(videoId).replace(/[^\w-]/g, '');
+      console.error(`Error fetching details for video ID ${safeVideoId}:`, error);
       throw error;
     }
-  },
+  }
 
-  async getMyVideos(userEmail) {
+  /**
+   * Search for videos by filename
+   * @param {string} filename - The filename to search for
+   * @returns {Array} Matching videos
+   */
+  static async searchVideoByFilename(filename) {
+    if (!filename) {
+      console.error("searchVideoByFilename requires a filename.");
+      throw new Error("Filename is required.");
+    }
+    
+    try {
+      const safeFilename = String(filename).replace(/[^\w\s.-]/g, '');
+      console.log(`Searching for video with filename: ${safeFilename}`);
+      const response = await ApiService.get(`search/videos/?filename=${encodeURIComponent(filename)}`);
+      console.log(`Found ${response?.length || 0} videos matching filename: ${safeFilename}`);
+      return Array.isArray(response) ? response : [];
+    } catch (error) {
+      const safeFilename = String(filename).replace(/[^\w\s.-]/g, '');
+      console.error(`Error searching for video with filename ${safeFilename}:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Get videos uploaded by a specific user
+   * @param {string} userEmail - Email of the user
+   * @returns {Array} User's videos
+   */
+  static async getMyVideos(userEmail) {
     if (!userEmail) {
       console.error("getMyVideos requires a userEmail.");
       throw new Error("User email is required.");
     }
 
     try {
-      console.log(`Fetching videos for user: ${userEmail}`);
+      // Sanitize userEmail before using in log message
+      const safeEmail = String(userEmail).replace(/[^\w@.-]/g, '*');
+      console.log(`Fetching videos for user: ${safeEmail}`);
       const response = await ApiService.get(`user-videos/${userEmail}/`);
-      console.log(`Fetched ${response?.length || 0} videos for user: ${userEmail}`);
+      console.log(`Fetched ${response?.length || 0} videos for user: ${safeEmail}`);
       return Array.isArray(response) ? response : [];
     } catch (error) {
-      console.error(`Error fetching videos for user ${userEmail}:`, error);
+      // Sanitize userEmail before using in error message
+      const safeEmail = String(userEmail).replace(/[^\w@.-]/g, '*');
+      console.error(`Error fetching videos for user ${safeEmail}:`, error);
       throw error;
     }
-  },
+  }
 
-  async getVideosByCategory(category) {
+  /**
+   * Get videos by category
+   * @param {string} category - Category to filter by
+   * @returns {Array} Videos in the category
+   */
+  static async getVideosByCategory(category) {
     if (!category) {
       console.error("getVideosByCategory requires a category.");
       throw new Error("Category is required.");
     }
 
     try {
-      console.log(`Fetching videos for category: ${category}`);
+      // Sanitize category before using in log message
+      const safeCategory = String(category).replace(/[^\w\s-]/g, '');
+      console.log(`Fetching videos for category: ${safeCategory}`);
       const response = await ApiService.get(`category-videos/${category}/`);
-      console.log(`Fetched ${response?.length || 0} videos for category: ${category}`);
+      console.log(`Fetched ${response?.length || 0} videos for category: ${safeCategory}`);
       return Array.isArray(response) ? response : [];
     } catch (error) {
-      console.error(`Error fetching videos for category ${category}:`, error);
+      // Sanitize category before using in error message
+      const safeCategory = String(category).replace(/[^\w\s-]/g, '');
+      console.error(`Error fetching videos for category ${safeCategory}:`, error);
       return [];
     }
-  },
+  }
 
-  async initiateVideoUpload(videoMetadata) {
+  /**
+   * Initialize a video upload and get upload URLs
+   * @param {Object} videoMetadata - Video metadata
+   * @returns {Object} Upload URLs and video ID
+   */
+  static async initiateVideoUpload(videoMetadata) {
     try {
       const requiredFields = ['title', 'filename'];
       for (const field of requiredFields) {
@@ -132,57 +198,87 @@ const VideoService = {
       }
       throw error;
     }
-  },
+  }
   
-  async recordVideoView(videoId) {
+  /**
+   * Record a view for a video
+   * @param {string|number} videoId - ID of the video
+   * @returns {Object} Updated view count
+   */
+  static async recordVideoView(videoId) {
     if (!videoId) {
       throw new Error("Video ID is required to record a view");
     }
     
     try {
-      console.log(`Recording view for video ID: ${videoId}`);
+      // Sanitize videoId before using in log message
+      const safeVideoId = String(videoId).replace(/[^\w-]/g, '');
+      console.log(`Recording view for video ID: ${safeVideoId}`);
       const response = await ApiService.post(`videos/${videoId}/view/`);
-      console.log(`View recorded for video ID: ${videoId}`, response);
+      console.log(`View recorded for video ID: ${safeVideoId}`, response);
       return response;
     } catch (error) {
-      console.error(`Error recording view for video ID ${videoId}:`, error);
+      // Sanitize videoId before using in error message
+      const safeVideoId = String(videoId).replace(/[^\w-]/g, '');
+      console.error(`Error recording view for video ID ${safeVideoId}:`, error);
       throw error;
     }
-  },
+  }
   
-  async toggleVideoLike(videoId) {
+  /**
+   * Toggle like status for a video
+   * @param {string|number} videoId - ID of the video
+   * @returns {Object} Updated like status
+   */
+  static async toggleVideoLike(videoId) {
     if (!videoId) {
       throw new Error("Video ID is required to toggle like status");
     }
     
     try {
-      console.log(`Toggling like status for video ID: ${videoId}`);
+      // Sanitize videoId before using in log message
+      const safeVideoId = String(videoId).replace(/[^\w-]/g, '');
+      console.log(`Toggling like status for video ID: ${safeVideoId}`);
       const response = await ApiService.post(`videos/${videoId}/like/`);
-      console.log(`Like status updated for video ID: ${videoId}`, response);
+      console.log(`Like status updated for video ID: ${safeVideoId}`, response);
       return response;
     } catch (error) {
-      console.error(`Error toggling like for video ID ${videoId}:`, error);
+      // Sanitize videoId before using in error message
+      const safeVideoId = String(videoId).replace(/[^\w-]/g, '');
+      console.error(`Error toggling like for video ID ${safeVideoId}:`, error);
       throw error;
     }
-  },
+  }
   
-  async createVideoShare(videoId) {
+  /**
+   * Create a shareable link for a video
+   * @param {string|number} videoId - ID of the video
+   * @returns {Object} Share link details
+   */
+  static async createVideoShare(videoId) {
     if (!videoId) {
       throw new Error("Video ID is required to create a share link");
     }
     
     try {
-      console.log(`Creating share link for video ID: ${videoId}`);
+
+      const safeVideoId = String(videoId).replace(/[^\w-]/g, '');
+      console.log(`Creating share link for video ID: ${safeVideoId}`);
       const response = await ApiService.post(`videos/${videoId}/share/`);
-      console.log(`Share link created for video ID: ${videoId}`, response);
+      console.log(`Share link created for video ID: ${safeVideoId}`, response);
       return response;
     } catch (error) {
-      console.error(`Error creating share link for video ID ${videoId}:`, error);
+      const safeVideoId = String(videoId).replace(/[^\w-]/g, '');
+      console.error(`Error creating share link for video ID ${safeVideoId}:`, error);
       throw error;
     }
-  },
+  }
   
-  async getUserHistory() {
+  /**
+   * Get the user's video viewing history
+   * @returns {Array} Viewed videos
+   */
+  static async getUserHistory() {
     try {
       console.log('Fetching user video history...');
       const response = await ApiService.get('user/history/');
@@ -193,25 +289,300 @@ const VideoService = {
       console.error('Error fetching user history:', error);
       return [];
     }
-  },
+  }
   
-  async getSharedVideoByToken(shareToken) {
+  /**
+   * Get videos liked by the user
+   * @returns {Array} Liked videos
+   */
+  static async getUserLikedVideos() {
+    try {
+      console.log('Fetching user liked videos...');
+      const response = await ApiService.get('user/liked/');
+      console.log(`Fetched ${response?.length || 0} liked videos.`);
+      
+      return Array.isArray(response) ? response : [];
+    } catch (error) {
+      console.error('Error fetching user liked videos:', error);
+      return [];
+    }
+  }
+  
+  /**
+   * Get a video by its share token
+   * @param {string} shareToken - Share token for the video
+   * @returns {Object} Video details
+   */
+  static async getSharedVideoByToken(shareToken) {
     if (!shareToken) {
       throw new Error("Share token is required");
     }
     
     try {
-      console.log(`Fetching shared video with token: ${shareToken}`);
+      // Sanitize shareToken before using in log message
+      const safeToken = String(shareToken).replace(/[^\w-]/g, '');
+      console.log(`Fetching shared video with token: ${safeToken}`);
       const response = await ApiService.get(`shared/${shareToken}/`);
       console.log(`Fetched shared video:`, response);
       return response;
     } catch (error) {
-      console.error(`Error fetching shared video with token ${shareToken}:`, error);
+      // Sanitize shareToken before using in error message
+      const safeToken = String(shareToken).replace(/[^\w-]/g, '');
+      console.error(`Error fetching shared video with token ${safeToken}:`, error);
       throw error;
     }
-  },
+  }
 
-  async uploadFileToBlob(sasUrl, file, progressCallback = null) {
+  /**
+   * Get evaluation form for a video
+   * @param {string|number} videoId - ID of the video
+   * @returns {Object} Evaluation form data
+   */
+  static async getEvaluationForm(videoId) {
+    if (!videoId) {
+      throw new Error("Video ID is required to get evaluation form");
+    }
+    
+    try {
+      // Sanitize videoId before using in log message
+      const safeVideoId = String(videoId).replace(/[^\w-]/g, '');
+      console.log(`Fetching evaluation form for video ID: ${safeVideoId}`);
+      const response = await ApiService.get(`evaluation-forms/video/${videoId}`);
+      console.log(`Fetched evaluation form for video ID: ${safeVideoId}`, response);
+      return response;
+    } catch (error) {
+      // Sanitize videoId before using in error message
+      const safeVideoId = String(videoId).replace(/[^\w-]/g, '');
+      console.error(`Error fetching evaluation form for video ID ${safeVideoId}:`, error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Create a new evaluation form for a video
+   * @param {string|number} videoId - ID of the video
+   * @param {Object} formData - Form data
+   * @returns {Object} Created form
+   */
+  static async createEvaluationForm(videoId, formData) {
+    if (!videoId) {
+      throw new Error("Video ID is required to create evaluation form");
+    }
+    
+    try {
+      // Sanitize videoId before using in log message
+      const safeVideoId = String(videoId).replace(/[^\w-]/g, '');
+      console.log(`Creating evaluation form for video ID: ${safeVideoId}`);
+      const response = await ApiService.post(`evaluation-forms/video/${videoId}`, formData);
+      console.log(`Created evaluation form for video ID: ${safeVideoId}`, response);
+      return response;
+    } catch (error) {
+      // Sanitize videoId before using in error message
+      const safeVideoId = String(videoId).replace(/[^\w-]/g, '');
+      console.error(`Error creating evaluation form for video ID ${safeVideoId}:`, error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Update an existing evaluation form
+   * @param {string|number} videoId - ID of the video
+   * @param {Object} formData - Updated form data
+   * @returns {Object} Updated form
+   */
+  static async updateEvaluationForm(videoId, formData) {
+    if (!videoId) {
+      throw new Error("Video ID is required to update evaluation form");
+    }
+    
+    try {
+      // Sanitize videoId before using in log message
+      const safeVideoId = String(videoId).replace(/[^\w-]/g, '');
+      console.log(`Updating evaluation form for video ID: ${safeVideoId}`);
+      const response = await ApiService.put(`evaluation-forms/video/${videoId}`, formData);
+      console.log(`Updated evaluation form for video ID: ${safeVideoId}`, response);
+      return response;
+    } catch (error) {
+      // Sanitize videoId before using in error message
+      const safeVideoId = String(videoId).replace(/[^\w-]/g, '');
+      console.error(`Error updating evaluation form for video ID ${safeVideoId}:`, error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Submit an evaluation response
+   * @param {string|number} formId - ID of the evaluation form
+   * @param {Object} answers - User's answers
+   * @returns {Object} Submission result with points
+   */
+  static async submitEvaluationResponse(formId, answers) {
+    if (!formId) {
+      throw new Error("Form ID is required to submit evaluation");
+    }
+    
+    try {
+      console.log(`Submitting evaluation response for form ID: ${formId}`);
+      const response = await ApiService.post(`evaluation-forms/${formId}/submit/`, { answers });
+      console.log(`Submitted evaluation response:`, response);
+      return response;
+    } catch (error) {
+      console.error(`Error submitting evaluation for form ID ${formId}:`, error);
+      throw error;
+    }
+  }
+
+  // Admin-specific methods
+  
+  /**
+   * Get all videos (admin only)
+   * @returns {Array} All videos
+   */
+  static async adminGetAllVideos() {
+    try {
+      console.log('Fetching all videos (admin)');
+      const response = await ApiService.get('admin/videos/');
+      console.log(`Fetched ${response?.length || 0} videos (admin).`);
+      return Array.isArray(response) ? response : [];
+    } catch (error) {
+      console.error('Error fetching admin videos:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Delete a video (admin only)
+   * @param {string|number} videoId - ID of the video to delete
+   * @returns {Object} Deletion result
+   */
+  static async adminDeleteVideo(videoId) {
+    if (!videoId) {
+      throw new Error("Video ID is required for deletion");
+    }
+    
+    try {
+      console.log(`Deleting video ID: ${videoId} (admin)`);
+      return await ApiService.delete(`admin/videos/${videoId}/`);
+    } catch (error) {
+      console.error(`Error deleting video ID ${videoId}:`, error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Update video visibility (admin only)
+   * @param {string|number} videoId - ID of the video
+   * @param {string} visibility - New visibility setting
+   * @returns {Object} Updated video data
+   */
+  static async adminUpdateVideoVisibility(videoId, visibility) {
+    if (!videoId || !visibility) {
+      throw new Error("Video ID and visibility are required");
+    }
+    
+    if (!['public', 'private', 'unlisted'].includes(visibility)) {
+      throw new Error("Invalid visibility option");
+    }
+    
+    try {
+      console.log(`Updating visibility for video ID: ${videoId} to ${visibility} (admin)`);
+      return await ApiService.patch(`admin/videos/${videoId}/`, {
+        visibility: visibility
+      });
+    } catch (error) {
+      console.error(`Error updating video visibility for ID ${videoId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Edit a video's metadata (admin only)
+   * @param {string|number} videoId - ID of the video
+   * @param {Object} videoData - Updated video data
+   * @returns {Object} Updated video
+   */
+  static async adminEditVideo(videoId, videoData) {
+    if (!videoId) {
+      throw new Error("Video ID is required for updating");
+    }
+    
+    try {
+      console.log(`Updating video ID: ${videoId} (admin)`);
+      return await ApiService.patch(`admin/videos/${videoId}/`, videoData);
+    } catch (error) {
+      console.error(`Error updating video ID ${videoId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get video statistics (admin only)
+   * @returns {Object} Video statistics
+   */
+  static async adminGetVideoStats() {
+    try {
+      console.log('Fetching video statistics (admin)');
+      return await ApiService.get('admin/video-stats/');
+    } catch (error) {
+      console.error('Error fetching video statistics:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Search for a user by email (admin only)
+   * @param {string} email - Email to search for
+   * @returns {Object} User data
+   */
+  static async adminSearchUser(email) {
+    if (!email) {
+      throw new Error("Email is required for user search");
+    }
+    
+    try {
+      console.log(`Searching for user with email: ${email} (admin)`);
+      return await ApiService.get(`admin/users/search/?email=${encodeURIComponent(email)}`);
+    } catch (error) {
+      console.error(`Error searching for user with email ${email}:`, error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Promote a user to admin (admin only)
+   * @param {string|number} userId - ID of the user
+   * @param {string} adminPassword - Admin password for verification
+   * @returns {Object} Promotion result
+   */
+  static async adminPromoteToAdmin(userId, adminPassword) {
+    if (!userId) {
+      throw new Error("User ID is required");
+    }
+    
+    if (!adminPassword) {
+      throw new Error("Admin password is required for security verification");
+    }
+    
+    try {
+      console.log(`Promoting user ID: ${userId} to admin (admin)`);
+      return await ApiService.post('admin/users/promote/', {
+        user_id: userId,
+        admin_password: adminPassword
+      });
+    } catch (error) {
+      console.error(`Error promoting user ID ${userId} to admin:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Upload a file to Azure Blob Storage
+   * @param {string} sasUrl - SAS URL for upload
+   * @param {File} file - File to upload
+   * @param {Function} progressCallback - Progress callback
+   * @returns {Promise} Upload completion promise
+   */
+  static async uploadFileToBlob(sasUrl, file, progressCallback = null) {
     return new Promise((resolve, reject) => {
       if (!sasUrl || !file) {
         reject(new Error('SAS URL and File object are required for blob upload.'));
@@ -274,9 +645,45 @@ const VideoService = {
         reject(error instanceof Error ? error : new Error(error));
       }
     });
-  },
+  }
 
-  optimizeVideoPlayback(videoElement) {
+  /**
+   * Initiate webcam recording upload for a video
+   * @param {string|number} videoId - ID of the video
+   * @param {string} filename - Name of the file
+   * @returns {Object} Upload URLs
+   */
+  static async initiateWebcamUpload(videoId, filename) {
+    if (!videoId || !filename) {
+      throw new Error('Video ID and filename are required to initiate webcam upload');
+    }
+    
+    try {
+      console.log(`Initiating webcam recording upload for video ID: ${videoId}`);
+      const response = await ApiService.post(`videos/${videoId}/webcam-upload/`, {
+        filename: filename
+      });
+      
+      console.log('Backend response for webcam upload:', response);
+      
+      if (!response?.webcam_upload_url) {
+        throw new Error('Failed to get webcam upload URL from the server');
+      }
+      
+      return response;
+      
+    } catch (error) {
+      console.error('Error initiating webcam upload:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Optimize video playback
+   * @param {HTMLVideoElement} videoElement - Video element to optimize
+   * @returns {Object|null} Cleanup object or null
+   */
+  static optimizeVideoPlayback(videoElement) {
     if (!videoElement) return null;
 
     videoElement.preload = "metadata";
@@ -342,9 +749,14 @@ const VideoService = {
         videoElement.removeEventListener('error', handleError);
       }
     };
-  },
+  }
 
-  generateOptimizedThumbnail(videoFile) {
+  /**
+   * Generate an optimized thumbnail from a video file
+   * @param {File} videoFile - Video file to generate thumbnail from
+   * @returns {Promise<Blob>} Thumbnail blob
+   */
+  static generateOptimizedThumbnail(videoFile) {
     return new Promise((resolve, reject) => {
       if (!videoFile?.type?.startsWith('video/')) {
         reject(new Error('Invalid video file'));
@@ -387,9 +799,14 @@ const VideoService = {
       video.src = videoUrl;
       video.load();
     });
-  },
+  }
 
-  formatRelativeTime(timestamp) {
+  /**
+   * Format a timestamp into a relative time string
+   * @param {string} timestamp - Timestamp to format
+   * @returns {string} Formatted relative time
+   */
+  static formatRelativeTime(timestamp) {
     if (!timestamp) return 'unknown date';
 
     try {
@@ -406,9 +823,15 @@ const VideoService = {
       console.error("Error formatting relative time:", e);
       return "error in date";
     }
-  },
+  }
 
-  _getTimeString(diffInSeconds) {
+  /**
+   * Convert seconds to a time string
+   * @private
+   * @param {number} diffInSeconds - Difference in seconds
+   * @returns {string} Formatted time string
+   */
+  static _getTimeString(diffInSeconds) {
     // Just now (less than 5 seconds)
     if (diffInSeconds < 5) return 'just now';
     
@@ -444,11 +867,18 @@ const VideoService = {
     // Years
     const diffInYears = Math.floor(diffInMonths / 12);
     return this._formatUnit(diffInYears, 'year');
-  },
+  }
   
-  _formatUnit(value, unit) {
+  /**
+   * Format a unit with proper pluralization
+   * @private
+   * @param {number} value - Value to format
+   * @param {string} unit - Unit name
+   * @returns {string} Formatted unit string
+   */
+  static _formatUnit(value, unit) {
     return `${value} ${unit}${value !== 1 ? 's' : ''} ago`;
   }
-};
+}
 
 export default VideoService;

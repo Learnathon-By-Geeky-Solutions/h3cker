@@ -374,12 +374,10 @@ const TokenService = {
 
       this.updateLastTokenSetTime();
       
+      // Set secure cookie with proper flags
       try {
-        // Add secure and httpOnly flags to cookies
-        const isSecure = window.location.protocol === 'https:';
-        const secureFlag = isSecure ? ';secure' : '';
-        document.cookie = `auth_token_backup=${encodeURIComponent(token)};path=/;max-age=${this.sessionDuration/1000}${secureFlag};httpOnly`;
-        document.cookie = `auth_uid_backup=${encodeURIComponent(uid)};path=/;max-age=${this.sessionDuration/1000}${secureFlag};httpOnly`;
+        this._setSecureCookie('auth_token_backup', token, this.sessionDuration / 1000);
+        this._setSecureCookie('auth_uid_backup', uid, this.sessionDuration / 1000);
       } catch (cookieError) {
         console.error('Error setting backup cookie:', cookieError);
       }
@@ -391,11 +389,10 @@ const TokenService = {
       console.error('Error setting token:', error);
       
 
+      // Set secure cookie with proper flags
       try {
-        const isSecure = window.location.protocol === 'https:';
-        const secureFlag = isSecure ? ';secure' : '';
-        document.cookie = `auth_token_backup=${encodeURIComponent(token)};path=/;max-age=${this.sessionDuration/1000}${secureFlag};httpOnly`;
-        document.cookie = `auth_uid_backup=${encodeURIComponent(uid)};path=/;max-age=${this.sessionDuration/1000}${secureFlag};httpOnly`;
+        this._setSecureCookie('auth_token_backup', token, this.sessionDuration / 1000);
+        this._setSecureCookie('auth_uid_backup', uid, this.sessionDuration / 1000);
       } catch (cookieError) {
         console.error('Error setting backup cookie:', cookieError);
       }
@@ -515,19 +512,16 @@ const TokenService = {
       this._storage.setItem(this.tokenExpiryKey, expiryTime.toString());
       this.updateLastTokenSetTime();
       
+      // Refresh cookies with secure flags
       try {
         const cookieToken = this.getTokenFromCookie();
         if (cookieToken) {
-          const isSecure = window.location.protocol === 'https:';
-          const secureFlag = isSecure ? ';secure' : '';
-          document.cookie = `auth_token_backup=${encodeURIComponent(cookieToken)};path=/;max-age=${this.sessionDuration/1000}${secureFlag};httpOnly`;
+          this._setSecureCookie('auth_token_backup', cookieToken, this.sessionDuration / 1000);
         }
         
         const cookieUid = this.getUidFromCookie();
         if (cookieUid) {
-          const isSecure = window.location.protocol === 'https:';
-          const secureFlag = isSecure ? ';secure' : '';
-          document.cookie = `auth_uid_backup=${encodeURIComponent(cookieUid)};path=/;max-age=${this.sessionDuration/1000}${secureFlag};httpOnly`;
+          this._setSecureCookie('auth_uid_backup', cookieUid, this.sessionDuration / 1000);
         }
       } catch (cookieError) {
         console.error('Error refreshing backup cookie:', cookieError);
@@ -572,6 +566,7 @@ const TokenService = {
       
       const extendedKey = expandKey(key);
       
+
 
       let result = '';
       for (let i = 0; i < text.length; i++) {
@@ -783,11 +778,13 @@ const TokenService = {
       this._storage.removeItem(this.lastTokenSetTimeKey);
       this.clearGoogleAuthCache();
       
-
-      const isSecure = window.location.protocol === 'https:';
-      const secureFlag = isSecure ? ';secure' : '';
-      document.cookie = `auth_token_backup=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/${secureFlag};httpOnly`;
-      document.cookie = `auth_uid_backup=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/${secureFlag};httpOnly`;
+      // Clear secure cookies
+      try {
+        this._clearSecureCookie('auth_token_backup');
+        this._clearSecureCookie('auth_uid_backup');
+      } catch (cookieError) {
+        console.error('Error clearing secure cookies:', cookieError);
+      }
       
       try {
         sessionStorage.removeItem('google_auth_cache_backup');
@@ -802,7 +799,45 @@ const TokenService = {
     } catch (error) {
       console.error('Error clearing auth data:', error);
     }
-  }
+  },
+
+  /**
+   * Set secure cookie with proper flags
+   * @param {string} name - Cookie name
+   * @param {string} value - Cookie value
+   * @param {number} maxAge - Max age in seconds
+   * @private
+   */
+  _setSecureCookie(name, value, maxAge) {
+    try {
+      const isSecure = window.location.protocol === 'https:';
+      const secureFlag = isSecure ? ';secure' : '';
+      const sameSite = ';SameSite=Strict';
+      document.cookie = `${name}=${encodeURIComponent(value)};path=/;max-age=${maxAge};httpOnly${secureFlag}${sameSite}`;
+      return true;
+    } catch (error) {
+      console.error(`Error setting secure cookie ${name}:`, error);
+      return false;
+    }
+  },
+
+  /**
+   * Clear a secure cookie
+   * @param {string} name - Cookie name to clear
+   * @private
+   */
+  _clearSecureCookie(name) {
+    try {
+      const isSecure = window.location.protocol === 'https:';
+      const secureFlag = isSecure ? ';secure' : '';
+      const sameSite = ';SameSite=Strict';
+      document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/;httpOnly${secureFlag}${sameSite}`;
+      return true;
+    } catch (error) {
+      console.error(`Error clearing secure cookie ${name}:`, error);
+      return false;
+    }
+  },
 };
 
 export default TokenService;
