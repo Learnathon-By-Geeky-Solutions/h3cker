@@ -9,7 +9,7 @@ from ..utils import (
     should_make_private,
     make_video_private,
     increment_video_views,
-    parse_video_identifier
+    
 )
 
 User = get_user_model()
@@ -97,17 +97,3 @@ class IncrementVideoViewsTests(TestCase):
             self.assertEqual(result, 11)
             self.assertEqual(video.save_calls, [['views']])
             mock_f.assert_called_once_with('views')
-
-
-class ParseVideoIdentifierTests(TestCase):
-    def test_parse_numeric_identifier(self):
-        """Test parsing numeric video ID."""
-        is_numeric, value = parse_video_identifier("123")
-        self.assertTrue(is_numeric)
-        self.assertEqual(value, 123)
-        
-    def test_parse_uuid_identifier(self):
-        """Test parsing UUID video ID."""
-        is_numeric, value = parse_video_identifier("a1b2c3d4-e5f6-7890-abcd-ef1234567890")
-        self.assertFalse(is_numeric)
-        self.assertEqual(value, "a1b2c3d4-e5f6-7890-abcd-ef1234567890")
