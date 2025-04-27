@@ -25,6 +25,7 @@ from .serializers import (
 )
 from .utils import should_make_private, make_video_private, record_user_view, increment_video_views
 from .permissions import IsCompanyOrAdmin, IsOwnerOrAdmin
+from azure.storage.blob import generate_blob_sas, BlobSasPermissions
 from .services import EvaluationService, PointsService, AzureStorageService
 import uuid
 
