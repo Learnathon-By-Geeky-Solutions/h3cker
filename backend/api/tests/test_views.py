@@ -3,7 +3,10 @@ from unittest.mock import patch, MagicMock
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
-from api.models import User, ViewerProfile, Video, VideoView, VideoLike, VideoShare
+from api.models import (
+    User, ViewerProfile, Video, VideoView, VideoLike, VideoShare,
+    EvaluationForm, EvaluationQuestion, EvaluationResponse
+)
 import uuid
 from django.utils import timezone
 
@@ -96,6 +99,108 @@ def test_video_share(db, test_user, test_video):
     )
     return share
 
+@pytest.fixture
+def company_user(db):
+    """Fixture to create a company user."""
+    user = User.objects.create_user(
+        email="company@example.com",
+        firebase_uid="companyuid123",
+        password="companypassword",
+        role="company"
+    )
+    return user
+
+@pytest.fixture
+def admin_user(db):
+    """Fixture to create an admin user."""
+    user = User.objects.create_user(
+        email="admin@example.com",
+        firebase_uid="adminuid123",
+        password="adminpassword",
+        role="admin"
+    )
+    return user
+
+@pytest.fixture
+def company_authenticated_client(api_client, company_user):
+    """Fixture to provide an authenticated API client for company user."""
+    api_client.force_authenticate(user=company_user)
+    return api_client
+
+@pytest.fixture
+def admin_authenticated_client(api_client, admin_user):
+    """Fixture to provide an authenticated API client for admin user."""
+    api_client.force_authenticate(user=admin_user)
+    return api_client
+
+@pytest.fixture
+def company_video(db, company_user):
+    """Fixture to create a test video owned by a company user."""
+    video = Video.objects.create(
+        title="Company Video",
+        description="A video for testing evaluation forms.",
+        category="Testing",
+        visibility="public",
+        video_url="https://example.com/company_video",
+        thumbnail_url="https://example.com/company_thumb",
+        uploader=company_user,
+        duration="04:30"
+    )
+    return video
+
+@pytest.fixture
+def test_evaluation_form(db, company_user, company_video):
+    """Fixture to create a test evaluation form."""
+    form = EvaluationForm.objects.create(
+        video=company_video,
+        title="Test Evaluation Form",
+        description="A form for testing",
+        created_by=company_user
+    )
+    return form
+
+@pytest.fixture
+def test_evaluation_questions(db, test_evaluation_form):
+    """Fixture to create test evaluation questions."""
+    questions = []
+    questions.append(EvaluationQuestion.objects.create(
+        form=test_evaluation_form,
+        question_text="How would you rate this video?",
+        question_type="rating",
+        required=True,
+        order=0
+    ))
+    questions.append(EvaluationQuestion.objects.create(
+        form=test_evaluation_form,
+        question_text="What did you like about it?",
+        question_type="text",
+        required=True,
+        order=1
+    ))
+    questions.append(EvaluationQuestion.objects.create(
+        form=test_evaluation_form,
+        question_type="multiple_choice",
+        question_text="Which element was most appealing?",
+        options=["Visual", "Audio", "Content", "Other"],
+        required=True,
+        order=2
+    ))
+    return questions
+
+@pytest.fixture
+def viewer_profile(db, test_user):
+    """Fixture to create a viewer profile for testing evaluation responses."""
+    profile, _ = ViewerProfile.objects.get_or_create(
+        user=test_user,
+        defaults={
+            'points': 0,
+            'points_earned': 0,
+            'points_redeemed': 0,
+            'onboarding_completed': True
+        }
+    )
+    return profile
+
 @pytest.mark.django_db
 class TestTestAuthView:
     def test_auth_test_authenticated(self, authenticated_client):
@@ -106,6 +211,7 @@ class TestTestAuthView:
         assert response.data == {
             "success": True,
             "message": "Authentication successful!",
+            "user_role": "user"
         }
 
     def test_auth_test_unauthenticated(self, api_client):
@@ -132,7 +238,7 @@ class TestSetFirebaseTokenView:
         }
         mock_verify_id_token.assert_called_once_with('valid_firebase_token')
         mock_login.assert_called_once()
-        args, kwargs = mock_login.call_args
+        args, _ = mock_login.call_args
         assert args[1] == test_user
 
     @patch('firebase_admin.auth.verify_id_token')
@@ -241,7 +347,8 @@ class TestVideoFeedView:
         Video.objects.create(
             title="Another Video",
             video_url="https://example.com/another_video",
-            uploader=test_video.uploader
+            uploader=test_video.uploader,
+            visibility="public"  # Set visibility to public
         )
         url = reverse('video-feed')
         response = api_client.get(url)
@@ -512,4 +619,279 @@ class TestUserHistoryAPI:
         url = reverse('user-history')
         response = api_client.get(url)
 
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+@pytest.mark.django_db
+class TestEvaluationFormViewSet:
+    def test_get_form_by_video_invalid_id(self, authenticated_client):
+        """Test retrieving a form with an invalid video ID."""
+        url = reverse('evaluation-forms-detail', kwargs={'pk': 9999, 'format': 'video'})
+        response = authenticated_client.get(url)
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_update_form_success(self, company_authenticated_client, test_evaluation_form):
+        """Test successfully updating an evaluation form."""
+        url = reverse('evaluation-forms-detail', kwargs={'pk': test_evaluation_form.id})
+        update_data = {
+            'title': 'Updated Form Title',
+            'description': 'Updated form description'
+        }
+        response = company_authenticated_client.patch(url, update_data, format='json')
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['title'] == 'Updated Form Title'
+        assert response.data['description'] == 'Updated form description'
+
+        # Verify form was updated in the database
+        test_evaluation_form.refresh_from_db()
+        assert test_evaluation_form.title == 'Updated Form Title'
+        assert test_evaluation_form.description == 'Updated form description'
+
+    def test_update_form_not_found(self, company_authenticated_client, company_video):
+        """Test updating a non-existent evaluation form."""
+        # No form created for this video yet
+        url = reverse('evaluation-forms-detail', kwargs={'pk': 9999})
+        update_data = {
+            'title': 'Update Non-existent Form',
+            'description': 'This should fail'
+        }
+        response = company_authenticated_client.patch(url, update_data, format='json')
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+@pytest.mark.django_db
+class TestEvaluationQuestionViewSet:
+    def test_list_questions(self, authenticated_client, test_evaluation_form, test_evaluation_questions):
+        """Test successfully listing questions for a form."""
+        url = reverse('evaluation-questions', kwargs={'form_id': test_evaluation_form.id})
+        response = authenticated_client.get(url)
+
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) == 3
+        
+        # Check questions are in correct order
+        assert response.data[0]['order'] == 0
+        assert response.data[1]['order'] == 1
+        assert response.data[2]['order'] == 2
+        
+        # Check question types
+        assert response.data[0]['question_type'] == 'rating'
+        assert response.data[1]['question_type'] == 'text'
+        assert response.data[2]['question_type'] == 'multiple_choice'
+        
+        # Check options for multiple choice question
+        assert 'options' in response.data[2]
+        assert len(response.data[2]['options']) == 4
+
+    def test_create_multiple_choice_question(self, company_authenticated_client, test_evaluation_form):
+        """Test creating a multiple choice question with options."""
+        url = reverse('evaluation-questions', kwargs={'form_id': test_evaluation_form.id})
+        question_data = {
+            'question_text': 'Favorite Color?',
+            'question_type': 'multiple_choice',
+            'options': ['Red', 'Blue', 'Green', 'Yellow'],
+            'required': True
+        }
+        response = company_authenticated_client.post(url, question_data, format='json')
+
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data['question_text'] == 'Favorite Color?'
+        assert response.data['question_type'] == 'multiple_choice'
+        assert 'options' in response.data
+        assert len(response.data['options']) == 4
+        assert 'Red' in response.data['options']
+
+    def test_update_question(self, company_authenticated_client, test_evaluation_form, test_evaluation_questions):
+        """Test successfully updating a question."""
+        question_id = test_evaluation_questions[0].id
+        url = reverse('evaluation-question-detail', kwargs={'form_id': test_evaluation_form.id, 'pk': question_id})
+        update_data = {
+            'question_text': 'Updated Question Text',
+            'required': False
+        }
+        response = company_authenticated_client.patch(url, update_data, format='json')
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['question_text'] == 'Updated Question Text'
+        assert response.data['required'] is False
+        
+        # Verify question was updated in database
+        test_evaluation_questions[0].refresh_from_db()
+        assert test_evaluation_questions[0].question_text == 'Updated Question Text'
+        assert test_evaluation_questions[0].required is False
+
+    def test_delete_question(self, company_authenticated_client, test_evaluation_form, test_evaluation_questions):
+        """Test successfully deleting a question."""
+        question_id = test_evaluation_questions[0].id
+        url = reverse('evaluation-question-detail', kwargs={'form_id': test_evaluation_form.id, 'pk': question_id})
+        response = company_authenticated_client.delete(url)
+
+        assert response.status_code == status.HTTP_204_NO_CONTENT
+        
+        # Verify question was deleted from database
+        assert not EvaluationQuestion.objects.filter(id=question_id).exists()
+        
+        # Check that remaining questions were reordered
+        remaining_questions = EvaluationQuestion.objects.filter(form=test_evaluation_form).order_by('order')
+        assert remaining_questions.count() == 2
+        assert remaining_questions[0].order == 0
+        assert remaining_questions[1].order == 1
+
+    def test_non_owner_cannot_modify_questions(self, authenticated_client, test_evaluation_form, test_evaluation_questions):
+        """Test that non-owners cannot modify questions."""
+        # Try to create a new question
+        url = reverse('evaluation-questions', kwargs={'form_id': test_evaluation_form.id})
+        question_data = {
+            'question_text': 'Unauthorized Question',
+            'question_type': 'text',
+            'required': True
+        }
+        response = authenticated_client.post(url, question_data, format='json')
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        
+        # Try to update a question
+        question_id = test_evaluation_questions[0].id
+        url = reverse('evaluation-question-detail', kwargs={'form_id': test_evaluation_form.id, 'pk': question_id})
+        update_data = {'question_text': 'Unauthorized Update'}
+        response = authenticated_client.patch(url, update_data, format='json')
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        
+        # Try to delete a question
+        response = authenticated_client.delete(url)
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_admin_can_modify_any_questions(self, admin_authenticated_client, test_evaluation_form, test_evaluation_questions):
+        """Test that admins can modify questions they don't own."""
+        # Admin can create a new question
+        url = reverse('evaluation-questions', kwargs={'form_id': test_evaluation_form.id})
+        question_data = {
+            'question_text': 'Admin Question',
+            'question_type': 'text',
+            'required': True
+        }
+        response = admin_authenticated_client.post(url, question_data, format='json')
+        assert response.status_code == status.HTTP_201_CREATED
+        
+        # Admin can update a question
+        question_id = test_evaluation_questions[0].id
+        url = reverse('evaluation-question-detail', kwargs={'form_id': test_evaluation_form.id, 'pk': question_id})
+        update_data = {'question_text': 'Admin Updated Question'}
+        response = admin_authenticated_client.patch(url, update_data, format='json')
+        assert response.status_code == status.HTTP_200_OK
+        
+        # Admin can delete a question
+        question_id = test_evaluation_questions[1].id
+        url = reverse('evaluation-question-detail', kwargs={'form_id': test_evaluation_form.id, 'pk': question_id})
+        response = admin_authenticated_client.delete(url)
+        assert response.status_code == status.HTTP_204_NO_CONTENT
+
+@pytest.mark.django_db
+class TestSubmitEvaluationResponseView:
+    @patch('api.services.EvaluationService.validate_required_answers')
+    @patch('api.services.EvaluationService.create_response_and_award_points')
+    def test_submit_evaluation_response_success(self, mock_create_response, mock_validate_answers,
+                                              authenticated_client, test_user, test_evaluation_form, viewer_profile):
+        """Test successfully submitting an evaluation response."""
+        # Mock the validation to return success
+        mock_validate_answers.return_value = (True, None)
+        
+        # Mock the response creation and points award
+        response_mock = MagicMock()
+        mock_create_response.return_value = (response_mock, viewer_profile, 10)
+        
+        # Updated viewer profile with points
+        viewer_profile.points = 10
+        
+        url = reverse('submit-evaluation', kwargs={'form_id': test_evaluation_form.id})
+        submission_data = {
+            'answers': {
+                '1': 5,  # Rating question
+                '2': 'It was very engaging',  # Text question
+                '3': 'Visual'  # Multiple choice question
+            }
+        }
+        
+        response = authenticated_client.post(url, submission_data, format='json')
+        
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data['message'] == 'Evaluation submitted successfully'
+        assert response.data['points_awarded'] == 10
+        assert response.data['total_points'] == 10
+        
+        mock_validate_answers.assert_called_once_with(test_evaluation_form, submission_data['answers'])
+        mock_create_response.assert_called_once_with(
+            form=test_evaluation_form,
+            user=test_user,
+            answers=submission_data['answers']
+        )
+
+    @patch('api.views.EvaluationService.validate_required_answers')
+    def test_submit_evaluation_missing_required_answers(self, mock_validate_answers,
+                                                      authenticated_client, test_evaluation_form):
+        """Test submitting an incomplete evaluation form."""
+        # Mock validation to fail
+        mock_validate_answers.return_value = (False, "Question 1 is required")
+        
+        url = reverse('submit-evaluation', kwargs={'form_id': test_evaluation_form.id})
+        submission_data = {
+            'answers': {
+                # Missing required answers
+                '2': 'Incomplete submission'
+            }
+        }
+        
+        response = authenticated_client.post(url, submission_data, format='json')
+        
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data['error'] == "Question 1 is required"
+        
+        mock_validate_answers.assert_called_once_with(test_evaluation_form, submission_data['answers'])
+
+    def test_submit_evaluation_form_not_found(self, authenticated_client):
+        """Test submitting to a non-existent evaluation form."""
+        url = reverse('submit-evaluation', kwargs={'form_id': 9999})
+        submission_data = {
+            'answers': {
+                '1': 5
+            }
+        }
+        
+        response = authenticated_client.post(url, submission_data, format='json')
+        
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_submit_evaluation_already_submitted(self, authenticated_client, test_user, test_evaluation_form):
+        """Test submitting an evaluation form that was already submitted by the user."""
+        # Create an existing response
+        EvaluationResponse.objects.create(
+            form=test_evaluation_form,
+            user=test_user,
+            answers={'1': 4},
+            points_awarded=10
+        )
+        
+        url = reverse('submit-evaluation', kwargs={'form_id': test_evaluation_form.id})
+        submission_data = {
+            'answers': {
+                '1': 5
+            }
+        }
+        
+        response = authenticated_client.post(url, submission_data, format='json')
+        
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data['error'] == "You have already submitted an evaluation for this video"
+
+    def test_submit_evaluation_unauthenticated(self, api_client, test_evaluation_form):
+        """Test that unauthenticated users cannot submit evaluations."""
+        url = reverse('submit-evaluation', kwargs={'form_id': test_evaluation_form.id})
+        submission_data = {
+            'answers': {
+                '1': 5
+            }
+        }
+        
+        response = api_client.post(url, submission_data, format='json')
+        
         assert response.status_code == status.HTTP_403_FORBIDDEN

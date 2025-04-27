@@ -4,8 +4,11 @@ from django.contrib.messages.storage.fallback import FallbackStorage
 from django.urls import reverse
 from django.utils import timezone
 import datetime
+import csv
+from io import StringIO
+from unittest.mock import patch, MagicMock
 
-from api.admin import VideoViewAdmin, VideoLikeAdmin, VideoShareAdmin
+from api.admin import VideoViewAdmin, VideoLikeAdmin, VideoShareAdmin, VideoAdmin
 from api.models import User, Video, VideoView, VideoLike, VideoShare
 
 
@@ -74,6 +77,7 @@ class AdminTestCase(TestCase):
         self.factory = RequestFactory()
         
         # Set up admin classes
+        self.video_admin = VideoAdmin(Video, self.site)
         self.video_view_admin = VideoViewAdmin(VideoView, self.site)
         self.video_like_admin = VideoLikeAdmin(VideoLike, self.site)
         self.video_share_admin = VideoShareAdmin(VideoShare, self.site)
@@ -147,7 +151,7 @@ class VideoShareAdminTest(AdminTestCase):
         )
         
         # Set up the admin action request
-        request = self.factory.post('/')
+        request = self.factory.post('/admin/')
         request.user = self.superuser
         
         # Add support for messaging framework
@@ -165,7 +169,7 @@ class VideoShareAdminTest(AdminTestCase):
     
     def test_deactivate_shares_action(self):
         # Set up the admin action request
-        request = self.factory.post('/')
+        request = self.factory.post('/admin/')
         request.user = self.superuser
         
         # Add support for messaging framework
@@ -187,7 +191,7 @@ class VideoShareAdminTest(AdminTestCase):
         self.video_share.save()
         
         # Set up the admin action request
-        request = self.factory.post('/')
+        request = self.factory.post('/admin/')
         request.user = self.superuser
         
         # Add support for messaging framework
@@ -202,3 +206,174 @@ class VideoShareAdminTest(AdminTestCase):
         # Verify the access count was reset
         self.video_share.refresh_from_db()
         self.assertEqual(self.video_share.access_count, 0)
+
+
+class VideoAdminTest(AdminTestCase):
+    def create_request_with_messages(self):
+        request = self.factory.post('/')
+        request.user = self.superuser
+        setattr(request, 'session', 'session')
+        messages = FallbackStorage(request)
+        setattr(request, '_messages', messages)
+        return request
+        
+    def test_list_display(self):
+        self.assertEqual(
+            self.video_admin.list_display, 
+            ('title', 'uploader', 'visibility', 'views', 'likes', 'upload_date')
+        )
+    
+    def test_search_fields(self):
+        self.assertEqual(
+            self.video_admin.search_fields, 
+            ('title', 'description', 'uploader__email')
+        )
+    
+    def test_readonly_fields(self):
+        self.assertEqual(
+            self.video_admin.readonly_fields,
+            ('views', 'likes')
+        )
+    
+    def test_make_videos_private(self):
+        # Create a public video
+        public_video = Video.objects.create(
+            title='Public Video',
+            description='This is a public video',
+            visibility='public',
+            video_url='https://example.com/public.mp4',
+            uploader=self.company_user
+        )
+        
+        # Set up the admin action request
+        request = self.create_request_with_messages()
+        
+        # Execute the action
+        queryset = Video.objects.filter(id=public_video.id)
+        self.video_admin.make_videos_private(request, queryset)
+        
+        # Verify the video was made private
+        public_video.refresh_from_db()
+        self.assertEqual(public_video.visibility, 'private')
+    
+    def test_make_videos_public(self):
+        # Create a private video
+        private_video = Video.objects.create(
+            title='Private Video',
+            description='This is a private video',
+            visibility='private',
+            video_url='https://example.com/private.mp4',
+            uploader=self.company_user
+        )
+        
+        # Set up the admin action request
+        request = self.create_request_with_messages()
+        
+        # Execute the action
+        queryset = Video.objects.filter(id=private_video.id)
+        self.video_admin.make_videos_public(request, queryset)
+        
+        # Verify the video was made public
+        private_video.refresh_from_db()
+        self.assertEqual(private_video.visibility, 'public')
+    
+    def test_reset_video_statistics(self):
+        # Create a video with some statistics
+        video_with_stats = Video.objects.create(
+            title='Video With Stats',
+            description='This video has views and likes',
+            visibility='public',
+            video_url='https://example.com/stats.mp4',
+            uploader=self.company_user,
+            views=100,
+            likes=50
+        )
+        
+        # Create some views and likes for this video
+        VideoView.objects.create(
+            video=video_with_stats,
+            viewer=self.regular_user
+        )
+        
+        VideoLike.objects.create(
+            video=video_with_stats,
+            user=self.regular_user
+        )
+        
+        # Set up the admin action request
+        request = self.create_request_with_messages()
+        
+        # Execute the action
+        queryset = Video.objects.filter(id=video_with_stats.id)
+        self.video_admin.reset_video_statistics(request, queryset)
+        
+        # Verify the statistics were reset
+        video_with_stats.refresh_from_db()
+        self.assertEqual(video_with_stats.views, 0)
+        self.assertEqual(video_with_stats.likes, 0)
+        
+        # Verify related records were deleted
+        self.assertEqual(VideoView.objects.filter(video=video_with_stats).count(), 0)
+        self.assertEqual(VideoLike.objects.filter(video=video_with_stats).count(), 0)
+    
+    def test_create_new_share_links(self):
+        # Set up the admin action request
+        request = self.create_request_with_messages()
+        request.user = self.superuser
+        
+        # Get initial count of share links
+        initial_count = VideoShare.objects.filter(video=self.video).count()
+        
+        # Execute the action
+        queryset = Video.objects.filter(id=self.video.id)
+        self.video_admin.create_new_share_links(request, queryset)
+        
+        # Verify a new share link was created
+        new_count = VideoShare.objects.filter(video=self.video).count()
+        self.assertEqual(new_count, initial_count + 1)
+    
+    @patch('api.admin.should_make_private')
+    @patch('api.admin.make_video_private')
+    def test_check_privacy_limits(self, mock_make_private, mock_should_make_private):
+        # Setup mocks
+        mock_should_make_private.return_value = True
+        mock_make_private.return_value = True
+        
+        # Set up the admin action request
+        request = self.create_request_with_messages()
+        
+        # Execute the action
+        queryset = Video.objects.filter(id=self.video.id)
+        self.video_admin.check_privacy_limits(request, queryset)
+        
+        # Verify mocks were called correctly
+        mock_should_make_private.assert_called_once_with(self.video)
+        mock_make_private.assert_called_once_with(self.video)
+    
+    def test_export_video_data(self):
+        # Set up the admin action request
+        request = self.create_request_with_messages()
+        
+        # Execute the action
+        queryset = Video.objects.filter(id=self.video.id)
+        response = self.video_admin.export_video_data(request, queryset)
+        
+        # Verify the response
+        self.assertEqual(response['Content-Type'], 'text/csv')
+        self.assertEqual(response['Content-Disposition'], 'attachment; filename="videos.csv"')
+        
+        # Parse the CSV content to verify data
+        content = response.content.decode('utf-8')
+        csv_reader = csv.reader(StringIO(content))
+        rows = list(csv_reader)
+        
+        # Verify header row
+        self.assertEqual(
+            rows[0], 
+            ['ID', 'Title', 'Uploader', 'Category', 'Visibility', 'Views', 'Likes', 'Upload Date', 'Duration', 'View Limit']
+        )
+        
+        # Verify data row
+        self.assertEqual(rows[1][0], str(self.video.id))
+        self.assertEqual(rows[1][1], self.video.title)
+        self.assertEqual(rows[1][2], self.video.uploader.email)
