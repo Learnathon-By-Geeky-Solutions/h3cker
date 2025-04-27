@@ -65,9 +65,6 @@ const LoggedInView = () => {
     return (
       <EmptyState 
         title="No Public Videos Available"
-        message="Be the first to upload public content to share with others!"
-        actionLink="/dashboard/upload"
-        actionText="Upload Video"
       />
     );
   }
