@@ -181,6 +181,30 @@ class VideoShare(models.Model):
     def __str__(self):
         return f"Share for {self.video.title}"
 
+class WebcamRecording(models.Model):
+    """Model to track webcam recordings synchronized with video playback."""
+    UPLOAD_STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+    ]
+    
+    video = models.ForeignKey(Video, on_delete=models.CASCADE, related_name='webcam_recordings')
+    recorder = models.ForeignKey(User, on_delete=models.CASCADE)
+    filename = models.CharField(max_length=255)
+    recording_date = models.DateTimeField(auto_now_add=True)
+    upload_status = models.CharField(max_length=20, choices=UPLOAD_STATUS_CHOICES, default='pending')
+    upload_completed_at = models.DateTimeField(null=True, blank=True)
+    recording_url = models.URLField(max_length=500, blank=True, null=True)
+    
+    class Meta:
+        ordering = ['-recording_date']
+        verbose_name = 'Webcam Recording'
+        verbose_name_plural = 'Webcam Recordings'
+    
+    def __str__(self):
+        return f"Webcam Recording for Video {self.video.id} by {self.recorder.email}"
+
 class EvaluationForm(models.Model):
     video = models.OneToOneField(Video, on_delete=models.CASCADE, related_name='evaluation_form')
     title = models.CharField(max_length=200)
