@@ -3,7 +3,7 @@ from .views import (
     TestAuthView, OnboardingAPIView, SetFirebaseTokenView, 
     UploadVideoView, VideoFeedView, VideoDetailView,
     RecordVideoViewAPI, ToggleVideoLikeAPI, 
-    CreateVideoShareAPI, UserHistoryAPI
+    CreateVideoShareAPI, UserHistoryAPI, WebcamUploadView
 )
 
 urlpatterns = [
@@ -20,6 +20,7 @@ urlpatterns = [
     path('videos/<int:video_id>/view/', RecordVideoViewAPI.as_view(), name='record-video-view'),
     path('videos/<int:video_id>/like/', ToggleVideoLikeAPI.as_view(), name='toggle-video-like'),
     path('videos/<int:video_id>/share/', CreateVideoShareAPI.as_view(), name='create-video-share'),
+    path('videos/<int:video_id>/webcam-upload/', WebcamUploadView.as_view(), name='webcam-upload'),
     
     # User history endpoint
     path('user/history/', UserHistoryAPI.as_view(), name='user-history'),

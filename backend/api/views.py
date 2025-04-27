@@ -12,7 +12,7 @@ from django.db.models import F
 from django.conf import settings
 from django.http import Http404
 
-from .models import ViewerProfile, User, Video, VideoView, VideoLike, VideoShare
+from .models import ViewerProfile, User, Video, VideoView, VideoLike, VideoShare, WebcamRecording
 from .serializers import (OnboardingSerializer, FirebaseTokenSerializer, 
                          VideoSerializer, VideoFeedSerializer, VideoDetailSerializer,
                          VideoViewSerializer, VideoLikeSerializer, VideoShareSerializer)
@@ -348,5 +348,63 @@ class UploadVideoView(generics.CreateAPIView):
         except Exception as e:
             return Response(
                 {"error": f"Failed to generate SAS tokens: {str(e)}"}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class WebcamUploadView(APIView):
+    """Generate SAS upload URL for webcam recordings."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, video_id):
+        # Validate request data
+        filename = request.data.get('filename')
+        if not filename:
+            return Response(
+                {"error": "Filename is required"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        # Get the video and verify the user has access rights
+        video = get_object_or_404(Video, id=video_id)
+        
+        # Generate SAS token for webcam recording upload
+        try:
+            # Get Azure storage credentials
+            account_name = os.environ.get('AZURE_STORAGE_ACCOUNT_NAME')
+            account_key = os.environ.get('AZURE_STORAGE_ACCOUNT_KEY')
+            container_name = os.environ.get('AZURE_WEBCAM_CONTAINER_NAME', 'facialvideo')
+            
+            # Define permissions
+            upload_permission = BlobSasPermissions(write=True, create=True, add=True)
+            
+            # Generate SAS URL for webcam recording
+            sas_token = generate_blob_sas(
+                account_name=account_name,
+                container_name=container_name,
+                blob_name=filename,
+                account_key=account_key,
+                permission=upload_permission,
+                expiry=timezone.now() + timezone.timedelta(hours=1)
+            )
+            
+            webcam_upload_url = f"https://{account_name}.blob.core.windows.net/{container_name}/{filename}?{sas_token}"
+            
+            # Create a record of this webcam recording
+            WebcamRecording.objects.create(
+                video=video,
+                filename=filename,
+                recorder=request.user,
+                upload_status='pending'
+            )
+            
+            return Response({
+                "webcam_upload_url": webcam_upload_url,
+                "message": "Webcam recording upload URL generated successfully"
+            }, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            return Response(
+                {"error": f"Failed to generate SAS token: {str(e)}"}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
