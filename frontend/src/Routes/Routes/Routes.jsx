@@ -12,6 +12,7 @@ import VideoDetail from "../../components/Shared/VideoPlayer/VideoDetail.jsx";
 import PrivateRoute from "../PrivateRoute/Privateroute.jsx";
 import Video from "../../components/Pages/Video/Video.jsx";
 import DeviceManager from "../../components/Shared/DeviceManager/DeviceManager.jsx";
+import UserWatchHistory from "../../components/Pages/Dashboard/UserWatchHistory.jsx";
 
 
 const router = createBrowserRouter([
@@ -54,6 +55,10 @@ const router = createBrowserRouter([
       {
         path: "/dashboard/upload",
         element: <PrivateRoute><UploadVideo /></PrivateRoute>
+      },
+      {
+        path: "/dashboard/watchhistory",
+        element: <PrivateRoute><UserWatchHistory /></PrivateRoute>
       },
       {
         path: "/video/:id", 

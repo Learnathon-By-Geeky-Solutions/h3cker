@@ -33,7 +33,7 @@ const getNavItems = (role) => {
 
   if (role === 'user') {
     baseItems.push(
-      { path: '/dashboard/history', name: 'View History', icon: <Video size={20} /> }
+      { path: '/dashboard/watchhistory', name: 'Watch History', icon: <Video size={20} /> }
     );
   } 
   return baseItems;
