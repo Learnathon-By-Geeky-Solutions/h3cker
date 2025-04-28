@@ -269,7 +269,6 @@ const ShareModal = ({ isOpen, onClose, videoId, videoTitle }) => {
       
       const generateShareLink = async () => {
         try {
-          // eslint-disable-next-line @typescript-eslint/await-thenable
           const response = await VideoService.createVideoShare(videoId);
           if (response?.share_url) {
             setShareUrl(response.share_url);
@@ -451,7 +450,6 @@ const VideoDetail = () => {
         setError(null);
         setViewRecorded(false);
         
-        // eslint-disable-next-line @typescript-eslint/await-thenable
         const videoData = await VideoService.getVideoDetails(id);
         setVideo(videoData);
         setLiked(!!videoData.is_liked);
@@ -480,7 +478,6 @@ const VideoDetail = () => {
       if (!currentVideo) return;
       
       try {
-        // eslint-disable-next-line @typescript-eslint/await-thenable
         const videoFeed = await VideoService.getVideoFeed();
         if (Array.isArray(videoFeed) && videoFeed.length > 0) {
           const related = videoFeed
@@ -514,7 +511,6 @@ const VideoDetail = () => {
     if (!id || viewRecorded) return;
     
     try {
-      // eslint-disable-next-line @typescript-eslint/await-thenable
       await VideoService.recordVideoView(id);
       setViewRecorded(true);
       
@@ -531,7 +527,6 @@ const VideoDetail = () => {
     if (!id) return;
     
     try {
-      // eslint-disable-next-line @typescript-eslint/await-thenable
       const response = await VideoService.toggleVideoLike(id);
       
       if (response) {
@@ -561,7 +556,6 @@ const VideoDetail = () => {
   const handleToggleVisibility = async () => {
     try {
       const newVisibility = video.visibility === 'private' ? 'public' : 'private';
-      // eslint-disable-next-line @typescript-eslint/await-thenable
       await VideoService.adminUpdateVideoVisibility(id, newVisibility);
       setVideo({
         ...video,
@@ -576,7 +570,6 @@ const VideoDetail = () => {
 
   const handleDeleteVideo = async () => {
     try {
-      // eslint-disable-next-line @typescript-eslint/await-thenable
       await VideoService.adminDeleteVideo(id);
       navigate('/dashboard', { replace: true });
     } catch (error) {

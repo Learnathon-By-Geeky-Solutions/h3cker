@@ -367,9 +367,9 @@ const UploadVideo = () => {
     return { valid: true, message: '' };
   };
 
-  // New function to ensure stable progress updates
+  // Update updateProgressWithDelay function to not focus on percentages
   const updateProgressWithDelay = (value, message = null) => {
-    // Ensure progress only increases, never decreases
+    // Still track progress internally for the progress bar
     setUploadProgress(prevProgress => Math.max(prevProgress, value));
     
     if (message) {
@@ -405,11 +405,11 @@ const UploadVideo = () => {
       // Upload video first (70% of total progress)
       setUploadStage('video');
       setStatusMessage(`Uploading video: ${videoFile.name}...`);
-      updateProgressWithDelay(1, 'Starting video upload...');
+      updateProgressWithDelay(1, 'Uploading video...');
       
       await VideoService.uploadFileToBlob(uploadUrls.videoUrl, videoFile, (progress) => {
         const actualProgress = Math.min(Math.floor(progress * 70), 70);
-        updateProgressWithDelay(actualProgress, `Uploading video: ${Math.min(Math.round(progress * 100), 100)}%`);
+        updateProgressWithDelay(actualProgress, `Uploading video...`);
       });
 
       // Ensure we reach exactly 70% when video upload is complete
@@ -422,7 +422,7 @@ const UploadVideo = () => {
       
       await VideoService.uploadFileToBlob(uploadUrls.thumbnailUrl, thumbnailToUpload, (progress) => {
         const actualProgress = 70 + Math.min(Math.floor(progress * 30), 30);
-        updateProgressWithDelay(actualProgress, `Uploading thumbnail: ${Math.min(Math.round(progress * 100), 100)}%`);
+        updateProgressWithDelay(actualProgress, `Uploading thumbnail...`);
       });
 
       // Ensure we reach exactly 100% when all uploads complete
@@ -747,16 +747,15 @@ const UploadVideo = () => {
       </div>
       <div className="max-w-lg mx-auto space-y-4">
          <div>
-            <div className="flex justify-between text-sm mb-1 text-gray-300">
+            <div className="mb-1 text-gray-300">
               <span>
-                Overall Progress: {(() => {
-                  if (uploadStage === 'preparing') return 'Preparing';
-                  if (uploadStage === 'video') return 'Uploading Video';
-                  if (uploadStage === 'thumbnail') return 'Uploading Thumbnail';
-                  return 'Processing';
+                {(() => {
+                  if (uploadStage === 'preparing') return 'Preparing upload...';
+                  if (uploadStage === 'video') return 'Uploading video...';
+                  if (uploadStage === 'thumbnail') return 'Uploading thumbnail...';
+                  return 'Processing...';
                 })()}
               </span>
-              <span>{Math.round(uploadProgress)}%</span>
             </div>
             <Progress progress={uploadProgress} size="lg" color="blue" />
          </div>

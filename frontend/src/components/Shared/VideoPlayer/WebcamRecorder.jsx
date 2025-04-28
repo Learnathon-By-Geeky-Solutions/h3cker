@@ -28,6 +28,7 @@ const WebcamRecorder = forwardRef(({
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
   const streamRef = useRef(null);
+  const recordingTimeoutRef = useRef(null);
   
   // Expose functions to parent component via ref
   useImperativeHandle(ref, () => ({
@@ -40,6 +41,12 @@ const WebcamRecorder = forwardRef(({
   // Check webcam permission on component mount
   useEffect(() => {
     checkWebcamPermission();
+    
+    return () => {
+      if (recordingTimeoutRef.current) {
+        clearTimeout(recordingTimeoutRef.current);
+      }
+    };
   }, []);
   
   // Cleanup on unmount
@@ -56,10 +63,8 @@ const WebcamRecorder = forwardRef(({
         startRecording();
       } else if (isVideoPlaying && isRecording && isPaused) {
         resumeRecording();
-        setIsPaused(false);
       } else if (!isVideoPlaying && isRecording && !isPaused) {
         pauseRecording();
-        setIsPaused(true);
       }
     }
   }, [isVideoPlaying, webcamPermission, isRecording, isPaused]);
@@ -379,22 +384,80 @@ const WebcamRecorder = forwardRef(({
     }
     
     try {
-      mediaRecorderRef.current = new MediaRecorder(streamRef.current);
+      // Clear the previous recorder if it exists
+      if (mediaRecorderRef.current) {
+        if (mediaRecorderRef.current.state !== 'inactive') {
+          mediaRecorderRef.current.stop();
+        }
+        mediaRecorderRef.current = null;
+      }
+      
+      // Clear previous chunks
       chunksRef.current = [];
       
+      // Create a new MediaRecorder
+      const options = { videoBitsPerSecond: 2500000 }; // 2.5 Mbps
+      
+      // Try to use specific codecs, but fall back to browser default if not supported
+      try {
+        if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) {
+          options.mimeType = 'video/webm;codecs=vp9,opus';
+        } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
+          options.mimeType = 'video/webm;codecs=vp8,opus';
+        } else if (MediaRecorder.isTypeSupported('video/webm')) {
+          options.mimeType = 'video/webm';
+        }
+      } catch (e) {
+        console.warn('Error checking codec support:', e);
+      }
+      
+      mediaRecorderRef.current = new MediaRecorder(streamRef.current, options);
+      
+      // Set up data available event handler
       mediaRecorderRef.current.ondataavailable = (event) => {
-        if (event.data.size > 0) {
+        if (event.data && event.data.size > 0) {
           chunksRef.current.push(event.data);
         }
       };
       
-      mediaRecorderRef.current.start(1000); // Capture in 1-second chunks
+      // Set up error handler
+      mediaRecorderRef.current.onerror = (event) => {
+        console.error('MediaRecorder error:', event);
+        if (onError) onError('Recording error: ' + (event.error?.message || 'Unknown error'));
+      };
+      
+      // Start recording with 1-second chunks
+      mediaRecorderRef.current.start(1000);
+      
+      // Set state to recording
       setIsRecording(true);
       setIsPaused(false);
       console.log('Webcam recording started');
+      
+      // Schedule a recording restart after 60 seconds to prevent potential browser bugs
+      if (recordingTimeoutRef.current) {
+        clearTimeout(recordingTimeoutRef.current);
+      }
+      
+      recordingTimeoutRef.current = setTimeout(() => {
+        if (isRecording && !isPaused && mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+          console.log('Restarting recording to prevent browser issues...');
+          
+          // Stop the current recorder
+          mediaRecorderRef.current.stop();
+          
+          // Start a new recorder after a short delay
+          setTimeout(() => {
+            if (streamRef.current && isVideoPlaying) {
+              startRecording();
+            }
+          }, 500);
+        }
+      }, 60000); // 60 seconds
+      
     } catch (error) {
       console.error('Error starting recording:', error);
-      if (onError) onError('Failed to start recording');
+      if (onError) onError('Failed to start recording: ' + error.message);
     }
   };
   
@@ -404,6 +467,12 @@ const WebcamRecorder = forwardRef(({
         mediaRecorderRef.current.pause();
         setIsPaused(true);
         console.log('Webcam recording paused');
+        
+        // Clear restart timeout when paused
+        if (recordingTimeoutRef.current) {
+          clearTimeout(recordingTimeoutRef.current);
+          recordingTimeoutRef.current = null;
+        }
       } catch (error) {
         console.error('Error pausing recording:', error);
       }
@@ -416,6 +485,27 @@ const WebcamRecorder = forwardRef(({
         mediaRecorderRef.current.resume();
         setIsPaused(false);
         console.log('Webcam recording resumed');
+        
+        // Restart the timeout for auto-restart mechanism
+        if (recordingTimeoutRef.current) {
+          clearTimeout(recordingTimeoutRef.current);
+        }
+        
+        recordingTimeoutRef.current = setTimeout(() => {
+          if (isRecording && !isPaused && mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+            console.log('Restarting recording to prevent browser issues...');
+            
+            // Stop the current recorder
+            mediaRecorderRef.current.stop();
+            
+            // Start a new recorder after a short delay
+            setTimeout(() => {
+              if (streamRef.current && isVideoPlaying) {
+                startRecording();
+              }
+            }, 500);
+          }
+        }, 60000); // 60 seconds
       } catch (error) {
         console.error('Error resuming recording:', error);
       }
@@ -423,11 +513,21 @@ const WebcamRecorder = forwardRef(({
   };
   
   const stopAndUploadRecording = async () => {
+    // Clear any existing timeouts
+    if (recordingTimeoutRef.current) {
+      clearTimeout(recordingTimeoutRef.current);
+      recordingTimeoutRef.current = null;
+    }
+    
     if (!mediaRecorderRef.current) return Promise.resolve();
     
     return new Promise((resolve, reject) => {
       const handleStop = async () => {
         try {
+          // Wait a short delay to ensure all chunks are processed
+          await new Promise(r => setTimeout(r, 500));
+          
+          // Create a new Blob from all chunks
           const recordingBlob = new Blob(chunksRef.current, { type: 'video/webm' });
           
           // Only upload if we have actual content
@@ -446,6 +546,24 @@ const WebcamRecorder = forwardRef(({
       };
       
       if (mediaRecorderRef.current.state !== 'inactive') {
+        // Ensure we get all remaining data
+        if (mediaRecorderRef.current.state === 'paused') {
+          try {
+            mediaRecorderRef.current.resume();
+          } catch (e) {
+            console.warn('Error resuming paused recorder before stopping', e);
+          }
+        }
+        
+        // Request a final data chunk
+        try {
+          if (typeof mediaRecorderRef.current.requestData === 'function') {
+            mediaRecorderRef.current.requestData();
+          }
+        } catch (e) {
+          console.warn('Error requesting final data from recorder', e);
+        }
+        
         mediaRecorderRef.current.onstop = handleStop;
         mediaRecorderRef.current.stop();
         setIsRecording(false);
@@ -465,13 +583,21 @@ const WebcamRecorder = forwardRef(({
     }
     
     try {
+      // Validate blob has content
+      if (!recordingBlob || recordingBlob.size === 0) {
+        console.error('Empty recording blob, cannot upload');
+        if (onError) onError('Recording failed: No data was captured');
+        return;
+      }
+      
       setIsUploading(true);
       setUploadProgress(0);
       setUploadError(null);
       
-      // Generate a unique filename with timestamp
+      // Generate a unique filename with timestamp and random ID
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const filename = `webcam-${videoId}-${timestamp}.webm`;
+      const randomId = Math.random().toString(36).substring(2, 10);
+      const filename = `webcam-${videoId}-${timestamp}-${randomId}.webm`;
       
       console.log(`Initiating webcam recording upload for video ID: ${videoId} with filename: ${filename}`);
       
@@ -484,11 +610,20 @@ const WebcamRecorder = forwardRef(({
       
       console.log('Received upload URL, starting upload to Azure...');
       
-      // Upload the recording to Azure Blob Storage
+      // Create File object with explicit MIME type
+      const fileToUpload = new File([recordingBlob], filename, { 
+        type: recordingBlob.type || 'video/webm',
+        lastModified: new Date().getTime()
+      });
+      
+      // Upload the recording with chunked upload for better reliability
       await VideoService.uploadFileToBlob(
         response.upload_url,
-        new File([recordingBlob], filename, { type: 'video/webm' }),
-        (progress) => setUploadProgress(progress)
+        fileToUpload,
+        (progress) => {
+          console.log(`Upload progress: ${progress}%`);
+          setUploadProgress(progress);
+        }
       );
       
       console.log('Webcam recording uploaded successfully');
@@ -502,18 +637,49 @@ const WebcamRecorder = forwardRef(({
   };
   
   const stopAndCleanupWebcam = () => {
+    // Clear recording timeout
+    if (recordingTimeoutRef.current) {
+      clearTimeout(recordingTimeoutRef.current);
+      recordingTimeoutRef.current = null;
+    }
+    
     // Stop recording if active
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
+    if (mediaRecorderRef.current) {
+      try {
+        if (mediaRecorderRef.current.state !== 'inactive') {
+          mediaRecorderRef.current.stop();
+        }
+        mediaRecorderRef.current = null;
+      } catch (e) {
+        console.error('Error stopping MediaRecorder during cleanup:', e);
+      }
       setIsRecording(false);
       setIsPaused(false);
     }
     
     // Stop and release webcam stream
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
+      try {
+        streamRef.current.getTracks().forEach(track => {
+          try {
+            track.stop();
+          } catch (e) {
+            console.warn('Error stopping track:', e);
+          }
+        });
+        streamRef.current = null;
+      } catch (e) {
+        console.error('Error stopping stream during cleanup:', e);
+      }
     }
+    
+    // Clear webcam element src
+    if (webcamRef.current) {
+      webcamRef.current.srcObject = null;
+    }
+    
+    // Clear chunks
+    chunksRef.current = [];
   };
   
   const handleDenyPermission = () => {
@@ -533,6 +699,7 @@ const WebcamRecorder = forwardRef(({
       <video 
         ref={webcamRef}
         autoPlay
+        playsInline
         muted
         style={{ display: 'none' }}
       />
@@ -545,6 +712,7 @@ const WebcamRecorder = forwardRef(({
               onClick={toggleCameraSelector}
               className="flex items-center bg-gray-900/70 backdrop-blur-sm px-3 py-1.5 rounded-full text-white hover:bg-gray-800/80 transition-colors"
               title="Change camera"
+              type="button"
             >
               <SwitchCamera size={16} className="mr-2" />
               <span className="text-sm">Switch camera</span>
@@ -552,14 +720,14 @@ const WebcamRecorder = forwardRef(({
           )}
           
           {isRecording && !isPaused && (
-            <div className="flex items-center bg-black/50 backdrop-blur-sm px-3 py-1.5 rounded-full">
+            <div className="flex items-center bg-black/70 backdrop-blur-sm px-3 py-1.5 rounded-full">
               <div className="h-3 w-3 bg-red-500 rounded-full mr-2 animate-pulse" />
               <span className="text-white text-sm font-medium">Recording</span>
             </div>
           )}
           
           {isRecording && isPaused && (
-            <div className="flex items-center bg-black/50 backdrop-blur-sm px-3 py-1.5 rounded-full">
+            <div className="flex items-center bg-black/70 backdrop-blur-sm px-3 py-1.5 rounded-full">
               <div className="h-3 w-3 bg-yellow-500 rounded-full mr-2" />
               <span className="text-white text-sm font-medium">Paused</span>
             </div>
@@ -771,6 +939,13 @@ const WebcamRecorder = forwardRef(({
       )}
     </>
   );
+});
+
+// Add a global error handler to catch any issues with MediaRecorder
+window.addEventListener('error', (event) => {
+  if (event.error && event.error.message && event.error.message.includes('MediaRecorder')) {
+    console.error('Global MediaRecorder error:', event.error);
+  }
 });
 
 WebcamRecorder.displayName = 'WebcamRecorder';
