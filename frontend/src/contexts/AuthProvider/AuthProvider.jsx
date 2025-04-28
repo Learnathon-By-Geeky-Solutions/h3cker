@@ -37,9 +37,16 @@ const updateUserData = async (uid, updates) => {
 
 // Helper function to process user data after authentication
 const processAuthenticatedUser = async (userCredential, deviceId) => {
-  const token = await userCredential.user.getIdToken();
-  TokenService.setToken(token, userCredential.user.uid);
-  return userCredential.user;
+  if (!userCredential?.user) return null;
+  
+  try {
+    const token = await userCredential.user.getIdToken();
+    TokenService.setToken(token, userCredential.user.uid);
+    return userCredential.user;
+  } catch (error) {
+    console.error('Error processing authenticated user:', error);
+    return userCredential.user;
+  }
 };
 
 // Helper function to check pending navigations
@@ -213,11 +220,13 @@ const AuthProvider = ({ children }) => {
     const userSnapshot = await getDoc(userDocRef);
 
     try {
+      // Ensure photoURL is properly captured from Google auth
+      const googlePhotoURL = result.user.photoURL;
+      
       if (!userSnapshot.exists()) {
-   
-        await createGoogleUserDocument(result, deviceId);
+        await createGoogleUserDocument(result, deviceId, googlePhotoURL);
       } else {
-        await updateGoogleUserDocument(result, deviceId);
+        await updateGoogleUserDocument(result, deviceId, googlePhotoURL);
       }
   
       // Set token and cache
@@ -227,7 +236,7 @@ const AuthProvider = ({ children }) => {
       TokenService.setGoogleAuthCache({
         email: result.user.email,
         displayName: result.user.displayName,
-        photoURL: result.user.photoURL
+        photoURL: googlePhotoURL
       }, result.user.uid);
   
       return result.user;
@@ -243,14 +252,14 @@ const AuthProvider = ({ children }) => {
   };
 
   // Create new Google user document
-  const createGoogleUserDocument = async (result, deviceId) => {
+  const createGoogleUserDocument = async (result, deviceId, photoURL) => {
     const nameParts = result.user.displayName?.split(" ") || ['User'];
     
     await setDoc(doc(db, "users", result.user.uid), {
       firstName: nameParts[0],
       lastName: nameParts.slice(1).join(" ") || '',
       email: result.user.email,
-      photoURL: result.user.photoURL || DEFAULT_AVATAR,
+      photoURL: photoURL || DEFAULT_AVATAR,
       createdAt: serverTimestamp(),
       lastLoginAt: serverTimestamp(),
       role: 'user',
@@ -264,14 +273,16 @@ const AuthProvider = ({ children }) => {
   };
 
   // Update existing Google user document
-  const updateGoogleUserDocument = async (result, deviceId) => {
+  const updateGoogleUserDocument = async (result, deviceId, photoURL) => {
     try {
       const updatedDevices = await updateUserDevices(result.user.uid, deviceId);
       
       await updateDoc(doc(db, "users", result.user.uid), { 
         lastLoginAt: serverTimestamp(),
         emailVerified: result.user.emailVerified,
-        devices: updatedDevices
+        devices: updatedDevices,
+        // Only update photoURL if it exists and has changed
+        ...(photoURL && { photoURL })
       });
     } catch (error) {
       if (error.message === 'MAX_DEVICES_REACHED' || error.code === 'MAX_DEVICES_REACHED') {
@@ -405,8 +416,6 @@ const AuthProvider = ({ children }) => {
       }
 
       TokenService.clearAuth();
-      
-
       return signOut(auth);
     } catch (error) {
       console.error('Error during logout:', error);
@@ -514,7 +523,14 @@ const AuthProvider = ({ children }) => {
     const handleAuthStateChange = async (currentUser) => {
       try {
         if (currentUser) {
-          await processAuthenticatedUser({ user: currentUser });
+          // Only attempt to process and get token if the user is authenticated
+          try {
+            await processAuthenticatedUser({ user: currentUser });
+          } catch (tokenError) {
+            console.warn('Error processing authentication token:', tokenError);
+            // Continue anyway as we still have the currentUser object
+          }
+          
           const userData = await getUserDataFromFirestore(currentUser);
           
           setUser({ 
@@ -536,30 +552,36 @@ const AuthProvider = ({ children }) => {
         TokenService.clearAuth();
         setUser(null);
       }
+      
       setLoading(false);
     };
 
     const getUserDataFromFirestore = async (currentUser) => {
-      const userDoc = await getDoc(doc(db, "users", currentUser.uid));
-      
-      // Set Google auth cache if applicable
-      if (currentUser.providerData.some(provider => provider.providerId === 'google.com')) {
-        TokenService.setGoogleAuthCache({
-          email: currentUser.email,
-          displayName: currentUser.displayName,
-          photoURL: currentUser.photoURL
-        }, currentUser.uid);
+      try {
+        const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+        
+        // Set Google auth cache if applicable
+        if (currentUser.providerData.some(provider => provider.providerId === 'google.com')) {
+          TokenService.setGoogleAuthCache({
+            email: currentUser.email,
+            displayName: currentUser.displayName,
+            photoURL: currentUser.photoURL
+          }, currentUser.uid);
+        }
+        
+        // Update emailVerified status if needed
+        const userData = userDoc.exists() ? userDoc.data() : {};
+        if (userDoc.exists() && userData.emailVerified !== currentUser.emailVerified) {
+          await updateDoc(doc(db, "users", currentUser.uid), {
+            emailVerified: currentUser.emailVerified
+          });
+        }
+        
+        return userData;
+      } catch (error) {
+        console.error('Error getting user data from Firestore:', error);
+        return {};
       }
-      
-      // Update emailVerified status if needed
-      const userData = userDoc.exists() ? userDoc.data() : {};
-      if (userDoc.exists() && userData.emailVerified !== currentUser.emailVerified) {
-        await updateDoc(doc(db, "users", currentUser.uid), {
-          emailVerified: currentUser.emailVerified
-        });
-      }
-      
-      return userData;
     };
     
     const unsubscribe = onAuthStateChanged(auth, handleAuthStateChange);
@@ -599,7 +621,7 @@ const AuthProvider = ({ children }) => {
       window.removeEventListener('popstate', handleBackNavigation);
     };
   }, []);
- 
+
   const safeGetGoogleAuthCache = useCallback(() => {
     try {
       return TokenService.getGoogleAuthCache();

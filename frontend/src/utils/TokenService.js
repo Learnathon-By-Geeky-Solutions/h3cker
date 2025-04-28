@@ -85,7 +85,6 @@ const TokenService = {
       }
     } catch (e) {
       console.warn('Could not access performance timing data:', e);
-
       perfData = timestamp.split('').reverse().join('');
     }
   
@@ -137,7 +136,6 @@ const TokenService = {
       return this._generateFallbackDeviceId();
     } catch (error) {
       console.error('Error generating device ID:', error);
-
       return this._generateFallbackDeviceId();
     }
   },
@@ -189,7 +187,6 @@ const TokenService = {
       return false;
     }
   },
-
 
   updateLastTokenSetTime() {
     try {
@@ -296,51 +293,71 @@ const TokenService = {
   },
 
   /**
-   * Get a friendly name for the current device
-   * @returns {string} A name for the current device
+   * Detect platform name from user agent
+   * @private
+   * @returns {string} The detected platform name
    */
-  getDeviceName() {
+  _detectPlatform() {
     try {
-      let platform = 'Unknown Device';
       if (navigator.userAgentData?.platform) {
-        platform = navigator.userAgentData.platform;
-      } else {
-        const userAgent = navigator.userAgent;
-        if (userAgent.includes('Win')) platform = 'Windows';
-        else if (userAgent.includes('Mac')) platform = 'macOS';
-        else if (userAgent.includes('Linux')) platform = 'Linux';
-        else if (userAgent.includes('Android')) platform = 'Android';
-        else if (userAgent.includes('iPhone') || userAgent.includes('iPad')) platform = 'iOS';
+        return navigator.userAgentData.platform;
       }
       
-      const browser = this.getBrowserName();
-      return `${browser} on ${platform}`;
+      const userAgent = navigator.userAgent;
+      if (userAgent.includes('Win')) return 'Windows';
+      if (userAgent.includes('Mac')) return 'macOS';
+      if (userAgent.includes('Linux')) return 'Linux';
+      if (userAgent.includes('Android')) return 'Android';
+      if (userAgent.includes('iPhone') || userAgent.includes('iPad')) return 'iOS';
+      
+      return 'Unknown Device';
     } catch (error) {
-      console.error('Error getting device name:', error);
+      console.error('Error detecting platform:', error);
       return 'Unknown Device';
     }
   },
 
   /**
-   * Get the name of the current browser
-   * @returns {string} The name of the browser
+   * Detect browser name from user agent
+   * @private
+   * @returns {string} The detected browser name
    */
-  getBrowserName() {
+  _detectBrowser() {
     try {
       const userAgent = navigator.userAgent;
-
-      // Edge needs to be checked before Chrome due to its user agent string
+      
       if (userAgent.indexOf("Edg") > -1) return "Edge";
-      if (userAgent.indexOf("Chrome") > -1 && userAgent.indexOf("Safari") > -1 && userAgent.indexOf("OPR") === -1) return "Chrome";
+      if (userAgent.indexOf("Chrome") > -1 && 
+          userAgent.indexOf("Safari") > -1 && 
+          userAgent.indexOf("OPR") === -1) return "Chrome";
       if (userAgent.indexOf("Firefox") > -1) return "Firefox";
-      if (userAgent.indexOf("Safari") > -1 && userAgent.indexOf("Chrome") === -1) return "Safari";
-      if (userAgent.indexOf("OPR") > -1 || userAgent.indexOf("Opera") > -1) return "Opera";
-      if (userAgent.indexOf("Trident") > -1 || userAgent.indexOf("MSIE") > -1) return "Internet Explorer";
-
+      if (userAgent.indexOf("Safari") > -1 && 
+          userAgent.indexOf("Chrome") === -1) return "Safari";
+      if (userAgent.indexOf("OPR") > -1 || 
+          userAgent.indexOf("Opera") > -1) return "Opera";
+      if (userAgent.indexOf("Trident") > -1 || 
+          userAgent.indexOf("MSIE") > -1) return "Internet Explorer";
+      
       return "Unknown Browser";
     } catch (error) {
-      console.error('Error getting browser name:', error);
-      return "Unknown Browser";
+      console.error('Error detecting browser:', error);
+      return 'Unknown Browser';
+    }
+  },
+
+  /**
+   * Get a friendly name for the current device
+   * @returns {string} A name for the current device
+   */
+  getDeviceName() {
+    try {
+      const platform = this._detectPlatform();
+      const browser = this._detectBrowser();
+      
+      return `${browser} on ${platform}`;
+    } catch (error) {
+      console.error('Error getting device name:', error);
+      return 'Unknown Device';
     }
   },
 
@@ -370,35 +387,14 @@ const TokenService = {
       this._storage.setItem(this.tokenKey, token);
       const expiryTime = Date.now() + this.sessionDuration;
       this._storage.setItem(this.tokenExpiryKey, expiryTime.toString());
-      
 
       this.updateLastTokenSetTime();
-      
-      try {
-        // Add secure and httpOnly flags to cookies
-        const isSecure = window.location.protocol === 'https:';
-        const secureFlag = isSecure ? ';secure' : '';
-        document.cookie = `auth_token_backup=${encodeURIComponent(token)};path=/;max-age=${this.sessionDuration/1000}${secureFlag};httpOnly`;
-        document.cookie = `auth_uid_backup=${encodeURIComponent(uid)};path=/;max-age=${this.sessionDuration/1000}${secureFlag};httpOnly`;
-      } catch (cookieError) {
-        console.error('Error setting backup cookie:', cookieError);
-      }
       
       console.log(`Token set. Expires at: ${new Date(expiryTime).toLocaleString()}`);
 
       this.handleDeviceTracking(uid);
     } catch (error) {
       console.error('Error setting token:', error);
-      
-
-      try {
-        const isSecure = window.location.protocol === 'https:';
-        const secureFlag = isSecure ? ';secure' : '';
-        document.cookie = `auth_token_backup=${encodeURIComponent(token)};path=/;max-age=${this.sessionDuration/1000}${secureFlag};httpOnly`;
-        document.cookie = `auth_uid_backup=${encodeURIComponent(uid)};path=/;max-age=${this.sessionDuration/1000}${secureFlag};httpOnly`;
-      } catch (cookieError) {
-        console.error('Error setting backup cookie:', cookieError);
-      }
     }
   },
 
@@ -410,14 +406,6 @@ const TokenService = {
     try {
       const token = this.getToken();
       if (!token) {
-        const cookieToken = this.getTokenFromCookie();
-        if (cookieToken) {
-          const cookieUid = this.getUidFromCookie();
-          if (cookieUid) {
-            this._storage.setItem(this.tokenKey, cookieToken);
-            return false;
-          }
-        }
         return true;
       }
 
@@ -438,46 +426,6 @@ const TokenService = {
     } catch (error) {
       console.error('Error checking token expiry:', error);
       return true;
-    }
-  },
-
-  /**
-   * Get token from cookie (fallback method)
-   * @returns {string|null} Token from cookie or null
-   */
-  getTokenFromCookie() {
-    try {
-      const cookies = document.cookie.split(';');
-      for (const cookie of cookies) {
-        const trimmedCookie = cookie.trim();
-        if (trimmedCookie.startsWith('auth_token_backup=')) {
-          return decodeURIComponent(trimmedCookie.substring('auth_token_backup='.length));
-        }
-      }
-      return null;
-    } catch (error) {
-      console.error('Error getting token from cookie:', error);
-      return null;
-    }
-  },
-
-  /**
-   * Get UID from cookie (fallback method)
-   * @returns {string|null}
-   */
-  getUidFromCookie() {
-    try {
-      const cookies = document.cookie.split(';');
-      for (const cookie of cookies) {
-        const trimmedCookie = cookie.trim();
-        if (trimmedCookie.startsWith('auth_uid_backup=')) {
-          return decodeURIComponent(trimmedCookie.substring('auth_uid_backup='.length));
-        }
-      }
-      return null;
-    } catch (error) {
-      console.error('Error getting UID from cookie:', error);
-      return null;
     }
   },
 
@@ -515,24 +463,6 @@ const TokenService = {
       this._storage.setItem(this.tokenExpiryKey, expiryTime.toString());
       this.updateLastTokenSetTime();
       
-      try {
-        const cookieToken = this.getTokenFromCookie();
-        if (cookieToken) {
-          const isSecure = window.location.protocol === 'https:';
-          const secureFlag = isSecure ? ';secure' : '';
-          document.cookie = `auth_token_backup=${encodeURIComponent(cookieToken)};path=/;max-age=${this.sessionDuration/1000}${secureFlag};httpOnly`;
-        }
-        
-        const cookieUid = this.getUidFromCookie();
-        if (cookieUid) {
-          const isSecure = window.location.protocol === 'https:';
-          const secureFlag = isSecure ? ';secure' : '';
-          document.cookie = `auth_uid_backup=${encodeURIComponent(cookieUid)};path=/;max-age=${this.sessionDuration/1000}${secureFlag};httpOnly`;
-        }
-      } catch (cookieError) {
-        console.error('Error refreshing backup cookie:', cookieError);
-      }
-      
       console.log(`Token expiry refreshed. New expiry: ${new Date(expiryTime).toLocaleString()}`);
       return true;
     } catch (error) {
@@ -551,10 +481,8 @@ const TokenService = {
   simpleEncrypt(text, key) {
     try {
       if (!key || !text) return text;
-      
 
       const expandKey = (baseKey) => {
-
         let expandedKey = '';
         let lastChar = 0;
         
@@ -571,7 +499,6 @@ const TokenService = {
       };
       
       const extendedKey = expandKey(key);
-      
 
       let result = '';
       for (let i = 0; i < text.length; i++) {
@@ -703,8 +630,6 @@ const TokenService = {
     }
   },
 
-
-   //Clear the Google authentication cache
   clearGoogleAuthCache() {
     try {
       this._storage.removeItem(this.googleAuthCacheKey);
@@ -775,19 +700,12 @@ const TokenService = {
     }
   },
 
-
   clearAuth() {
     try {
       this._storage.removeItem(this.tokenKey);
       this._storage.removeItem(this.tokenExpiryKey);
       this._storage.removeItem(this.lastTokenSetTimeKey);
       this.clearGoogleAuthCache();
-      
-
-      const isSecure = window.location.protocol === 'https:';
-      const secureFlag = isSecure ? ';secure' : '';
-      document.cookie = `auth_token_backup=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/${secureFlag};httpOnly`;
-      document.cookie = `auth_uid_backup=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/${secureFlag};httpOnly`;
       
       try {
         sessionStorage.removeItem('google_auth_cache_backup');

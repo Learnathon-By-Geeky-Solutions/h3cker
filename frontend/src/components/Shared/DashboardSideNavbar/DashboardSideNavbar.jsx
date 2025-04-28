@@ -13,6 +13,7 @@ import {
   Menu, 
   X, 
   Video,
+  User
 } from 'lucide-react';
 
 const DEFAULT_AVATAR = "https://flowbite.com/docs/images/people/profile-picture-5.jpg";
@@ -46,6 +47,14 @@ const DashboardSideNavbar = ({ isOpen, setIsOpen }) => {
   const { user, logOut } = useContext(AuthContext);
   const [isHovering, setIsHovering] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [imageError, setImageError] = useState(false);
+
+  // Reset image error when user changes
+  useEffect(() => {
+    if (user?.photoURL) {
+      setImageError(false);
+    }
+  }, [user?.photoURL]);
 
   // Handle window resize
   useEffect(() => {
@@ -123,21 +132,30 @@ const DashboardSideNavbar = ({ isOpen, setIsOpen }) => {
     return (
       <div className={`mb-6 ${containerClass}`}>
         <div className={`flex ${profileClass}`}>
-          <Avatar
-            img={user?.photoURL || DEFAULT_AVATAR}
-            rounded
-            bordered
-            color="blue"
-            className={`${avatarSizeClass} border-blue-600/50`}
-            onError={(e) => {
-              e.target.onerror = null;
-              e.target.src = DEFAULT_AVATAR;
-            }}
-          />
+          {imageError || !user?.photoURL ? (
+            <div className={`${avatarSizeClass} rounded-full bg-gray-700 flex items-center justify-center border-2 border-blue-600/50`}>
+              <User size={!isOpen && !isHovering ? 20 : 16} className="text-gray-300" />
+            </div>
+          ) : (
+            <Avatar
+              img={user?.photoURL}
+              rounded
+              bordered
+              color="blue"
+              className={`${avatarSizeClass} border-blue-600/50`}
+              onError={(e) => {
+                e.target.onerror = null;
+                setImageError(true);
+              }}
+              loading="eager"
+            />
+          )}
           {(isOpen || isHovering) && (
             <div className="space-y-0.5">
               <p className="text-sm font-medium text-white truncate">
-                {user?.displayName || 'User'}
+                {user?.firstName && user?.lastName 
+                  ? `${user.firstName} ${user.lastName}` 
+                  : user?.displayName || 'User'}
               </p>
               <p className="text-xs text-gray-400 truncate max-w-[160px]">
                 {user?.email || 'user@example.com'}

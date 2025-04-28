@@ -1,7 +1,7 @@
 import React, { useContext, useState, useEffect, useRef } from "react";
 import { AuthContext } from "../../../contexts/AuthProvider/AuthProvider";
 import { Link, useNavigate } from "react-router-dom";
-import { BarChart3, Menu, X} from "lucide-react";
+import { BarChart3, Menu, X, User } from "lucide-react";
 import SearchBar from "../SearchBar/SearchBar";
 
 const NavigationBar = () => {
@@ -10,9 +10,15 @@ const NavigationBar = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [imageError, setImageError] = useState(false);
   
   const userMenuRef = useRef(null);
   const mobileMenuRef = useRef(null);
+
+  // Reset image error when user changes
+  useEffect(() => {
+    setImageError(false);
+  }, [user?.photoURL]);
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 10);
@@ -132,12 +138,18 @@ const NavigationBar = () => {
             onClick={() => setShowUserMenu(!showUserMenu)}
             className="flex items-center focus:outline-none"
           >
-            <div className="h-8 w-8 rounded-full overflow-hidden border-2 border-gray-700 hover:border-blue-500 transition-colors">
-              <img
-                src={user.photoURL || "https://flowbite.com/docs/images/people/profile-picture-5.jpg"}
-                alt="User profile"
-                className="h-full w-full object-cover"
-              />
+            <div className="h-8 w-8 rounded-full overflow-hidden border-2 border-gray-700 hover:border-blue-500 transition-colors bg-gray-700 flex items-center justify-center">
+              {imageError || !user.photoURL ? (
+                <User size={16} className="text-gray-300" />
+              ) : (
+                <img
+                  src={user.photoURL}
+                  alt="User profile"
+                  className="h-full w-full object-cover"
+                  onError={() => setImageError(true)}
+                  loading="eager"
+                />
+              )}
             </div>
           </button>
 
@@ -155,26 +167,31 @@ const NavigationBar = () => {
         ref={mobileMenuRef}
         className="md:hidden bg-gray-800 shadow-lg transition-all duration-300 max-h-screen opacity-100"
       >
-        {/* Mobile Search */}
-        <div className="px-4 py-3">
-          <SearchBar />
-        </div>
+        {user && (
+          <div className="px-4 py-3">
+            <SearchBar />
+          </div>
+        )}
         
         {/* Mobile Navigation Links */}
         <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
           {renderNavLinks(true)}
         </div>
-        
-        {/* User info in mobile menu when logged in */}
         {user && (
           <div className="pt-4 pb-3 border-t border-gray-700">
             <div className="flex items-center px-5">
-              <div className="flex-shrink-0">
-                <img 
-                  className="h-10 w-10 rounded-full" 
-                  src={user.photoURL || "https://flowbite.com/docs/images/people/profile-picture-5.jpg"} 
-                  alt="User avatar" 
-                />
+              <div className="flex-shrink-0 h-10 w-10 rounded-full bg-gray-700 flex items-center justify-center overflow-hidden">
+                {imageError || !user.photoURL ? (
+                  <User size={20} className="text-gray-300" />
+                ) : (
+                  <img 
+                    className="h-full w-full object-cover" 
+                    src={user.photoURL} 
+                    alt="User avatar"
+                    onError={() => setImageError(true)}
+                    loading="eager"
+                  />
+                )}
               </div>
               <div className="ml-3">
                 <div className="text-base font-medium text-white">
@@ -229,29 +246,23 @@ const NavigationBar = () => {
     }`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
-          {/* Logo */}
           <Link to="/" className="flex items-center space-x-2">
             <div className="flex items-center justify-center w-8 h-8 bg-blue-600 rounded-md shadow-lg">
               <BarChart3 size={18} className="text-white" />
             </div>
             <span className="text-xl font-bold text-white">Engage Analytics</span>
           </Link>
-
-          {/* Search Bar - Desktop */}
-          <div className="hidden md:block flex-1 max-w-md mx-10">
-            <SearchBar />
-          </div>
-
-          {/* Navigation */}
+          {user && (
+            <div className="hidden md:block flex-1 max-w-md mx-10">
+              <SearchBar />
+            </div>
+          )}
           <div className="flex items-center space-x-6">
             <nav className="hidden md:flex space-x-6 text-sm font-medium">
               {renderNavLinks()}
             </nav>
 
-            {/* User Controls */}
             {renderUserControls()}
-            
-            {/* Mobile menu button */}
             <button 
               data-mobile-toggle
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -267,8 +278,7 @@ const NavigationBar = () => {
           </div>
         </div>
       </div>
-      
-      {/* Mobile Navigation */}
+    
       {renderMobileMenu()}
     </div>
   );

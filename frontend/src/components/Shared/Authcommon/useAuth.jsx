@@ -15,17 +15,9 @@ const useAuthNavigation = () => {
       sessionStorage.setItem('auth_navigation_pending', 'true');
       sessionStorage.setItem('auth_navigation_target', from);
       
-      // Edge browser detection
-      const isEdge = navigator.userAgent.indexOf("Edg") > -1;
-      
-      if (isEdge) {
-        console.log('Edge browser detected, using direct navigation');
-        window.location.href = from;
-        return true;
-      }
-      
       navigate(from, { replace: true });
       
+      // Fallback navigation check if React Router navigation fails
       setTimeout(() => {
         const currentPath = window.location.pathname;
         if (currentPath.includes('/login') || 
@@ -76,11 +68,8 @@ export const useGoogleAuth = () => {
     
     const initialLoadTimeout = setTimeout(loadCachedAccount, 500);
     
-    const intervalId = setInterval(loadCachedAccount, 5000);
-    
     return () => {
       clearTimeout(initialLoadTimeout);
-      clearInterval(intervalId);
     };
   }, [getGoogleAuthCache, googleAuthChecked]);
 
@@ -193,7 +182,6 @@ export const useSignupForm = () => {
   const [loading, setLoading] = useState(false);
   const [showVerificationMessage, setShowVerificationMessage] = useState(false);
   const [touchedFields, setTouchedFields] = useState({});
-
 
   useEffect(() => {
     if (showVerificationMessage) {

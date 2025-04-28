@@ -50,8 +50,8 @@ const Dashboard = () => {
       try {
         // Admin users get all videos, regular users only get their own
         const allVideos = user?.role === 'admin' ? 
-          await VideoService.adminGetAllVideos() : 
-          await VideoService.getVideoFeed();
+          VideoService.adminGetAllVideos() : 
+          VideoService.getVideoFeed();
         
         if (!isMounted) return;
         

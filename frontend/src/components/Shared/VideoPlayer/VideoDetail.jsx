@@ -22,13 +22,12 @@ import {
   Trash,
   Eye,
   EyeOff,
-  Award
+
 } from 'lucide-react';
 import VideoService from '../../../utils/VideoService';
 import VideoPlayer from '../../Shared/VideoPlayer/VideoPlayer';
 import { LoadingState, ErrorState } from '../../Shared/VideoLoadingStates/VideoLoadingStates';
 import { AuthContext } from '../../../contexts/AuthProvider/AuthProvider';
-import EvaluationForm from '../../Pages/Dashboard/EvaluationForm';
 
 // Modern primary action button component
 const PrimaryButton = ({ icon, label, onClick, disabled = false, count, active = false }) => {
@@ -91,7 +90,7 @@ const SecondaryButton = ({ icon, label, onClick, disabled = false }) => {
   );
 };
 
-const VideoHeader = ({ video, handleBack, handleLike, handleShare, handleEvaluate, liked, hasEvaluationForm, hasSubmittedEvaluation }) => {
+const VideoHeader = ({ video, handleBack, handleLike, handleShare, liked }) => {
   const formattedDate = video.upload_date 
     ? new Date(video.upload_date).toLocaleDateString('en-US', {
         year: 'numeric',
@@ -147,14 +146,6 @@ const VideoHeader = ({ video, handleBack, handleLike, handleShare, handleEvaluat
             label="Share"
             onClick={handleShare}
           />
-
-          {hasEvaluationForm && !hasSubmittedEvaluation && (
-            <SecondaryButton
-              icon={Award}
-              label="Evaluate & Earn Points"
-              onClick={handleEvaluate}
-            />
-          )}
         </div>
       </div>
     </>
@@ -278,6 +269,7 @@ const ShareModal = ({ isOpen, onClose, videoId, videoTitle }) => {
       
       const generateShareLink = async () => {
         try {
+          // eslint-disable-next-line @typescript-eslint/await-thenable
           const response = await VideoService.createVideoShare(videoId);
           if (response?.share_url) {
             setShareUrl(response.share_url);
@@ -451,11 +443,6 @@ const VideoDetail = () => {
   const [viewRecorded, setViewRecorded] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [evaluationModalOpen, setEvaluationModalOpen] = useState(false);
-  const [evaluationCompleted, setEvaluationCompleted] = useState(false);
-  const [hasEvaluationForm, setHasEvaluationForm] = useState(false);
-  const [hasSubmittedEvaluation, setHasSubmittedEvaluation] = useState(false);
-  const [showEvaluationNotification, setShowEvaluationNotification] = useState(false);
 
   useEffect(() => {
     const fetchVideoDetails = async () => {
@@ -464,20 +451,11 @@ const VideoDetail = () => {
         setError(null);
         setViewRecorded(false);
         
+        // eslint-disable-next-line @typescript-eslint/await-thenable
         const videoData = await VideoService.getVideoDetails(id);
         setVideo(videoData);
         setLiked(!!videoData.is_liked);
         
-        // Check if video has evaluation form and if user has submitted it
-        if (videoData.has_evaluation_form) {
-          setHasEvaluationForm(true);
-        }
-        
-        if (videoData.has_submitted_evaluation) {
-          setHasSubmittedEvaluation(true);
-          setEvaluationCompleted(true);
-        }
-       
         await fetchRelatedVideos(videoData);
         
         setLoading(false);
@@ -502,6 +480,7 @@ const VideoDetail = () => {
       if (!currentVideo) return;
       
       try {
+        // eslint-disable-next-line @typescript-eslint/await-thenable
         const videoFeed = await VideoService.getVideoFeed();
         if (Array.isArray(videoFeed) && videoFeed.length > 0) {
           const related = videoFeed
@@ -535,6 +514,7 @@ const VideoDetail = () => {
     if (!id || viewRecorded) return;
     
     try {
+      // eslint-disable-next-line @typescript-eslint/await-thenable
       await VideoService.recordVideoView(id);
       setViewRecorded(true);
       
@@ -551,6 +531,7 @@ const VideoDetail = () => {
     if (!id) return;
     
     try {
+      // eslint-disable-next-line @typescript-eslint/await-thenable
       const response = await VideoService.toggleVideoLike(id);
       
       if (response) {
@@ -572,44 +553,15 @@ const VideoDetail = () => {
     setShareModalOpen(true);
   };
 
-  const handleEvaluate = () => {
-    setEvaluationModalOpen(true);
-  };
-
   const handleVideoEnded = () => {
     console.log('Video playback ended');
-    // Only show evaluation form automatically if:
-    // 1. User is not an admin
-    // 2. Video has an evaluation form
-    // 3. User hasn't already submitted an evaluation
-    // 4. User is logged in
-    if (user && 
-        user.role !== 'admin' && 
-        hasEvaluationForm && 
-        !hasSubmittedEvaluation && 
-        !evaluationCompleted) {
-      setEvaluationModalOpen(true);
-    }
-  };
-
-  const handleEvaluationComplete = (response) => {
-    setEvaluationCompleted(true);
-    setHasSubmittedEvaluation(true);
-    setEvaluationModalOpen(false);
-    
-    // Show notification about points awarded
-    if (response?.points_awarded) {
-      setShowEvaluationNotification(true);
-      setTimeout(() => {
-        setShowEvaluationNotification(false);
-      }, 5000); // Hide after 5 seconds
-    }
   };
 
   // Admin functions
   const handleToggleVisibility = async () => {
     try {
       const newVisibility = video.visibility === 'private' ? 'public' : 'private';
+      // eslint-disable-next-line @typescript-eslint/await-thenable
       await VideoService.adminUpdateVideoVisibility(id, newVisibility);
       setVideo({
         ...video,
@@ -624,6 +576,7 @@ const VideoDetail = () => {
 
   const handleDeleteVideo = async () => {
     try {
+      // eslint-disable-next-line @typescript-eslint/await-thenable
       await VideoService.adminDeleteVideo(id);
       navigate('/dashboard', { replace: true });
     } catch (error) {
@@ -685,16 +638,6 @@ const VideoDetail = () => {
 
   return (
     <div className="max-w-6xl mx-auto px-4">
-      {showEvaluationNotification && (
-        <div className="fixed top-5 right-5 bg-green-600 text-white p-4 rounded-lg shadow-lg z-50 flex items-center">
-          <Award className="mr-2" />
-          <div>
-            <p className="font-bold">Evaluation Submitted!</p>
-            <p>You've earned 10 points (worth 100 BDT)</p>
-          </div>
-        </div>
-      )}
-      
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
           <motion.div 
@@ -725,10 +668,7 @@ const VideoDetail = () => {
               handleBack={handleBack} 
               handleLike={handleLike}
               handleShare={handleShare}
-              handleEvaluate={handleEvaluate}
               liked={liked}
-              hasEvaluationForm={hasEvaluationForm}
-              hasSubmittedEvaluation={hasSubmittedEvaluation}
             />
             
             <hr className="border-gray-700 my-4" />
@@ -768,23 +708,6 @@ const VideoDetail = () => {
           </FlowbiteButton>
         </Modal.Footer>
       </Modal>
-
-      {/* Evaluation Form Modal */}
-      <Modal show={evaluationModalOpen} onClose={() => setEvaluationModalOpen(false)} size="lg">
-        <Modal.Header className="bg-gray-800 text-white border-b border-gray-700">
-          <div className="flex items-center">
-            <Award className="text-yellow-400 mr-2" size={20} />
-            Evaluate Video & Earn Points
-          </div>
-        </Modal.Header>
-        <Modal.Body className="bg-gray-800 text-white">
-          <EvaluationForm 
-            videoId={id} 
-            onComplete={handleEvaluationComplete} 
-            onBack={() => setEvaluationModalOpen(false)}
-          />
-        </Modal.Body>
-      </Modal>
     </div>
   );
 };
@@ -817,10 +740,7 @@ VideoHeader.propTypes = {
   handleBack: PropTypes.func.isRequired,
   handleLike: PropTypes.func.isRequired,
   handleShare: PropTypes.func.isRequired,
-  handleEvaluate: PropTypes.func.isRequired,
   liked: PropTypes.bool.isRequired,
-  hasEvaluationForm: PropTypes.bool,
-  hasSubmittedEvaluation: PropTypes.bool
 };
 
 RelatedVideoCard.propTypes = {
@@ -845,7 +765,10 @@ CommentInput.propTypes = {
 ShareModal.propTypes = {
   isOpen: PropTypes.bool.isRequired,
   onClose: PropTypes.func.isRequired,
-  videoId: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+  videoId: PropTypes.oneOfType([
+    PropTypes.string,
+    PropTypes.number
+  ]),
   videoTitle: PropTypes.string
 };
 

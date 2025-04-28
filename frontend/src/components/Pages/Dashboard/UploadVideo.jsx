@@ -211,7 +211,7 @@ const UploadVideo = () => {
     setStatusMessage('Initializing upload...');
 
     try {
-      const response = await VideoService.initiateVideoUpload(metadataPayload);
+      const response = VideoService.initiateVideoUpload(metadataPayload);
 
       if (!response?.video_upload_url || !response?.thumbnail_upload_url) {
         throw new Error("Backend did not return valid upload URLs.");

@@ -16,8 +16,8 @@ const UserLikedVideos = () => {
         setLoading(true);
         setError(null);
         
-        // Fetch liked videos from the API
-        const videos = await VideoService.getUserLikedVideos();
+        // Fetch liked videos from the API - removed await since this doesn't return a Promise
+        const videos = VideoService.getUserLikedVideos();
         
         // Ensure we have an array of videos (defensive programming)
         if (Array.isArray(videos)) {

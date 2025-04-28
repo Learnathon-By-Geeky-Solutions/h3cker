@@ -1,16 +1,14 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 import { Card, Badge } from 'flowbite-react';
-import { Clock, TrendingUp, ThumbsUp, Play } from 'lucide-react';
+import { TrendingUp, ThumbsUp, Play, Clock } from 'lucide-react';
 import { formatDistanceToNow, parseISO, isValid } from 'date-fns';
 
 const AdCard = ({ ad, onPlayClick }) => {
   const getThumbnail = () => {
     if (ad.imageUrl || ad.thumbnail_url) return ad.imageUrl || ad.thumbnail_url;
-    return ad.imageUrl || ad.thumbnail_url || '';
+    return null;
   };
-
-  const duration = ad.duration || "00:00";
 
   const formatDateString = (dateString) => {
     let formattedDate = 'Unknown date';
@@ -28,39 +26,35 @@ const AdCard = ({ ad, onPlayClick }) => {
   };
 
   const createdAt = formatDateString(ad.upload_date);
-
   const isFeatured = ad.featured || ad.popular || false;
+  const hasVideo = Boolean(ad.video_url || ad.videoUrl);
+  const placeholderSrc = `/api/placeholder/400/225?text=${encodeURIComponent(ad.title || 'Video')}`;
 
   const handleClick = (e) => {
     e.preventDefault();
-    if (onPlayClick && ad.video_url) {
-        onPlayClick(ad);
+    if (onPlayClick && hasVideo) {
+      onPlayClick(ad);
     } else if (onPlayClick) {
-        console.warn("Play clicked but no video URL found for:", ad.title);
+      console.warn("Play clicked but no video URL found for:", ad.title);
     }
   };
-
-  const placeholderSrc = `/api/placeholder/400/225?text=${encodeURIComponent(ad.title || 'Video')}`;
 
   return (
     <Card className="overflow-hidden hover:shadow-lg transition-all duration-300 bg-gray-800 border-gray-700 card-hover group p-0">
       <div className="relative aspect-video">
         <img
-          src={getThumbnail() || placeholderSrc} // Use placeholder if getThumbnail returns empty
+          src={getThumbnail() || placeholderSrc}
           alt={ad.title || 'Video thumbnail'}
           className="w-full h-full object-cover rounded-t-lg"
           loading="lazy"
           onError={(e) => {
             e.target.onerror = null;
-            if (e.target.src !== placeholderSrc) { // Avoid infinite loop if placeholder fails
-                e.target.src = placeholderSrc;
+            if (e.target.src !== placeholderSrc) {
+              e.target.src = placeholderSrc;
             }
           }}
         />
-        <div className="absolute bottom-2 right-2 bg-gray-900 bg-opacity-80 text-white text-xs px-2 py-1 rounded-md flex items-center">
-          <Clock size={12} className="mr-1" />
-          {duration}
-        </div>
+        
         {isFeatured && (
           <div className="absolute top-2 left-2">
             <Badge color="purple" icon={TrendingUp} className="flex items-center text-xs">
@@ -70,7 +64,7 @@ const AdCard = ({ ad, onPlayClick }) => {
         )}
 
         <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-          {ad.video_url && ( // Only show play button if there's a video URL
+          {hasVideo && (
             <button
               onClick={handleClick}
               aria-label={`Play ${ad.title}`}
@@ -79,7 +73,7 @@ const AdCard = ({ ad, onPlayClick }) => {
             >
               <Play size={20} className="text-white ml-0.5" />
             </button>
-           )}
+          )}
         </div>
       </div>
 
@@ -89,20 +83,20 @@ const AdCard = ({ ad, onPlayClick }) => {
         </h5>
 
         <div className="flex justify-between items-center mt-2 text-xs text-gray-400 space-x-2">
-           <div className="flex items-center overflow-hidden whitespace-nowrap">
-             <Play size={12} className="mr-1 flex-shrink-0" />
-             <span className="truncate">{ad.views != null ? ad.views.toLocaleString() : '0'} views</span>
-           </div>
-           <div className="flex items-center overflow-hidden whitespace-nowrap">
-             <ThumbsUp size={12} className="mr-1 flex-shrink-0" />
-             <span className="truncate">{ad.likes != null ? ad.likes.toLocaleString() : '0'}</span>
-           </div>
-           <div className="flex items-center overflow-hidden whitespace-nowrap">
-             <Clock size={12} className="mr-1 flex-shrink-0" />
-             <span className="truncate" title={ad.upload_date ? new Date(parseISO(ad.upload_date)).toLocaleString() : 'Unknown date'}>
-                 {createdAt}
-             </span>
-           </div>
+          <div className="flex items-center overflow-hidden whitespace-nowrap">
+            <Play size={12} className="mr-1 flex-shrink-0" />
+            <span className="truncate">{ad.views != null ? ad.views.toLocaleString() : '0'} views</span>
+          </div>
+          <div className="flex items-center overflow-hidden whitespace-nowrap">
+            <ThumbsUp size={12} className="mr-1 flex-shrink-0" />
+            <span className="truncate">{ad.likes != null ? ad.likes.toLocaleString() : '0'}</span>
+          </div>
+          <div className="flex items-center overflow-hidden whitespace-nowrap">
+            <Clock size={12} className="mr-1 flex-shrink-0" />
+            <span className="truncate" title={ad.upload_date ? new Date(parseISO(ad.upload_date)).toLocaleString() : 'Unknown date'}>
+              {createdAt}
+            </span>
+          </div>
         </div>
       </div>
     </Card>
@@ -117,7 +111,6 @@ AdCard.propTypes = {
     thumbnail_url: PropTypes.string,
     videoUrl: PropTypes.string, 
     video_url: PropTypes.string,
-    duration: PropTypes.string,
     views: PropTypes.number,
     likes: PropTypes.number,
     upload_date: PropTypes.string,
