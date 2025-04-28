@@ -87,6 +87,13 @@ if ENVIRONMENT == 'PROD':
             'PORT': 5432,
         }
     }
+elif ENVIRONMENT == 'TEST':
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 else:
     # Local Database
     DATABASES = {

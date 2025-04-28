@@ -1,16 +1,15 @@
 from django.db import transaction
-from .models import ViewerProfile, EvaluationResponse
+from .models import ViewerProfile
 from django.utils import timezone
 from azure.storage.blob import generate_blob_sas, BlobSasPermissions
 import os
 
 
 class PointsService:
-    #Service class to manage user points operations
     
     @staticmethod
-    def award_points_for_evaluation(user, points=10):
-
+    def award_points_for_webcam_upload(user, points=5):
+        """Awards points to a user for successfully uploading webcam data."""
         with transaction.atomic():
             profile, _ = ViewerProfile.objects.get_or_create(user=user)
             profile.points += points
@@ -20,37 +19,7 @@ class PointsService:
         return profile, points
 
 
-class EvaluationService:
-#Service class to manage evaluation operations
-    
-    @staticmethod
-    def validate_required_answers(form, answers):
-        required_questions = form.questions.filter(required=True)
-        
-        for question in required_questions:
-            question_id = str(question.id)
-            if question_id not in answers or not answers[question_id]:
-                return False, f"Question '{question.question_text}' is required"
-                
-        return True, None
-        
-    @staticmethod
-    @transaction.atomic
-    def create_response_and_award_points(form, user, answers, points_to_award=10):
-        response = EvaluationResponse.objects.create(
-            form=form,
-            user=user,
-            answers=answers,
-            points_awarded=points_to_award
-        )
-        
-        profile, awarded = PointsService.award_points_for_evaluation(user, points_to_award)
-        
-        return response, profile, awarded
-
-
 class AzureStorageService:
-#Service for managing Azure Blob Storage operations.
     
     @staticmethod
     def get_storage_credentials():
@@ -63,7 +32,6 @@ class AzureStorageService:
     
     @staticmethod
     def generate_sas_url(account_name, container_name, blob_name, account_key, permission, expiry_hours):
-    #Generate SAS token with given parameters.
         expiry = timezone.now() + timezone.timedelta(hours=expiry_hours)
         sas_token = generate_blob_sas(
             account_name=account_name,
@@ -80,7 +48,6 @@ class AzureStorageService:
     #Generate SAS URLs for a video file.
         creds = cls.get_storage_credentials()
         
-        # Define permissions
         upload_permission = BlobSasPermissions(write=True, create=True, add=True)
         view_permission = BlobSasPermissions(read=True)
         video_upload_url = cls.generate_sas_url(
@@ -105,7 +72,6 @@ class AzureStorageService:
     
     @classmethod
     def get_thumbnail_urls(cls, filename):
-        """Generate SAS URLs for a thumbnail file."""
         creds = cls.get_storage_credentials()
         
         upload_permission = BlobSasPermissions(write=True, create=True, add=True)

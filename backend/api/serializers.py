@@ -1,7 +1,6 @@
 from rest_framework import serializers
 from .models import (
-    ViewerProfile, User, Video, VideoView, VideoLike, VideoShare, 
-    EvaluationForm, EvaluationQuestion, EvaluationResponse
+    ViewerProfile, User, Video, VideoView, VideoLike, VideoShare
 )
 from django.conf import settings
 import os
@@ -36,9 +35,6 @@ class UserSerializer(serializers.ModelSerializer):
 class AdminActionSerializer(serializers.Serializer):
     user_id = serializers.IntegerField(required=True)
     admin_password = serializers.CharField(required=True, write_only=True)
-
-class FirebaseTokenSerializer(serializers.Serializer):
-    token = serializers.CharField(required=True)
 
 class VideoSerializer(serializers.ModelSerializer):
     uploader = UserBasicSerializer(read_only=True)
@@ -92,8 +88,6 @@ class VideoDetailSerializer(serializers.ModelSerializer):
     uploader = UserBasicSerializer(read_only=True)
     is_liked = serializers.SerializerMethodField()
     frontend_url = serializers.SerializerMethodField()
-    has_evaluation_form = serializers.SerializerMethodField()
-    has_submitted_evaluation = serializers.SerializerMethodField()
 
     class Meta:
         model = Video
@@ -114,8 +108,6 @@ class VideoDetailSerializer(serializers.ModelSerializer):
             "auto_private_after",
             "is_liked",
             "frontend_url",
-            "has_evaluation_form",
-            "has_submitted_evaluation",
         ]
         read_only_fields = fields
         
@@ -128,25 +120,6 @@ class VideoDetailSerializer(serializers.ModelSerializer):
     def get_frontend_url(self, obj):
         frontend_url = self.context.get('frontend_url') or settings.FRONTEND_URL
         return f"{frontend_url}/video/{obj.id}"
-        
-    def get_has_evaluation_form(self, obj):
-        try:
-            return hasattr(obj, 'evaluation_form')
-        except Exception:
-            return False
-            
-    def get_has_submitted_evaluation(self, obj):
-        request = self.context.get('request')
-        if not request or not request.user.is_authenticated:
-            return False
-            
-        try:
-            return EvaluationResponse.objects.filter(
-                form__video=obj,
-                user=request.user
-            ).exists()
-        except Exception:
-            return False
 
 class VideoViewSerializer(serializers.ModelSerializer):
     class Meta:
@@ -172,25 +145,6 @@ class VideoShareSerializer(serializers.ModelSerializer):
         frontend_url = self.context.get('frontend_url') or settings.FRONTEND_URL
         return f"{frontend_url}/video/{obj.share_token}"
 
-class EvaluationQuestionSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = EvaluationQuestion
-        fields = ['id', 'question_text', 'question_type', 'options', 'required', 'order']
-
-class EvaluationFormSerializer(serializers.ModelSerializer):
-    questions = EvaluationQuestionSerializer(many=True, read_only=True)
-    video_title = serializers.ReadOnlyField(source='video.title')
-    
-    class Meta:
-        model = EvaluationForm
-        fields = ['id', 'title', 'description', 'questions', 'created_at', 'video', 'video_title']
-
-class EvaluationResponseSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = EvaluationResponse
-        fields = ['id', 'form', 'answers', 'submitted_at', 'points_awarded']
-        read_only_fields = ['submitted_at', 'points_awarded']
-
 class UserPointsSerializer(serializers.ModelSerializer):
     points_value = serializers.SerializerMethodField()
     conversion_rate = serializers.SerializerMethodField()
@@ -204,4 +158,4 @@ class UserPointsSerializer(serializers.ModelSerializer):
         return obj.calculate_points_value()
         
     def get_conversion_rate(self, obj):
-        return 10  # 10 BDT per point
+        return 10
