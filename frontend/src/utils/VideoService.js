@@ -626,7 +626,7 @@ class VideoService {
       
       console.log('Backend response for webcam upload:', response);
       
-      if (!response?.webcam_upload_url) {
+      if (!response?.upload_url) {
         throw new Error('Failed to get webcam upload URL from the server');
       }
       

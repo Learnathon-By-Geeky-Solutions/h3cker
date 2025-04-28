@@ -553,18 +553,6 @@ class TestWebcamUploadView:
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
-    @patch('os.environ.get', autospec=True)
-    def test_webcam_upload_missing_azure_config(self, mock_env_get, authenticated_client, test_video):
-        """Test uploading a webcam recording when Azure config is missing."""
-        mock_env_get.return_value = None  # Simulate missing environment variables
-
-        url = reverse('webcam-upload', kwargs={'video_id': test_video.id})
-        data = {'filename': 'test_recording.webm'}
-        response = authenticated_client.post(url, data, format='json')
-
-        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-        assert 'Azure configuration' in response.data['error']
-
     @patch('api.services.AzureStorageService.generate_sas_url', autospec=True)
     def test_webcam_upload_sas_generation_fails(self, mock_generate_sas, authenticated_client, test_video):
         """Test uploading a webcam recording when SAS URL generation fails."""

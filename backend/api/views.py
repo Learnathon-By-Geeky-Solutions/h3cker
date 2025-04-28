@@ -344,50 +344,7 @@ class WebcamUploadView(generics.CreateAPIView):
         filename = request.data.get('filename')
 
         try:
-            account_name = os.environ.get('AZURE_STORAGE_ACCOUNT_NAME')
-            account_key = os.environ.get('AZURE_STORAGE_ACCOUNT_KEY')
-            container_name = os.environ.get('AZURE_WEBCAM_CONTAINER_NAME')
-            
-            if not all([account_name, account_key, container_name]):
-                return Response({'error': 'Azure configuration is missing.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-            blob_permissions = {
-                'read': False,
-                'add': False,
-                'create': True,
-                'write': True,
-                'delete': False,
-                'delete_version': False,
-                'tag': False,
-                'set_immutability_policy': False
-            }
-            upload_url = AzureStorageService.generate_sas_url(
-                account_name,
-                container_name,
-                filename,
-                account_key,
-                blob_permissions,
-                1  # 1 hour expiry for upload URL
-            )
-            
-            read_permissions = {
-                'read': True,
-                'add': False,
-                'create': False,
-                'write': False,
-                'delete': False,
-                'delete_version': False,
-                'tag': False,
-                'set_immutability_policy': False
-            }
-            view_url = AzureStorageService.generate_sas_url(
-                account_name,
-                container_name,
-                filename,
-                account_key,
-                read_permissions,
-                24 * 60 * 30
-            )
+            upload_url, view_url = AzureStorageService.get_emotion_urls(filename)
 
             recording = WebcamRecording.objects.create(
                 video=video,

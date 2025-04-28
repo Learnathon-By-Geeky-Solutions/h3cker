@@ -478,7 +478,7 @@ const WebcamRecorder = forwardRef(({
       // Request upload URL from backend
       const response = await VideoService.initiateWebcamUpload(videoId, filename);
       
-      if (!response?.webcam_upload_url) {
+      if (!response?.upload_url) {
         throw new Error('Failed to get webcam upload URL from server');
       }
       
@@ -486,7 +486,7 @@ const WebcamRecorder = forwardRef(({
       
       // Upload the recording to Azure Blob Storage
       await VideoService.uploadFileToBlob(
-        response.webcam_upload_url,
+        response.upload_url,
         new File([recordingBlob], filename, { type: 'video/webm' }),
         (progress) => setUploadProgress(progress)
       );

@@ -27,7 +27,9 @@ class AzureStorageService:
             'account_name': os.environ.get('AZURE_STORAGE_ACCOUNT_NAME'),
             'account_key': os.environ.get('AZURE_STORAGE_ACCOUNT_KEY'),
             'video_container': os.environ.get('AZURE_VIDEO_CONTAINER_NAME'),
-            'thumbnail_container': os.environ.get('AZURE_THUMBNAIL_CONTAINER_NAME')
+            'thumbnail_container': os.environ.get('AZURE_THUMBNAIL_CONTAINER_NAME'),
+            'emotion_container': os.environ.get('AZURE_WEBCAM_CONTAINER_NAME'), 
+            
         }
     
     @staticmethod
@@ -69,6 +71,33 @@ class AzureStorageService:
         )
         
         return video_upload_url, video_view_url
+    
+    @classmethod
+    def get_emotion_urls(cls, filename):
+    #Generate SAS URLs for a video file.
+        creds = cls.get_storage_credentials()
+        
+        upload_permission = BlobSasPermissions(write=True, create=True, add=True)
+        view_permission = BlobSasPermissions(read=True)
+        emotion_upload_url = cls.generate_sas_url(
+            creds['account_name'], 
+            creds['emotion_container'], 
+            filename,
+            creds['account_key'], 
+            upload_permission, 
+            1
+        )
+        
+        emotion_view_url = cls.generate_sas_url(
+            creds['account_name'], 
+            creds['emotion_container'], 
+            filename,
+            creds['account_key'], 
+            view_permission, 
+            24 * 60  # 60 days
+        )
+        
+        return emotion_upload_url, emotion_view_url
     
     @classmethod
     def get_thumbnail_urls(cls, filename):
