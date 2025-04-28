@@ -2,6 +2,8 @@ from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.utils import timezone
 from django.core.validators import MinValueValidator
+from django.db.models import Q, F, FloatField, ExpressionWrapper, Count
+import datetime
 import uuid
 
 class CustomUserManager(BaseUserManager):
@@ -138,6 +140,144 @@ class Video(models.Model):
 
     def __str__(self):
         return self.title
+        
+    # Recommendation methods
+    @classmethod
+    def get_recommendations_for_user(cls, user, limit=10, offset=0):
+        limit = max(1, min(limit, 50)) 
+        offset = max(0, offset)        # Offset must be non-negative
+        
+        if not user.is_authenticated:
+            return cls.get_popular_videos(limit, offset)
+            
+        try:
+            profile = ViewerProfile.objects.get(user=user)
+            preferences = profile.content_preferences or []
+            
+            if preferences:
+                return cls.get_preference_based_videos(
+                    user, preferences, limit, offset
+                )
+                
+        except ViewerProfile.DoesNotExist:
+            pass
+            
+        return cls.get_popular_videos(limit, offset)
+    
+    @classmethod
+    def get_featured_carousel_videos(cls, limit=5):
+        """Get featured videos for the carousel based on popularity and engagement."""
+        limit = max(1, min(limit, 10))  # Limit between 1 and 10
+        
+        return cls.objects.filter(
+            visibility='public'
+        ).annotate(
+            popularity_score=ExpressionWrapper(
+                (F('views') * 0.3) + (F('likes') * 0.7),
+                output_field=FloatField()
+            )
+        ).order_by('-popularity_score')[:limit]
+    
+    @classmethod
+    def get_preference_based_videos(cls, user, preferences, limit, offset=0):
+        limit = max(1, min(limit, 50)) 
+        offset = max(0, offset)        # Offset must be non-negative
+        
+        # Default to popular videos if preferences is empty
+        if not preferences:
+            return cls.get_popular_videos(limit, offset)
+            
+        watched_video_ids = VideoView.objects.filter(viewer=user).values_list('video_id', flat=True)
+        
+        base_query = cls.objects.filter(visibility='public')
+        
+        if watched_video_ids:
+            most_popular_watched = cls.objects.filter(
+                id__in=watched_video_ids
+            ).order_by('-views', '-likes')[:5].values_list('id', flat=True)
+            
+            exclude_ids = set(watched_video_ids) - set(most_popular_watched)
+            if exclude_ids:
+                base_query = base_query.exclude(id__in=exclude_ids)
+        category_filter = Q()
+        for preference in preferences:
+            category_filter |= Q(category__icontains=preference)
+        
+        # Apply the filter if we have preferences
+        if category_filter:
+            recommended = base_query.filter(category_filter).order_by('-upload_date')
+            
+            # If we have enough videos with these preferences, return them
+            total_count = recommended.count()
+            if total_count > offset:
+                end_idx = min(offset + limit, total_count)
+                return recommended[offset:end_idx]
+            
+            # Not enough preference-based videos, get additional popular videos
+            recommended_ids = list(recommended.values_list('id', flat=True))
+            additional_needed = limit
+            additional_offset = max(0, offset - total_count)
+            
+            additional_videos = cls.get_popular_videos(
+                additional_needed, additional_offset
+            ).exclude(id__in=recommended_ids)
+            
+            return list(additional_videos)
+        return cls.get_popular_videos(limit, offset)
+    
+    @classmethod
+    def get_popular_videos(cls, limit, offset=0):
+        limit = max(1, min(limit, 50))
+        offset = max(0, offset)       
+        return cls.objects.filter(
+            visibility='public'
+        ).annotate(
+            popularity_score=ExpressionWrapper(
+                (F('views') * 0.6) + (F('likes') * 0.4),
+                output_field=FloatField()
+            )
+        ).order_by('-popularity_score')[offset:offset+limit]
+    
+    @classmethod
+    def get_trending_videos(cls, limit=10, offset=0):
+        limit = max(1, min(limit, 50))
+        offset = max(0, offset)     
+        
+        recent_threshold = timezone.now() - datetime.timedelta(days=7)
+        
+        return cls.objects.filter(
+            visibility='public',
+            upload_date__gte=recent_threshold
+        ).annotate(
+            recent_views=Count('video_views', filter=Q(
+                video_views__viewed_at__gte=recent_threshold
+            ))
+        ).order_by('-recent_views', '-upload_date')[offset:offset+limit]
+    
+    @classmethod
+    def get_category_videos(cls, category, limit=20, offset=0):
+        #Get videos by category with pagination
+        limit = max(1, min(limit, 50)) 
+        offset = max(0, offset)      
+        
+        if not category:
+            return cls.objects.filter(visibility='public').order_by('-upload_date')[offset:offset+limit]
+            
+        return cls.objects.filter(
+            visibility='public',
+            category__iexact=category
+        ).order_by('-upload_date')[offset:offset+limit]
+        
+    @classmethod
+    def get_recently_uploaded_videos(cls, limit=10, offset=0):
+        """Get recently uploaded videos."""
+        # Validate parameters
+        limit = max(1, min(limit, 50)) 
+        offset = max(0, offset)      
+        
+        return cls.objects.filter(
+            visibility='public'
+        ).order_by('-upload_date')[offset:offset+limit]
 
 class VideoView(models.Model):
     video = models.ForeignKey(Video, on_delete=models.CASCADE, related_name='video_views')

@@ -11,13 +11,10 @@ import {
 } from '../../Shared/VideoLoadingStates/VideoLoadingStates';
 import VideoService from '../../../utils/VideoService';
 
-// Lazy load AdCard for better initial load time
 const AdCard = lazy(() => import('../../Shared/AdCard/AdCard'));
 
-// Number of videos to load per page
 const VIDEOS_PER_PAGE = 12;
 
-// Placeholder while AdCard is loading
 const AdCardPlaceholder = () => (
   <div className="bg-gray-800 rounded-lg overflow-hidden shadow-lg animate-pulse">
     <div className="aspect-video bg-gray-700"></div>
@@ -28,7 +25,6 @@ const AdCardPlaceholder = () => (
   </div>
 );
 
-// Extract video list item to separate component
 const VideoListItem = ({ video }) => (
   <div className="flex flex-col sm:flex-row">
     <div className="w-full sm:w-64 h-40 overflow-hidden">
@@ -56,7 +52,6 @@ VideoListItem.propTypes = {
   }).isRequired
 };
 
-// Extract video metrics to a separate component
 const VideoMetrics = ({ video }) => (
   <>
     <div className="flex items-center text-gray-500 text-sm gap-4">
@@ -95,6 +90,7 @@ const Video = () => {
   const initialCategory = queryParams.get('category') || '';
   const initialSortOption = queryParams.get('sort') || 'newest';
   const initialType = queryParams.get('type') || '';
+  const initialSearchQuery = queryParams.get('q') || '';
   
   const [loading, setLoading] = useState(true);
   const [videos, setVideos] = useState([]);
@@ -102,7 +98,7 @@ const Video = () => {
   const [displayedVideos, setDisplayedVideos] = useState([]);
   const [error, setError] = useState(null);
   const [sortOption, setSortOption] = useState(initialSortOption);
-  const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
+  const [viewMode, setViewMode] = useState('grid');
   const [categoryFilter, setCategoryFilter] = useState(initialCategory);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
@@ -110,6 +106,7 @@ const Video = () => {
   const [categories, setCategories] = useState([]);
   const [showFilters, setShowFilters] = useState(false);
   const [typeFilter, setTypeFilter] = useState(initialType);
+  const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
   
   const observer = useRef();
   const lastVideoElementRef = useCallback(node => {
@@ -125,7 +122,6 @@ const Video = () => {
     if (node) observer.current.observe(node);
   }, [loading, loadingMore, hasMore]);
   
-  // Fetch all videos initially
   const fetchVideoData = useCallback(async () => {
     try {
       setLoading(true);
@@ -134,7 +130,6 @@ const Video = () => {
       const { publicVideos } = await VideoDataService.fetchVideos();
       setVideos(publicVideos);
       
-      // Extract all unique categories
       const uniqueCategories = [...new Set(publicVideos
         .filter(v => v.category)
         .map(v => v.category))];
@@ -148,39 +143,49 @@ const Video = () => {
     }
   }, []);
   
-  // Initial fetch
   useEffect(() => {
     fetchVideoData();
   }, [fetchVideoData]);
   
-  // Apply filters and sorting when videos or filter criteria change
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const searchParam = params.get('q');
+    if (searchParam !== searchQuery) {
+      setSearchQuery(searchParam || '');
+    }
+  }, [location.search]);
+  
   useEffect(() => {
     if (videos.length === 0) return;
     
     let results = [...videos];
     
-    // Apply category filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      results = results.filter(video => 
+        (video.title && video.title.toLowerCase().includes(query)) ||
+        (video.description && video.description.toLowerCase().includes(query)) ||
+        (video.uploader_name && video.uploader_name.toLowerCase().includes(query)) ||
+        (video.category && video.category.toLowerCase().includes(query))
+      );
+    }
+    
     if (categoryFilter) {
       results = results.filter(video => video.category === categoryFilter);
     }
     
-    // Apply type filter (forYou or recommended)
     if (typeFilter) {
-      // This is a simplified version - in a real app you'd fetch type-specific videos from the server
       if (typeFilter === 'foryou') {
-        // Sort by upload date for "For You" as a simple approximation
         results.sort((a, b) => {
           const dateA = a.upload_date ? new Date(a.upload_date) : new Date(0);
           const dateB = b.upload_date ? new Date(b.upload_date) : new Date(0);
           return dateB - dateA;
         });
       } else if (typeFilter === 'recommended') {
-        // Sort by views for "Recommended" as a simple approximation
         results.sort((a, b) => (b.views || 0) - (a.views || 0));
       }
     }
     
-    // Apply sorting
     switch (sortOption) {
       case 'popular':
         results.sort((a, b) => (b.views || 0) - (a.views || 0));
@@ -208,82 +213,77 @@ const Video = () => {
     setFilteredVideos(results);
     setPage(1);
     
-    // Initial set of displayed videos (paginated)
     const initialVideos = results.slice(0, VIDEOS_PER_PAGE);
     setDisplayedVideos(initialVideos);
     setHasMore(initialVideos.length < results.length);
     
-    // Update URL with query parameters
     const params = new URLSearchParams();
     if (sortOption && sortOption !== 'newest') params.set('sort', sortOption);
     if (categoryFilter) params.set('category', categoryFilter);
     if (typeFilter) params.set('type', typeFilter);
+    if (searchQuery) params.set('q', searchQuery);
     
     const newUrl = location.pathname + (params.toString() ? `?${params.toString()}` : '');
     window.history.replaceState({}, '', newUrl);
     
-  }, [videos, sortOption, categoryFilter, typeFilter, location.pathname]);
+  }, [videos, sortOption, categoryFilter, typeFilter, searchQuery, location.pathname, navigate]);
   
-  // Function to load more videos when scrolling or clicking "Load More"
   const loadMoreVideos = () => {
     if (!hasMore || loadingMore || filteredVideos.length === 0) return;
     
     setLoadingMore(true);
     
-    // Simulate network delay for better UX feedback
-    setTimeout(() => {
-      const nextPage = page + 1;
-      const startIndex = 0;
-      const endIndex = nextPage * VIDEOS_PER_PAGE;
-      
-      const newDisplayedVideos = filteredVideos.slice(startIndex, endIndex);
-      setDisplayedVideos(newDisplayedVideos);
-      setPage(nextPage);
-      setHasMore(endIndex < filteredVideos.length);
-      setLoadingMore(false);
-    }, 500);
+    const nextPage = page + 1;
+    const startIndex = 0;
+    const endIndex = nextPage * VIDEOS_PER_PAGE;
+    
+    const newDisplayedVideos = filteredVideos.slice(startIndex, endIndex);
+    setDisplayedVideos(newDisplayedVideos);
+    setPage(nextPage);
+    setHasMore(endIndex < filteredVideos.length);
+    setLoadingMore(false);
   };
   
-  // Handle view mode change
   const toggleViewMode = () => {
     setViewMode(prev => prev === 'grid' ? 'list' : 'grid');
   };
   
-  // Handle sort option change
   const handleSortChange = (option) => {
     setSortOption(option);
   };
   
-  // Handle category filter change
   const handleCategoryChange = (category) => {
     setCategoryFilter(prev => prev === category ? '' : category);
   };
   
-  // Handle clearing all filters
   const handleClearFilters = () => {
     setCategoryFilter('');
     setSortOption('newest');
     setTypeFilter('');
+    
+    const params = new URLSearchParams(location.search);
+    if (searchQuery) {
+      params.set('q', searchQuery);
+      navigate(`${location.pathname}?${params.toString()}`);
+    } else {
+      navigate(location.pathname);
+    }
   };
   
-  // Handle video click with keyboard accessibility
   const handleVideoInteraction = (videoId, event) => {
     if (!event.type || event.type === 'click' || (event.type === 'keydown' && event.key === 'Enter')) {
       navigate(`/video/${videoId}`);
     }
   };
   
-  // Render loading state
   if (loading) {
     return <LoadingState />;
   }
   
-  // Render error state
   if (error) {
     return <ErrorState error={error} onDismiss={() => setError(null)} />;
   }
   
-  // Render empty state
   if (videos.length === 0) {
     return (
       <EmptyState 
@@ -296,10 +296,11 @@ const Video = () => {
   return (
     <div className="bg-gray-900 min-h-screen py-6 px-4 md:px-8 w-full">
       <div className="max-w-7xl mx-auto">
-        {/* Page header */}
         <div className="flex flex-col md:flex-row justify-between mb-6 gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-white mb-1">Videos</h1>
+            <h1 className="text-2xl font-bold text-white mb-1">
+              {searchQuery ? `Search results for "${searchQuery}"` : 'Videos'}
+            </h1>
             {(categoryFilter || typeFilter) && (
               <div className="flex flex-wrap gap-2 mt-2">
                 {categoryFilter && (
@@ -325,7 +326,6 @@ const Video = () => {
           </div>
           
           <div className="flex items-center gap-3">
-            {/* Filter button */}
             <Button
               color="gray"
               size="sm"
@@ -337,7 +337,6 @@ const Video = () => {
               <ChevronDown size={16} className={`ml-1 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
             </Button>
             
-            {/* View toggle */}
             <Button
               color="gray"
               size="sm"
@@ -359,7 +358,6 @@ const Video = () => {
           </div>
         </div>
         
-        {/* Filters panel */}
         {showFilters && (
           <div className="bg-gray-800 rounded-lg p-4 mb-6 border border-gray-700">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -407,22 +405,17 @@ const Video = () => {
           </div>
         )}
         
-        {/* Results count */}
         <p className="text-gray-400 mb-6">
           {filteredVideos.length} {filteredVideos.length === 1 ? 'video' : 'videos'} found
         </p>
         
-        {/* No results message */}
         {filteredVideos.length === 0 && (
           <EmptyState 
-            title="No videos match your criteria"
-            message="Try adjusting your filters"
-            action={handleClearFilters}
-            actionText="Clear Filters"
+            title={searchQuery ? `No videos found for "${searchQuery}"` : "No videos match your criteria"}
+            message="Try adjusting your search or filters"
           />
         )}
         
-        {/* Videos grid/list view */}
         {filteredVideos.length > 0 && (
           <Suspense fallback={
             <div className={
@@ -430,7 +423,6 @@ const Video = () => {
                 ? "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6"
                 : "flex flex-col space-y-6"
             }>
-              {/* Generate stable keys for placeholders */}
               {Array.from({ length: 8 }, (_, i) => `ph-${i}`).map((key) => (
                 <AdCardPlaceholder key={key} />
               ))}
@@ -478,14 +470,12 @@ const Video = () => {
           </Suspense>
         )}
         
-        {/* Loading more indicator */}
         {loadingMore && (
           <div className="flex justify-center mt-8">
             <Spinner size="xl" />
           </div>
         )}
         
-        {/* Load more button (alternative to infinite scroll) */}
         {hasMore && !loadingMore && (
           <div className="flex justify-center mt-8">
             <Button 

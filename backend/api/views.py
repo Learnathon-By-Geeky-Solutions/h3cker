@@ -31,8 +31,23 @@ from .utils import (
 from .permissions import IsCompanyOrAdmin
 
 
+def safe_int_param(request, param_name, default_value, min_value=None, max_value=None):
+    """Safely parse integer parameters from request with validation."""
+    try:
+        value = int(request.query_params.get(param_name, default_value))
+        
+        if min_value is not None:
+            value = max(min_value, value)
+        if max_value is not None:
+            value = min(max_value, value)
+            
+        return value
+    except (ValueError, TypeError):
+        return default_value
+
+
 class OnboardingAPIView(generics.UpdateAPIView):
-    """API endpoint for handling user onboarding."""
+    """API endpoint for handling user onboarding and providing recommendations."""
     permission_classes = [IsAuthenticated]
     serializer_class = OnboardingSerializer
 
@@ -49,7 +64,35 @@ class OnboardingAPIView(generics.UpdateAPIView):
             
         serializer.validated_data['onboarding_completed'] = True
         serializer.save()
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        
+        # Generate video recommendations based on updated preferences
+        limit = safe_int_param(request, 'limit', 10, 1, 50)
+        recommendations = Video.get_recommendations_for_user(request.user, limit)
+        
+        # Create response with profile and recommendations
+        response_data = {
+            'profile': serializer.data,
+            'recommendations': VideoFeedSerializer(recommendations, many=True).data
+        }
+        
+        return Response(response_data, status=status.HTTP_200_OK)
+    
+    def get(self, request, *args, **kwargs):
+        """Get user profile and recommendations."""
+        profile = self.get_object()
+        profile_serializer = self.get_serializer(profile)
+        
+        # Generate video recommendations
+        limit = safe_int_param(request, 'limit', 10, 1, 50)
+        recommendations = Video.get_recommendations_for_user(request.user, limit)
+        
+        # Create response with profile and recommendations
+        response_data = {
+            'profile': profile_serializer.data,
+            'recommendations': VideoFeedSerializer(recommendations, many=True).data
+        }
+        
+        return Response(response_data, status=status.HTTP_200_OK)
     
     def handle_exception(self, exc):
         """Convert any authentication-related exceptions to 401 status."""
@@ -260,8 +303,16 @@ class UserHistoryAPI(generics.ListAPIView):
     
     def get_queryset(self):
         user = self.request.user
-        viewed_video_ids = VideoView.objects.filter(viewer=user).order_by('-viewed_at').values_list('video_id', flat=True).distinct()
-        return Video.objects.filter(id__in=viewed_video_ids)
+        limit = safe_int_param(self.request, 'limit', 50, 1, 100)
+        offset = safe_int_param(self.request, 'offset', 0, 0)
+        
+        viewed_video_ids = VideoView.objects.filter(viewer=user).order_by('-viewed_at')\
+            .values_list('video_id', flat=True).distinct()
+            
+        if offset > 0:
+            viewed_video_ids = viewed_video_ids[offset:]
+            
+        return Video.objects.filter(id__in=viewed_video_ids)[:limit]
     
     def get_serializer_context(self):
         context = super().get_serializer_context()
@@ -282,8 +333,16 @@ class UserLikedVideosAPI(generics.ListAPIView):
     
     def get_queryset(self):
         user = self.request.user
-        liked_video_ids = VideoLike.objects.filter(user=user).order_by('-liked_at').values_list('video_id', flat=True)
-        return Video.objects.filter(id__in=liked_video_ids)
+        limit = safe_int_param(self.request, 'limit', 50, 1, 100)
+        offset = safe_int_param(self.request, 'offset', 0, 0)
+        
+        liked_video_ids = VideoLike.objects.filter(user=user).order_by('-liked_at')\
+            .values_list('video_id', flat=True)
+            
+        if offset > 0:
+            liked_video_ids = liked_video_ids[offset:]
+            
+        return Video.objects.filter(id__in=liked_video_ids)[:limit]
     
     def get_serializer_context(self):
         context = super().get_serializer_context()
@@ -371,7 +430,7 @@ class WebcamUploadView(generics.CreateAPIView):
 
 
 class VideoSearchView(generics.ListAPIView):
-    """API endpoint for searching videos by filename or other criteria."""
+    #API endpoint for searching videos by filename or other criteria
     serializer_class = VideoSerializer
     permission_classes = [IsAuthenticated]
     
@@ -406,3 +465,62 @@ class UserPointsView(generics.RetrieveAPIView):
         if isinstance(exc, (AuthenticationFailed, PermissionError)):
             return Response({"error": AUTH_REQUIRED_MESSAGE}, status=status.HTTP_401_UNAUTHORIZED)
         return super().handle_exception(exc)
+
+
+# New recommendation endpoints
+class VideoRecommendationsView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = VideoFeedSerializer
+    
+    def get_queryset(self):
+        limit = safe_int_param(self.request, 'limit', 20, 1, 50)
+        offset = safe_int_param(self.request, 'offset', 0, 0)
+        
+        return Video.get_recommendations_for_user(
+            self.request.user, limit, offset
+        )
+
+
+class FeaturedCarouselVideosView(generics.ListAPIView):
+    permission_classes = [AllowAny]
+    serializer_class = VideoFeedSerializer
+    
+    def get_queryset(self):
+        limit = safe_int_param(self.request, 'limit', 5, 1, 10)
+        return Video.get_featured_carousel_videos(limit)
+
+
+class CategoryVideosView(generics.ListAPIView):
+    permission_classes = [AllowAny]
+    serializer_class = VideoFeedSerializer
+    
+    def get_queryset(self):
+        category = self.request.query_params.get('category', '')
+        limit = safe_int_param(self.request, 'limit', 20, 1, 50)
+        offset = safe_int_param(self.request, 'offset', 0, 0)
+        
+        return Video.get_category_videos(
+            category, limit, offset
+        )
+
+
+class TrendingVideosView(generics.ListAPIView):
+    permission_classes = [AllowAny]
+    serializer_class = VideoFeedSerializer
+    
+    def get_queryset(self):
+        limit = safe_int_param(self.request, 'limit', 20, 1, 50)
+        offset = safe_int_param(self.request, 'offset', 0, 0)
+        
+        return Video.get_trending_videos(limit, offset)
+
+
+class RecentVideosView(generics.ListAPIView):
+    permission_classes = [AllowAny]
+    serializer_class = VideoFeedSerializer
+    
+    def get_queryset(self):
+        limit = safe_int_param(self.request, 'limit', 20, 1, 50)
+        offset = safe_int_param(self.request, 'offset', 0, 0)
+        
+        return Video.get_recently_uploaded_videos(limit, offset)

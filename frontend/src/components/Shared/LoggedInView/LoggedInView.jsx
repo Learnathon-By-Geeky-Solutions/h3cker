@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, TrendingUp } from 'lucide-react';
-import VideoDataService from '../../../utils/VideoDataService';
+import { Clock, TrendingUp, ThumbsUp } from 'lucide-react';
+import ApiService from '../../../utils/ApiService';
 import { 
   LoadingState, 
   ErrorState, 
@@ -12,10 +12,10 @@ import AdRow from '../AdRow/AdRow';
 const LoggedInView = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [videos, setVideos] = useState([]);
-  const [featuredVideo, setFeaturedVideo] = useState(null);
+  const [featuredVideos, setFeaturedVideos] = useState([]);
   const [recentVideos, setRecentVideos] = useState([]);
   const [popularVideos, setPopularVideos] = useState([]);
+  const [recommendedVideos, setRecommendedVideos] = useState([]);
   
   useEffect(() => {
     const loadVideos = async () => {
@@ -23,24 +23,35 @@ const LoggedInView = () => {
         setLoading(true);
         setError(null);
         
-        const { publicVideos } = await VideoDataService.fetchVideos();
+        // Use Promise.allSettled to handle multiple requests without failing if one fails
+        const [featuredResponse, recentResponse, trendingResponse, recommendedResponse] = 
+          await Promise.allSettled([
+            ApiService.get('featured-carousel/?limit=5'),
+            ApiService.get('recent-videos/?limit=8'),
+            ApiService.get('trending-videos/?limit=8'),
+            ApiService.get('recommendations/?limit=8')
+          ]);
         
-        if (publicVideos.length === 0) {
-          setVideos([]);
-          setLoading(false);
-          return;
+        // Process responses safely
+        if (featuredResponse.status === 'fulfilled') {
+          const data = featuredResponse.value;
+          setFeaturedVideos(Array.isArray(data) ? data : []);
         }
         
-        const { 
-          featuredVideo: featured, 
-          recentVideos: recent, 
-          popularVideos: popular 
-        } = VideoDataService.prepareVideoCollections(publicVideos);
+        if (recentResponse.status === 'fulfilled') {
+          const data = recentResponse.value;
+          setRecentVideos(Array.isArray(data) ? data : []);
+        }
         
-        setFeaturedVideo(featured);
-        setRecentVideos(recent);
-        setPopularVideos(popular);
-        setVideos(publicVideos);
+        if (trendingResponse.status === 'fulfilled') {
+          const data = trendingResponse.value;
+          setPopularVideos(Array.isArray(data) ? data : []);
+        }
+        
+        if (recommendedResponse.status === 'fulfilled') {
+          const data = recommendedResponse.value;
+          setRecommendedVideos(Array.isArray(data) ? data : []);
+        }
         
       } catch (error) {
         console.error('Error fetching videos:', error);
@@ -61,7 +72,13 @@ const LoggedInView = () => {
     return <ErrorState error={error} onDismiss={() => setError(null)} />;
   }
   
-  if (videos.length === 0) {
+  // Show empty state if no videos at all
+  if (
+    !featuredVideos.length && 
+    !recentVideos.length && 
+    !popularVideos.length && 
+    !recommendedVideos.length
+  ) {
     return (
       <EmptyState 
         title="No Public Videos Available"
@@ -71,28 +88,42 @@ const LoggedInView = () => {
   
   return (
     <div className="bg-gray-900 px-4 py-6 md:px-8 md:py-10 min-h-screen">
-      {featuredVideo && (
+      {featuredVideos && featuredVideos.length > 0 && (
         <div className="mb-10 transform transition-transform duration-700 hover:scale-[1.01]">
-          <HeroBillboard video={featuredVideo} />
+          <HeroBillboard videos={featuredVideos} />
         </div>
       )}
       
       <div className="space-y-12">
-        <AdRow 
-          title="Recently Added" 
-          icon={<Clock size={24} className="text-blue-400" />}
-          ads={recentVideos}
-          linkTo="/videos"
-          isVideoSection={true}
-        />
+        {recommendedVideos && recommendedVideos.length > 0 && (
+          <AdRow 
+            title="Recommended For You" 
+            icon={<ThumbsUp size={24} className="text-emerald-400" />}
+            ads={recommendedVideos}
+            linkTo="/videos?type=foryou"
+            isVideoSection={true}
+          />
+        )}
         
-        <AdRow 
-          title="Popular Videos" 
-          icon={<TrendingUp size={24} className="text-purple-400" />}
-          ads={popularVideos}
-          linkTo="/videos"
-          isVideoSection={true}
-        />
+        {recentVideos && recentVideos.length > 0 && (
+          <AdRow 
+            title="Recently Added" 
+            icon={<Clock size={24} className="text-blue-400" />}
+            ads={recentVideos}
+            linkTo="/videos?sort=newest"
+            isVideoSection={true}
+          />
+        )}
+        
+        {popularVideos && popularVideos.length > 0 && (
+          <AdRow 
+            title="Popular Videos" 
+            icon={<TrendingUp size={24} className="text-purple-400" />}
+            ads={popularVideos}
+            linkTo="/videos?sort=popular"
+            isVideoSection={true}
+          />
+        )}
       </div>
     </div>
   );

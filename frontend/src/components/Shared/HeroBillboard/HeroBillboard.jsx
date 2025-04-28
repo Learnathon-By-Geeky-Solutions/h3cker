@@ -1,116 +1,183 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { Link } from 'react-router-dom';
-import { Play, X } from 'lucide-react';
+import { Play, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from 'flowbite-react';
 import VideoPlayer from '../VideoPlayer/VideoPlayer';
+import VideoService from '../../../utils/VideoService';
 
-const HeroBillboard = ({ video }) => {
+const HeroBillboard = ({ videos }) => {
   const [showVideo, setShowVideo] = useState(false);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [autoplay, setAutoplay] = useState(true);
   
-  if (!video) return null;
+  if (!videos || !videos.length) return null;
+  
+  const currentVideo = videos[currentIndex];
+  
+  useEffect(() => {
+    let timer;
+    if (autoplay && videos.length > 1) {
+      timer = setInterval(() => {
+        setCurrentIndex((prevIndex) => (prevIndex + 1) % videos.length);
+      }, 5000);
+    }
+    
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [autoplay, videos.length]);
+  
+  useEffect(() => {
+    if (showVideo) {
+      setAutoplay(false);
+    }
+  }, [showVideo]);
   
   const getThumbnailUrl = () => {
-    if (!video.thumbnail_url) {
-      return `/api/placeholder/1200/600?text=${encodeURIComponent(video.title || 'Featured Video')}`;
+    if (!currentVideo.thumbnail_url) {
+      return `/api/placeholder/1200/600?text=${encodeURIComponent(currentVideo.title || 'Featured Video')}`;
     }
-    return video.thumbnail_url;
-  };
-  
-  const formatDuration = () => {
-    if (!video.duration) return "";
-    return video.duration;
+    return currentVideo.thumbnail_url;
   };
   
   const getCategoryTag = () => {
-    if (!video.category) return "FEATURED";
-    return video.category.toUpperCase();
+    if (!currentVideo.category) return "FEATURED";
+    return currentVideo.category.toUpperCase();
   };
   
   const handlePlayClick = () => {
-    // Only open the video modal if video_url exists
-    if (video.video_url) {
+    if (currentVideo.video_url) {
       setShowVideo(true);
     } else {
-      // Redirect to details page when video_url is not available
-      window.location.href = `/video/${video.id}`;
+      window.location.href = `/video/${currentVideo.id}`;
     }
   };
   
   const handleCloseVideo = () => {
     setShowVideo(false);
+    setAutoplay(true);
+  };
+  
+  const goToPrevious = () => {
+    setCurrentIndex((prevIndex) => 
+      prevIndex === 0 ? videos.length - 1 : prevIndex - 1
+    );
+    setAutoplay(false);
+    setTimeout(() => setAutoplay(true), 10000);
+  };
+  
+  const goToNext = () => {
+    setCurrentIndex((prevIndex) => 
+      (prevIndex + 1) % videos.length
+    );
+    setAutoplay(false);
+    setTimeout(() => setAutoplay(true), 10000);
+  };
+  
+  const goToSlide = (index) => {
+    setCurrentIndex(index);
+    setAutoplay(false);
+    setTimeout(() => setAutoplay(true), 10000);
   };
   
   return (
     <div className="relative overflow-hidden mb-10">
-      <div className="relative aspect-[21/9] md:aspect-[3/1]">
+      <div className="relative aspect-[16/9] md:aspect-[21/9] lg:aspect-[3/1]">
         <img 
           src={getThumbnailUrl()} 
-          alt={video.title} 
-          className="w-full h-full object-cover"
+          alt={currentVideo.title} 
+          className="w-full h-full object-cover transition-opacity duration-500"
           onError={(e) => {
             e.target.onerror = null;
-            e.target.src = `/api/placeholder/1200/600?text=${encodeURIComponent(video.title || 'Featured Video')}`;
+            e.target.src = `/api/placeholder/1200/600?text=${encodeURIComponent(currentVideo.title || 'Featured Video')}`;
           }}
         />
         <div className="absolute inset-0 bg-gradient-to-r from-gray-900 via-transparent to-gray-900 opacity-60"></div>
         <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-gray-900/60 to-transparent"></div>
       </div>
       
-      <div className="absolute bottom-0 left-0 p-6 md:p-12 w-full md:w-2/3 z-10">
-        <div className="mb-4 flex items-center">
-          <span className="text-sm font-bold tracking-wide text-blue-400">{getCategoryTag()}</span>
-          {formatDuration() && (
-            <span className="ml-4 text-sm font-medium text-gray-300 flex items-center">
-              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              {formatDuration()}
-            </span>
-          )}
+      <div className="absolute bottom-0 left-0 p-4 sm:p-6 md:p-12 w-full md:w-2/3 z-10">
+        <div className="mb-2 sm:mb-4 flex items-center">
+          <span className="text-xs sm:text-sm font-bold tracking-wide text-blue-400">{getCategoryTag()}</span>
         </div>
         
-        <h1 className="text-3xl md:text-5xl font-bold mb-3 text-white">{video.title}</h1>
-        <p className="text-base md:text-lg mb-6 text-gray-300 line-clamp-2 md:line-clamp-3">
-          {video.description || "No description available for this video."}
+        <h1 className="text-xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-2 sm:mb-3 text-white">{currentVideo.title}</h1>
+        <p className="text-sm sm:text-base md:text-lg mb-4 sm:mb-6 text-gray-300 line-clamp-2 md:line-clamp-3">
+          {currentVideo.description || "No description available for this video."}
         </p>
         
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap gap-2 sm:gap-3">
           <Button
             onClick={handlePlayClick}
-            className="relative flex items-center bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-full font-semibold shadow-lg transition-all duration-300"
+            className="relative flex items-center bg-blue-600 hover:bg-blue-700 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-full text-sm sm:text-base font-semibold shadow-lg transition-all duration-300"
           >
-            <Play size={20} className="mr-2" /> 
-            {video.video_url ? "Watch Now" : "Go to Video"}
+            <Play size={18} className="mr-2" /> 
+            {currentVideo.video_url ? "Watch Now" : "Go to Video"}
           </Button>
           
-          <Link to={`/video/${video.id}`}>
+          <Link to={`/video/${currentVideo.id}`}>
             <Button
               color="gray"
-              className="bg-gray-800 hover:bg-gray-700 text-white px-6 py-3 rounded-full font-semibold transition-all duration-300"
+              className="bg-gray-800 hover:bg-gray-700 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-full text-sm sm:text-base font-semibold transition-all duration-300"
             >
               View Details
             </Button>
           </Link>
         </div>
         
-        {(video.views > 0 || video.likes > 0) && (
-          <div className="flex mt-4 text-sm text-gray-400">
-            {video.views > 0 && (
+        {(currentVideo.views > 0 || currentVideo.likes > 0) && (
+          <div className="flex mt-3 sm:mt-4 text-xs sm:text-sm text-gray-400">
+            {currentVideo.views > 0 && (
               <span className="mr-4">
-                <strong>{video.views.toLocaleString()}</strong> views
+                <strong>{currentVideo.views.toLocaleString()}</strong> views
               </span>
             )}
-            {video.likes > 0 && (
+            {currentVideo.likes > 0 && (
               <span>
-                <strong>{video.likes.toLocaleString()}</strong> likes
+                <strong>{currentVideo.likes.toLocaleString()}</strong> likes
               </span>
             )}
           </div>
         )}
       </div>
       
-      {showVideo && video.video_url && (
+      {videos.length > 1 && (
+        <>
+          <button 
+            onClick={goToPrevious}
+            className="absolute top-1/2 left-2 sm:left-4 transform -translate-y-1/2 bg-black/50 hover:bg-blue-600 text-white p-1.5 sm:p-3 rounded-full transition-all duration-300 z-20 shadow-lg"
+            aria-label="Previous video"
+          >
+            <ChevronLeft size={20} />
+          </button>
+          
+          <button 
+            onClick={goToNext}
+            className="absolute top-1/2 right-2 sm:right-4 transform -translate-y-1/2 bg-black/50 hover:bg-blue-600 text-white p-1.5 sm:p-3 rounded-full transition-all duration-300 z-20 shadow-lg"
+            aria-label="Next video"
+          >
+            <ChevronRight size={20} />
+          </button>
+          
+          <div className="absolute bottom-2 sm:bottom-4 right-2 sm:right-4 flex items-center gap-1.5 sm:gap-2 z-20">
+            {videos.map((_, index) => (
+              <button
+                key={index}
+                onClick={() => goToSlide(index)}
+                className={`w-2 sm:w-3 h-2 sm:h-3 rounded-full transition-all duration-300 ${
+                  currentIndex === index
+                    ? 'bg-blue-500 scale-125'
+                    : 'bg-white/40 hover:bg-white/70'
+                }`}
+                aria-label={`Go to slide ${index + 1}`}
+              />
+            ))}
+          </div>
+        </>
+      )}
+      
+      {showVideo && currentVideo.video_url && (
         <div className="fixed inset-0 z-50 bg-black bg-opacity-90 flex items-center justify-center p-4">
           <div className="relative w-full max-w-5xl">
             <Button
@@ -125,9 +192,9 @@ const HeroBillboard = ({ video }) => {
             
             <div className="rounded-lg overflow-hidden shadow-2xl">
               <VideoPlayer 
-                videoUrl={video.video_url}
+                videoUrl={currentVideo.video_url}
                 thumbnailUrl={getThumbnailUrl()}
-                title={video.title}
+                title={currentVideo.title}
                 autoPlay={true}
               />
             </div>
@@ -139,17 +206,18 @@ const HeroBillboard = ({ video }) => {
 };
 
 HeroBillboard.propTypes = {
-  video: PropTypes.shape({
-    id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
-    title: PropTypes.string.isRequired,
-    description: PropTypes.string,
-    thumbnail_url: PropTypes.string,
-    video_url: PropTypes.string,
-    category: PropTypes.string,
-    duration: PropTypes.string,
-    views: PropTypes.number,
-    likes: PropTypes.number
-  }).isRequired
+  videos: PropTypes.arrayOf(
+    PropTypes.shape({
+      id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+      title: PropTypes.string.isRequired,
+      description: PropTypes.string,
+      thumbnail_url: PropTypes.string,
+      video_url: PropTypes.string,
+      category: PropTypes.string,
+      views: PropTypes.number,
+      likes: PropTypes.number
+    })
+  ).isRequired
 };
 
 export default HeroBillboard;

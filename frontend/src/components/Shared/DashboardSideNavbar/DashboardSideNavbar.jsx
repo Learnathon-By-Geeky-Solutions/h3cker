@@ -13,7 +13,9 @@ import {
   Menu, 
   X, 
   Video,
-  User
+  User,
+  Clock,
+  ThumbsUp
 } from 'lucide-react';
 
 const DEFAULT_AVATAR = "https://flowbite.com/docs/images/people/profile-picture-5.jpg";
@@ -34,7 +36,8 @@ const getNavItems = (role) => {
 
   if (role === 'user') {
     baseItems.push(
-      { path: '/dashboard/history', name: 'View History', icon: <Video size={20} /> }
+      { path: '/dashboard/history', name: 'Watch History', icon: <Clock size={20} /> },
+      { path: '/dashboard/liked', name: 'Liked Videos', icon: <ThumbsUp size={20} /> }
     );
   } 
   return baseItems;
