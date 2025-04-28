@@ -3,19 +3,18 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 from django.contrib.auth import get_user_model
+from django.db.models import F
 from api.models import (
-    User, Video, CompanyProfile, ViewerProfile, 
-    EvaluationForm, EvaluationQuestion, EvaluationResponse
+    User, Video, CompanyProfile, ViewerProfile 
 )
 from django.utils import timezone
-import json
 from unittest.mock import patch, MagicMock
 
 User = get_user_model()
 
 @pytest.fixture
 def admin_user():
-    """Create an admin user for testing."""
+    """Create an admin user for testing."""    
     return User.objects.create_user(
         email='admin@example.com',
         password='testpassword',
@@ -25,7 +24,7 @@ def admin_user():
 
 @pytest.fixture
 def company_user():
-    """Create a company user for testing."""
+    """Create a company user for testing."""    
     user = User.objects.create_user(
         email='company@example.com',
         password='testpassword',
@@ -37,7 +36,7 @@ def company_user():
 
 @pytest.fixture
 def regular_user():
-    """Create a regular user for testing."""
+    """Create a regular user for testing."""    
     user = User.objects.create_user(
         email='user@example.com',
         password='testpassword',
@@ -49,7 +48,7 @@ def regular_user():
 
 @pytest.fixture
 def test_video(admin_user):
-    """Create a test video for testing."""
+    """Create a test video for testing."""    
     return Video.objects.create(
         title='Test Admin Video',
         description='Test video for admin views',
@@ -61,31 +60,31 @@ def test_video(admin_user):
 
 @pytest.fixture
 def admin_client(admin_user):
-    """Create an authenticated admin client."""
+    """Create an authenticated admin client."""    
     client = APIClient()
     client.force_authenticate(user=admin_user)
     return client
 
 @pytest.fixture
 def company_client(company_user):
-    """Create an authenticated company client."""
+    """Create an authenticated company client."""    
     client = APIClient()
     client.force_authenticate(user=company_user)
     return client
 
 @pytest.fixture
 def user_client(regular_user):
-    """Create an authenticated regular user client."""
+    """Create an authenticated regular user client."""    
     client = APIClient()
     client.force_authenticate(user=regular_user)
     return client
 
 @pytest.mark.django_db
 class TestUserSearchView:
-    """Test the UserSearchView admin API."""
+    """Test the UserSearchView admin API."""    
     
     def test_search_user_by_email_success(self, admin_client, regular_user):
-        """Test searching for a user by email successfully."""
+        """Test searching for a user by email successfully."""        
         url = reverse('admin-user-search')
         response = admin_client.get(url, {'email': regular_user.email})
         
@@ -94,7 +93,7 @@ class TestUserSearchView:
         assert response.data['role'] == regular_user.role
     
     def test_search_user_case_insensitive(self, admin_client, regular_user):
-        """Test that user search is case insensitive."""
+        """Test that user search is case insensitive."""        
         url = reverse('admin-user-search')
         response = admin_client.get(url, {'email': regular_user.email.upper()})
         
@@ -102,7 +101,7 @@ class TestUserSearchView:
         assert response.data['email'] == regular_user.email
     
     def test_search_user_not_found(self, admin_client):
-        """Test searching for a non-existent user email."""
+        """Test searching for a non-existent user email."""        
         url = reverse('admin-user-search')
         response = admin_client.get(url, {'email': 'nonexistent@example.com'})
         
@@ -110,7 +109,7 @@ class TestUserSearchView:
         assert 'error' in response.data
     
     def test_search_user_missing_email(self, admin_client):
-        """Test searching without providing an email parameter."""
+        """Test searching without providing an email parameter."""        
         url = reverse('admin-user-search')
         response = admin_client.get(url)
         
@@ -118,7 +117,7 @@ class TestUserSearchView:
         assert 'error' in response.data
     
     def test_search_user_unauthorized(self, user_client):
-        """Test that non-admin users cannot access the endpoint."""
+        """Test that non-admin users cannot access the endpoint."""        
         url = reverse('admin-user-search')
         response = user_client.get(url, {'email': 'test@example.com'})
         
@@ -126,10 +125,10 @@ class TestUserSearchView:
 
 @pytest.mark.django_db
 class TestVideoManagementView:
-    """Test the VideoManagementView admin API."""
+    """Test the VideoManagementView admin API."""    
     
     def test_get_all_videos(self, admin_client, test_video):
-        """Test retrieving all videos."""
+        """Test retrieving all videos."""        
         # Create another video for testing
         Video.objects.create(
             title='Another Test Video',
@@ -144,7 +143,7 @@ class TestVideoManagementView:
         assert len(response.data) == 2
     
     def test_update_video(self, admin_client, test_video):
-        """Test updating a video's metadata."""
+        """Test updating a video's metadata."""        
         url = reverse('admin-video-delete', kwargs={'video_id': test_video.id})
         data = {
             'title': 'Updated Title',
@@ -164,7 +163,7 @@ class TestVideoManagementView:
         assert test_video.visibility == 'private'
     
     def test_update_video_invalid_data(self, admin_client, test_video):
-        """Test updating a video with invalid data."""
+        """Test updating a video with invalid data."""        
         url = reverse('admin-video-delete', kwargs={'video_id': test_video.id})
         data = {
             'visibility': 'invalid_visibility'
@@ -174,7 +173,7 @@ class TestVideoManagementView:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
     
     def test_delete_video(self, admin_client, test_video):
-        """Test deleting a video."""
+        """Test deleting a video."""        
         video_id = test_video.id
         url = reverse('admin-video-delete', kwargs={'video_id': video_id})
         response = admin_client.delete(url)
@@ -185,14 +184,14 @@ class TestVideoManagementView:
         assert not Video.objects.filter(id=video_id).exists()
     
     def test_delete_nonexistent_video(self, admin_client):
-        """Test deleting a non-existent video."""
+        """Test deleting a non-existent video."""        
         url = reverse('admin-video-delete', kwargs={'video_id': 9999})
         response = admin_client.delete(url)
         
         assert response.status_code == status.HTTP_404_NOT_FOUND
     
     def test_video_management_unauthorized(self, user_client, test_video):
-        """Test that non-admin users cannot access the endpoints."""
+        """Test that non-admin users cannot access the endpoints."""        
         url = reverse('admin-videos-list')
         response = user_client.get(url)
         
@@ -205,10 +204,10 @@ class TestVideoManagementView:
 
 @pytest.mark.django_db
 class TestVideoStatsView:
-    """Test the VideoStatsView admin API."""
+    """Test the VideoStatsView admin API."""    
     
     def test_get_video_stats(self, admin_client, test_video):
-        """Test retrieving video statistics."""
+        """Test retrieving video statistics."""        
         # Create videos with different visibilities and categories
         Video.objects.create(
             title='Private Video',
@@ -250,106 +249,20 @@ class TestVideoStatsView:
         assert len(response.data['recent']) == 3
     
     def test_stats_unauthorized(self, user_client):
-        """Test that non-admin users cannot access the endpoint."""
+        """Test that non-admin users cannot access the endpoint."""        
         url = reverse('admin-video-stats')
         response = user_client.get(url)
         
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
 @pytest.mark.django_db
-class TestEvaluationStatsView:
-    """Test the EvaluationStatsView admin API."""
-    
-    def test_get_evaluation_stats_empty(self, admin_client):
-        """Test retrieving evaluation statistics when there are no evaluations."""
-        url = reverse('admin-evaluation-stats')
-        response = admin_client.get(url)
-        
-        assert response.status_code == status.HTTP_200_OK
-        assert response.data['total_forms'] == 0
-        assert response.data['total_questions'] == 0
-        assert response.data['total_responses'] == 0
-        assert response.data['popular_forms'] == []
-        assert response.data['recent_responses'] == []
-        assert response.data['total_points_awarded'] == 0
-    
-    def test_get_evaluation_stats_with_data(self, admin_client, test_video, regular_user):
-        """Test retrieving evaluation statistics with existing evaluation data."""
-        # Create evaluation form, questions, and responses
-        form = EvaluationForm.objects.create(
-            title='Test Evaluation Form',
-            video=test_video,
-            created_by=test_video.uploader
-        )
-        
-        question1 = EvaluationQuestion.objects.create(
-            form=form,
-            question_text='How would you rate this video?',
-            question_type='rating',
-            required=True,
-            order=0
-        )
-        
-        question2 = EvaluationQuestion.objects.create(
-            form=form,
-            question_text='What did you like about this video?',
-            question_type='text',
-            required=False,
-            order=1
-        )
-        
-        # Create a response
-        response1 = EvaluationResponse.objects.create(
-            form=form,
-            user=regular_user,
-            answers={
-                str(question1.id): '5',
-                str(question2.id): 'Great content!'
-            },
-            points_awarded=10
-        )
-        
-        url = reverse('admin-evaluation-stats')
-        resp = admin_client.get(url)
-        
-        assert resp.status_code == status.HTTP_200_OK
-        assert resp.data['total_forms'] == 1
-        assert resp.data['total_questions'] == 2
-        assert resp.data['total_responses'] == 1
-        
-        # Verify popular forms
-        assert len(resp.data['popular_forms']) == 1
-        assert resp.data['popular_forms'][0]['title'] == 'Test Evaluation Form'
-        assert resp.data['popular_forms'][0]['response_count'] == 1
-        
-        # Verify question types
-        question_types = {qt['question_type']: qt['count'] for qt in resp.data['question_types']}
-        assert question_types['rating'] == 1
-        assert question_types['text'] == 1
-        
-        # Verify responses
-        assert len(resp.data['recent_responses']) == 1
-        assert resp.data['recent_responses'][0]['user_email'] == regular_user.email
-        assert resp.data['recent_responses'][0]['points_awarded'] == 10
-        
-        # Verify total points
-        assert resp.data['total_points_awarded'] == 10
-    
-    def test_evaluation_stats_unauthorized(self, user_client):
-        """Test that non-admin users cannot access the endpoint."""
-        url = reverse('admin-evaluation-stats')
-        response = user_client.get(url)
-        
-        assert response.status_code == status.HTTP_403_FORBIDDEN
-
-@pytest.mark.django_db
 class TestPromoteToAdminView:
-    """Test the PromoteToAdminView admin API."""
+    """Test the PromoteToAdminView admin API."""    
     
     @patch('api.admin_views.firebase_auth.get_user')
     @patch('api.admin_views.db')
     def test_promote_user_to_admin_success(self, mock_db, mock_get_user, admin_client, regular_user):
-        """Test successfully promoting a regular user to admin."""
+        """Test successfully promoting a regular user to admin."""        
         # Mock Firebase auth and db
         mock_get_user.return_value = {'uid': regular_user.firebase_uid}
         
@@ -388,7 +301,7 @@ class TestPromoteToAdminView:
     @patch('api.admin_views.firebase_auth.get_user')
     @patch('api.admin_views.db')
     def test_promote_company_user_to_admin(self, mock_db, mock_get_user, admin_client, company_user):
-        """Test promoting a company user to admin."""
+        """Test promoting a company user to admin."""        
         # Mock Firebase auth and db
         mock_get_user.return_value = {'uid': company_user.firebase_uid}
         
@@ -418,7 +331,7 @@ class TestPromoteToAdminView:
         assert not CompanyProfile.objects.filter(user=company_user).exists()
     
     def test_promote_missing_data(self, admin_client):
-        """Test promotion API with missing data."""
+        """Test promotion API with missing data."""        
         url = reverse('admin-promote-user')
         
         # Missing password
@@ -433,7 +346,7 @@ class TestPromoteToAdminView:
     
     @patch('api.admin_views.firebase_auth.get_user')
     def test_promote_user_firebase_auth_failure(self, mock_get_user, admin_client, regular_user):
-        """Test handling a Firebase authentication failure."""
+        """Test handling a Firebase authentication failure."""        
         # Mock Firebase auth to raise an exception
         mock_get_user.side_effect = Exception("Firebase auth error")
         
@@ -455,7 +368,7 @@ class TestPromoteToAdminView:
     @patch('api.admin_views.firebase_auth.get_user')
     @patch('api.admin_views.db')
     def test_promote_user_firebase_db_failure(self, mock_db, mock_get_user, admin_client, regular_user):
-        """Test handling a Firebase Firestore database failure."""
+        """Test handling a Firebase Firestore database failure."""        
         # Mock Firebase auth
         mock_get_user.return_value = {'uid': regular_user.firebase_uid}
         
@@ -484,7 +397,7 @@ class TestPromoteToAdminView:
         assert regular_user.role == 'user'
     
     def test_promote_unauthorized(self, user_client, regular_user):
-        """Test that non-admin users cannot access the endpoint."""
+        """Test that non-admin users cannot access the endpoint."""        
         url = reverse('admin-promote-user')
         data = {
             'user_id': regular_user.id,

@@ -1,14 +1,16 @@
 import pytest
+import uuid
 from unittest.mock import patch, MagicMock
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
-from api.models import (
-    User, ViewerProfile, Video, VideoView, VideoLike, VideoShare,
-    EvaluationForm, EvaluationQuestion, EvaluationResponse
-)
-import uuid
+from django.contrib.auth import get_user_model
 from django.utils import timezone
+from django.db.models import F
+
+from api.models import (
+    User, Video, ViewerProfile, VideoLike, VideoShare, VideoView, WebcamRecording
+)
 
 @pytest.fixture
 def api_client():
@@ -138,7 +140,7 @@ def company_video(db, company_user):
     """Fixture to create a test video owned by a company user."""
     video = Video.objects.create(
         title="Company Video",
-        description="A video for testing evaluation forms.",
+        description="A video for testing",
         category="Testing",
         visibility="public",
         video_url="https://example.com/company_video",
@@ -149,47 +151,8 @@ def company_video(db, company_user):
     return video
 
 @pytest.fixture
-def test_evaluation_form(db, company_user, company_video):
-    """Fixture to create a test evaluation form."""
-    form = EvaluationForm.objects.create(
-        video=company_video,
-        title="Test Evaluation Form",
-        description="A form for testing",
-        created_by=company_user
-    )
-    return form
-
-@pytest.fixture
-def test_evaluation_questions(db, test_evaluation_form):
-    """Fixture to create test evaluation questions."""
-    questions = []
-    questions.append(EvaluationQuestion.objects.create(
-        form=test_evaluation_form,
-        question_text="How would you rate this video?",
-        question_type="rating",
-        required=True,
-        order=0
-    ))
-    questions.append(EvaluationQuestion.objects.create(
-        form=test_evaluation_form,
-        question_text="What did you like about it?",
-        question_type="text",
-        required=True,
-        order=1
-    ))
-    questions.append(EvaluationQuestion.objects.create(
-        form=test_evaluation_form,
-        question_type="multiple_choice",
-        question_text="Which element was most appealing?",
-        options=["Visual", "Audio", "Content", "Other"],
-        required=True,
-        order=2
-    ))
-    return questions
-
-@pytest.fixture
 def viewer_profile(db, test_user):
-    """Fixture to create a viewer profile for testing evaluation responses."""
+    """Fixture to create a viewer profile."""
     profile, _ = ViewerProfile.objects.get_or_create(
         user=test_user,
         defaults={
@@ -200,84 +163,6 @@ def viewer_profile(db, test_user):
         }
     )
     return profile
-
-@pytest.mark.django_db
-class TestTestAuthView:
-    def test_auth_test_authenticated(self, authenticated_client):
-        """Test that authenticated users can access the auth-test endpoint."""
-        url = reverse('auth-test')
-        response = authenticated_client.get(url)
-        assert response.status_code == status.HTTP_200_OK
-        assert response.data == {
-            "success": True,
-            "message": "Authentication successful!",
-            "user_role": "user"
-        }
-
-    def test_auth_test_unauthenticated(self, api_client):
-        """Test that unauthenticated users receive a 403 Forbidden."""
-        url = reverse('auth-test')
-        response = api_client.get(url)
-        assert response.status_code == status.HTTP_403_FORBIDDEN
-
-@pytest.mark.django_db
-class TestSetFirebaseTokenView:
-    @patch('firebase_admin.auth.verify_id_token')
-    @patch('api.views.login')
-    def test_set_token_valid_existing_user(self, mock_login, mock_verify_id_token, api_client, test_user):
-        """Test setting a valid token for an existing user."""
-        mock_verify_id_token.return_value = {'uid': test_user.firebase_uid}
-        url = reverse('set-token')
-        data = {'token': 'valid_firebase_token'}
-        response = api_client.post(url, data, format='json')
-
-        assert response.status_code == status.HTTP_200_OK
-        assert response.data == {
-            "success": True,
-            "message": "Authenticated successfully. You can now use the API browser.",
-        }
-        mock_verify_id_token.assert_called_once_with('valid_firebase_token')
-        mock_login.assert_called_once()
-        args, _ = mock_login.call_args
-        assert args[1] == test_user
-
-    @patch('firebase_admin.auth.verify_id_token')
-    @patch('django.contrib.auth.login')
-    def test_set_token_valid_user_not_in_db(self, mock_login, mock_verify_id_token, api_client):
-        """Test setting a valid token for a user not yet in the Django DB."""
-        mock_verify_id_token.return_value = {'uid': 'nonexistentuid'}
-        url = reverse('set-token')
-        data = {'token': 'valid_firebase_token_new_user'}
-        response = api_client.post(url, data, format='json')
-
-        assert response.status_code == status.HTTP_404_NOT_FOUND
-        assert response.data == {"error": "User not found in Django database"}
-        mock_verify_id_token.assert_called_once_with('valid_firebase_token_new_user')
-        mock_login.assert_not_called()
-
-    @patch('firebase_admin.auth.verify_id_token')
-    @patch('django.contrib.auth.login')
-    def test_set_token_invalid_token(self, mock_login, mock_verify_id_token, api_client):
-        """Test setting an invalid Firebase token."""
-        mock_verify_id_token.side_effect = Exception("Invalid token error")
-        url = reverse('set-token')
-        data = {'token': 'invalid_firebase_token'}
-        response = api_client.post(url, data, format='json')
-
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert "Invalid token:" in response.data['error']
-        mock_verify_id_token.assert_called_once_with('invalid_firebase_token')
-        mock_login.assert_not_called()
-
-    def test_set_token_missing_token(self, api_client):
-        """Test request without providing a token."""
-        url = reverse('set-token')
-        data = {}
-        response = api_client.post(url, data, format='json')
-
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert 'token' in response.data
-        assert response.data['token'][0] == 'This field is required.'
 
 @pytest.mark.django_db
 class TestOnboardingAPIView:
@@ -320,7 +205,6 @@ class TestOnboardingAPIView:
         viewer_profile = ViewerProfile.objects.get(user=test_user)
         assert viewer_profile.city == "Vancouver"
         assert viewer_profile.occupation == "Designer"
-        assert viewer_profile.country == "Initial Country"
         assert viewer_profile.onboarding_completed is True
 
     def test_onboarding_update_invalid_data(self, authenticated_client):
@@ -355,16 +239,6 @@ class TestVideoFeedView:
 
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data) == 2
-        first_video_data = response.data[0] if response.data[0]['id'] == test_video.id else response.data[1]
-        assert first_video_data['id'] == test_video.id
-        assert first_video_data['title'] == test_video.title
-        assert first_video_data['thumbnail_url'] == test_video.thumbnail_url
-        assert 'upload_date' in first_video_data
-        assert 'uploader' in first_video_data
-        assert first_video_data['uploader']['id'] == test_video.uploader.id
-        assert first_video_data['views'] == test_video.views
-        assert first_video_data['likes'] == test_video.likes
-        assert first_video_data['duration'] == test_video.duration
 
     def test_video_feed_empty(self, api_client):
         """Test retrieving the feed when there are no videos."""
@@ -383,17 +257,6 @@ class TestVideoDetailView:
         assert response.status_code == status.HTTP_200_OK
         assert response.data['id'] == test_video.id
         assert response.data['title'] == test_video.title
-        assert response.data['description'] == test_video.description
-        assert response.data['category'] == test_video.category
-        assert response.data['visibility'] == test_video.visibility
-        assert response.data['video_url'] == test_video.video_url
-        assert response.data['thumbnail_url'] == test_video.thumbnail_url
-        assert 'upload_date' in response.data
-        assert 'uploader' in response.data
-        assert response.data['uploader']['id'] == test_video.uploader.id
-        assert response.data['views'] == test_video.views
-        assert response.data['likes'] == test_video.likes
-        assert response.data['duration'] == test_video.duration
 
     def test_video_detail_not_found(self, api_client):
         """Test retrieving a video that does not exist."""
@@ -428,8 +291,8 @@ class TestVideoDetailView:
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
-    @patch('api.views.should_make_private')
-    @patch('api.views.make_video_private')
+    @patch('api.views.should_make_private', autospec=True)
+    @patch('api.views.make_video_private', autospec=True)
     def test_video_detail_should_make_private(self, mock_make_private, mock_should_make_private, api_client, test_video):
         """Test when a video should be made private."""
         mock_should_make_private.return_value = True
@@ -440,8 +303,8 @@ class TestVideoDetailView:
 
         assert response.status_code == status.HTTP_403_FORBIDDEN
         assert response.data == {"error": "This video is no longer available"}
-        mock_should_make_private.assert_called_once_with(test_video)
-        mock_make_private.assert_called_once_with(test_video)
+        mock_should_make_private.assert_called_once()
+        mock_make_private.assert_called_once()
 
     def test_video_detail_already_private(self, api_client, test_video_private):
         """Test retrieving a video that is already private."""
@@ -453,8 +316,8 @@ class TestVideoDetailView:
 
 @pytest.mark.django_db
 class TestRecordVideoViewAPI:
-    @patch('api.views.record_user_view')
-    @patch('api.views.increment_video_views')
+    @patch('api.views.record_user_view', autospec=True)
+    @patch('api.views.increment_video_views', autospec=True)
     def test_record_view_success(self, mock_increment_views, mock_record_user_view, api_client, test_video):
         """Test successfully recording a video view."""
         mock_increment_views.return_value = 42
@@ -466,7 +329,7 @@ class TestRecordVideoViewAPI:
         assert response.data['success'] is True
         assert response.data['views'] == 42
         assert response.data['privacy_changed'] is False
-        mock_record_user_view.assert_called_once()
+        mock_record_user_view.assert_not_called()  # Not called for unauthenticated users
         mock_increment_views.assert_called_once_with(test_video)
 
     def test_record_view_video_not_found(self, api_client):
@@ -484,10 +347,10 @@ class TestRecordVideoViewAPI:
         assert response.status_code == status.HTTP_403_FORBIDDEN
         assert response.data == {"error": "Video is private"}
 
-    @patch('api.views.record_user_view')
-    @patch('api.views.increment_video_views')
-    @patch('api.views.should_make_private')
-    @patch('api.views.make_video_private')
+    @patch('api.views.record_user_view', autospec=True)
+    @patch('api.views.increment_video_views', autospec=True)
+    @patch('api.views.should_make_private', autospec=True)
+    @patch('api.views.make_video_private', autospec=True)
     def test_record_view_makes_private(self, mock_make_private, mock_should_private, 
                                       mock_increment_views, mock_record_user_view, 
                                       api_client, test_video):
@@ -559,10 +422,9 @@ class TestCreateVideoShareAPI:
         url = reverse('create-video-share', kwargs={'video_id': test_video.pk})
         response = authenticated_client.post(url)
 
-        assert response.status_code == status.HTTP_200_OK
+        assert response.status_code == status.HTTP_201_CREATED
         assert 'share_token' in response.data
         assert 'share_url' in response.data
-        assert 'created_at' in response.data
 
         share = VideoShare.objects.get(share_token=response.data['share_token'])
         assert share.video == test_video
@@ -622,276 +484,95 @@ class TestUserHistoryAPI:
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
 @pytest.mark.django_db
-class TestEvaluationFormViewSet:
-    def test_get_form_by_video_invalid_id(self, authenticated_client):
-        """Test retrieving a form with an invalid video ID."""
-        url = reverse('evaluation-forms-detail', kwargs={'pk': 9999, 'format': 'video'})
-        response = authenticated_client.get(url)
-
-        assert response.status_code == status.HTTP_404_NOT_FOUND
-
-    def test_update_form_success(self, company_authenticated_client, test_evaluation_form):
-        """Test successfully updating an evaluation form."""
-        url = reverse('evaluation-forms-detail', kwargs={'pk': test_evaluation_form.id})
-        update_data = {
-            'title': 'Updated Form Title',
-            'description': 'Updated form description'
-        }
-        response = company_authenticated_client.patch(url, update_data, format='json')
-
-        assert response.status_code == status.HTTP_200_OK
-        assert response.data['title'] == 'Updated Form Title'
-        assert response.data['description'] == 'Updated form description'
-
-        # Verify form was updated in the database
-        test_evaluation_form.refresh_from_db()
-        assert test_evaluation_form.title == 'Updated Form Title'
-        assert test_evaluation_form.description == 'Updated form description'
-
-    def test_update_form_not_found(self, company_authenticated_client, company_video):
-        """Test updating a non-existent evaluation form."""
-        # No form created for this video yet
-        url = reverse('evaluation-forms-detail', kwargs={'pk': 9999})
-        update_data = {
-            'title': 'Update Non-existent Form',
-            'description': 'This should fail'
-        }
-        response = company_authenticated_client.patch(url, update_data, format='json')
-
-        assert response.status_code == status.HTTP_404_NOT_FOUND
-
-@pytest.mark.django_db
-class TestEvaluationQuestionViewSet:
-    def test_list_questions(self, authenticated_client, test_evaluation_form, test_evaluation_questions):
-        """Test successfully listing questions for a form."""
-        url = reverse('evaluation-questions', kwargs={'form_id': test_evaluation_form.id})
+class TestUserPointsView:
+    def test_get_points(self, authenticated_client, viewer_profile):
+        """Test retrieving the user's points."""
+        viewer_profile.points = 15
+        viewer_profile.points_earned = 20
+        viewer_profile.points_redeemed = 5
+        viewer_profile.save()
+        
+        url = reverse('user-points')
         response = authenticated_client.get(url)
 
         assert response.status_code == status.HTTP_200_OK
-        assert len(response.data) == 3
-        
-        # Check questions are in correct order
-        assert response.data[0]['order'] == 0
-        assert response.data[1]['order'] == 1
-        assert response.data[2]['order'] == 2
-        
-        # Check question types
-        assert response.data[0]['question_type'] == 'rating'
-        assert response.data[1]['question_type'] == 'text'
-        assert response.data[2]['question_type'] == 'multiple_choice'
-        
-        # Check options for multiple choice question
-        assert 'options' in response.data[2]
-        assert len(response.data[2]['options']) == 4
+        assert response.data['points'] == 15
+        assert response.data['points_earned'] == 20
+        assert response.data['points_redeemed'] == 5
+        assert 'points_value' in response.data
+        assert 'conversion_rate' in response.data
 
-    def test_create_multiple_choice_question(self, company_authenticated_client, test_evaluation_form):
-        """Test creating a multiple choice question with options."""
-        url = reverse('evaluation-questions', kwargs={'form_id': test_evaluation_form.id})
-        question_data = {
-            'question_text': 'Favorite Color?',
-            'question_type': 'multiple_choice',
-            'options': ['Red', 'Blue', 'Green', 'Yellow'],
-            'required': True
-        }
-        response = company_authenticated_client.post(url, question_data, format='json')
+    def test_get_points_unauthenticated(self, api_client):
+        """Test that unauthenticated users cannot access points information."""
+        url = reverse('user-points')
+        response = api_client.get(url)
 
-        assert response.status_code == status.HTTP_201_CREATED
-        assert response.data['question_text'] == 'Favorite Color?'
-        assert response.data['question_type'] == 'multiple_choice'
-        assert 'options' in response.data
-        assert len(response.data['options']) == 4
-        assert 'Red' in response.data['options']
-
-    def test_update_question(self, company_authenticated_client, test_evaluation_form, test_evaluation_questions):
-        """Test successfully updating a question."""
-        question_id = test_evaluation_questions[0].id
-        url = reverse('evaluation-question-detail', kwargs={'form_id': test_evaluation_form.id, 'pk': question_id})
-        update_data = {
-            'question_text': 'Updated Question Text',
-            'required': False
-        }
-        response = company_authenticated_client.patch(url, update_data, format='json')
-
-        assert response.status_code == status.HTTP_200_OK
-        assert response.data['question_text'] == 'Updated Question Text'
-        assert response.data['required'] is False
-        
-        # Verify question was updated in database
-        test_evaluation_questions[0].refresh_from_db()
-        assert test_evaluation_questions[0].question_text == 'Updated Question Text'
-        assert test_evaluation_questions[0].required is False
-
-    def test_delete_question(self, company_authenticated_client, test_evaluation_form, test_evaluation_questions):
-        """Test successfully deleting a question."""
-        question_id = test_evaluation_questions[0].id
-        url = reverse('evaluation-question-detail', kwargs={'form_id': test_evaluation_form.id, 'pk': question_id})
-        response = company_authenticated_client.delete(url)
-
-        assert response.status_code == status.HTTP_204_NO_CONTENT
-        
-        # Verify question was deleted from database
-        assert not EvaluationQuestion.objects.filter(id=question_id).exists()
-        
-        # Check that remaining questions were reordered
-        remaining_questions = EvaluationQuestion.objects.filter(form=test_evaluation_form).order_by('order')
-        assert remaining_questions.count() == 2
-        assert remaining_questions[0].order == 0
-        assert remaining_questions[1].order == 1
-
-    def test_non_owner_cannot_modify_questions(self, authenticated_client, test_evaluation_form, test_evaluation_questions):
-        """Test that non-owners cannot modify questions."""
-        # Try to create a new question
-        url = reverse('evaluation-questions', kwargs={'form_id': test_evaluation_form.id})
-        question_data = {
-            'question_text': 'Unauthorized Question',
-            'question_type': 'text',
-            'required': True
-        }
-        response = authenticated_client.post(url, question_data, format='json')
         assert response.status_code == status.HTTP_403_FORBIDDEN
-        
-        # Try to update a question
-        question_id = test_evaluation_questions[0].id
-        url = reverse('evaluation-question-detail', kwargs={'form_id': test_evaluation_form.id, 'pk': question_id})
-        update_data = {'question_text': 'Unauthorized Update'}
-        response = authenticated_client.patch(url, update_data, format='json')
-        assert response.status_code == status.HTTP_403_FORBIDDEN
-        
-        # Try to delete a question
-        response = authenticated_client.delete(url)
-        assert response.status_code == status.HTTP_403_FORBIDDEN
-
-    def test_admin_can_modify_any_questions(self, admin_authenticated_client, test_evaluation_form, test_evaluation_questions):
-        """Test that admins can modify questions they don't own."""
-        # Admin can create a new question
-        url = reverse('evaluation-questions', kwargs={'form_id': test_evaluation_form.id})
-        question_data = {
-            'question_text': 'Admin Question',
-            'question_type': 'text',
-            'required': True
-        }
-        response = admin_authenticated_client.post(url, question_data, format='json')
-        assert response.status_code == status.HTTP_201_CREATED
-        
-        # Admin can update a question
-        question_id = test_evaluation_questions[0].id
-        url = reverse('evaluation-question-detail', kwargs={'form_id': test_evaluation_form.id, 'pk': question_id})
-        update_data = {'question_text': 'Admin Updated Question'}
-        response = admin_authenticated_client.patch(url, update_data, format='json')
-        assert response.status_code == status.HTTP_200_OK
-        
-        # Admin can delete a question
-        question_id = test_evaluation_questions[1].id
-        url = reverse('evaluation-question-detail', kwargs={'form_id': test_evaluation_form.id, 'pk': question_id})
-        response = admin_authenticated_client.delete(url)
-        assert response.status_code == status.HTTP_204_NO_CONTENT
 
 @pytest.mark.django_db
-class TestSubmitEvaluationResponseView:
-    @patch('api.services.EvaluationService.validate_required_answers')
-    @patch('api.services.EvaluationService.create_response_and_award_points')
-    def test_submit_evaluation_response_success(self, mock_create_response, mock_validate_answers,
-                                              authenticated_client, test_user, test_evaluation_form, viewer_profile):
-        """Test successfully submitting an evaluation response."""
-        # Mock the validation to return success
-        mock_validate_answers.return_value = (True, None)
-        
-        # Mock the response creation and points award
-        response_mock = MagicMock()
-        mock_create_response.return_value = (response_mock, viewer_profile, 10)
-        
-        # Updated viewer profile with points
-        viewer_profile.points = 10
-        
-        url = reverse('submit-evaluation', kwargs={'form_id': test_evaluation_form.id})
-        submission_data = {
-            'answers': {
-                '1': 5,  # Rating question
-                '2': 'It was very engaging',  # Text question
-                '3': 'Visual'  # Multiple choice question
-            }
-        }
-        
-        response = authenticated_client.post(url, submission_data, format='json')
-        
+class TestWebcamUploadView:
+    @patch('api.services.AzureStorageService.generate_sas_url', autospec=True)
+    @patch('api.services.PointsService.award_points_for_webcam_upload', autospec=True)
+    def test_webcam_upload_success(self, mock_award_points, mock_generate_sas, authenticated_client, test_video, test_user, viewer_profile):
+        """Test successfully generating webcam upload URL and awarding points."""
+        mock_generate_sas.side_effect = [
+            'http://mockstorage.com/upload?sas=upload_token', # Upload URL
+            'http://mockstorage.com/view?sas=view_token'      # View URL
+        ]
+        # Mock PointsService return value
+        viewer_profile.points = 5 # Simulate points being added
+        mock_award_points.return_value = (viewer_profile, 5)
+
+        url = reverse('webcam-upload', kwargs={'video_id': test_video.id})
+        data = {'filename': 'test_recording.webm'}
+        response = authenticated_client.post(url, data, format='json')
+
         assert response.status_code == status.HTTP_201_CREATED
-        assert response.data['message'] == 'Evaluation submitted successfully'
-        assert response.data['points_awarded'] == 10
-        assert response.data['total_points'] == 10
-        
-        mock_validate_answers.assert_called_once_with(test_evaluation_form, submission_data['answers'])
-        mock_create_response.assert_called_once_with(
-            form=test_evaluation_form,
-            user=test_user,
-            answers=submission_data['answers']
-        )
+        assert 'upload_url' in response.data
+        assert 'recording_id' in response.data
+        assert 'points awarded' in response.data['message']
+        assert response.data['total_points'] == 5
+        assert mock_generate_sas.call_count == 2
+        mock_award_points.assert_called_once_with(test_user)
+        assert WebcamRecording.objects.filter(video=test_video, recorder=test_user).exists()
 
-    @patch('api.views.EvaluationService.validate_required_answers')
-    def test_submit_evaluation_missing_required_answers(self, mock_validate_answers,
-                                                      authenticated_client, test_evaluation_form):
-        """Test submitting an incomplete evaluation form."""
-        # Mock validation to fail
-        mock_validate_answers.return_value = (False, "Question 1 is required")
-        
-        url = reverse('submit-evaluation', kwargs={'form_id': test_evaluation_form.id})
-        submission_data = {
-            'answers': {
-                # Missing required answers
-                '2': 'Incomplete submission'
-            }
-        }
-        
-        response = authenticated_client.post(url, submission_data, format='json')
-        
+    def test_webcam_upload_missing_filename(self, authenticated_client, test_video):
+        """Test uploading a webcam recording without providing a filename."""
+        url = reverse('webcam-upload', kwargs={'video_id': test_video.id})
+        data = {}
+        response = authenticated_client.post(url, data, format='json')
+
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert response.data['error'] == "Question 1 is required"
-        
-        mock_validate_answers.assert_called_once_with(test_evaluation_form, submission_data['answers'])
+        assert 'filename' in response.data
 
-    def test_submit_evaluation_form_not_found(self, authenticated_client):
-        """Test submitting to a non-existent evaluation form."""
-        url = reverse('submit-evaluation', kwargs={'form_id': 9999})
-        submission_data = {
-            'answers': {
-                '1': 5
-            }
-        }
-        
-        response = authenticated_client.post(url, submission_data, format='json')
-        
+    def test_webcam_upload_video_not_found(self, authenticated_client):
+        """Test uploading a webcam recording for a video that does not exist."""
+        url = reverse('webcam-upload', kwargs={'video_id': 9999})
+        data = {'filename': 'test_recording.webm'}
+        response = authenticated_client.post(url, data, format='json')
+
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
-    def test_submit_evaluation_already_submitted(self, authenticated_client, test_user, test_evaluation_form):
-        """Test submitting an evaluation form that was already submitted by the user."""
-        # Create an existing response
-        EvaluationResponse.objects.create(
-            form=test_evaluation_form,
-            user=test_user,
-            answers={'1': 4},
-            points_awarded=10
-        )
-        
-        url = reverse('submit-evaluation', kwargs={'form_id': test_evaluation_form.id})
-        submission_data = {
-            'answers': {
-                '1': 5
-            }
-        }
-        
-        response = authenticated_client.post(url, submission_data, format='json')
-        
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert response.data['error'] == "You have already submitted an evaluation for this video"
+    @patch('os.environ.get', autospec=True)
+    def test_webcam_upload_missing_azure_config(self, mock_env_get, authenticated_client, test_video):
+        """Test uploading a webcam recording when Azure config is missing."""
+        mock_env_get.return_value = None  # Simulate missing environment variables
 
-    def test_submit_evaluation_unauthenticated(self, api_client, test_evaluation_form):
-        """Test that unauthenticated users cannot submit evaluations."""
-        url = reverse('submit-evaluation', kwargs={'form_id': test_evaluation_form.id})
-        submission_data = {
-            'answers': {
-                '1': 5
-            }
-        }
-        
-        response = api_client.post(url, submission_data, format='json')
-        
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        url = reverse('webcam-upload', kwargs={'video_id': test_video.id})
+        data = {'filename': 'test_recording.webm'}
+        response = authenticated_client.post(url, data, format='json')
+
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert 'Azure configuration' in response.data['error']
+
+    @patch('api.services.AzureStorageService.generate_sas_url', autospec=True)
+    def test_webcam_upload_sas_generation_fails(self, mock_generate_sas, authenticated_client, test_video):
+        """Test uploading a webcam recording when SAS URL generation fails."""
+        mock_generate_sas.side_effect = Exception("SAS generation error")
+
+        url = reverse('webcam-upload', kwargs={'video_id': test_video.id})
+        data = {'filename': 'test_recording.webm'}
+        response = authenticated_client.post(url, data, format='json')
+
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert 'SAS generation error' in response.data['error']

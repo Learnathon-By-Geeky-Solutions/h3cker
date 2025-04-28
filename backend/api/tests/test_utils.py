@@ -9,7 +9,7 @@ from ..utils import (
     should_make_private,
     make_video_private,
     increment_video_views,
-    
+    record_user_view,
 )
 
 User = get_user_model()
@@ -97,3 +97,85 @@ class IncrementVideoViewsTests(TestCase):
             self.assertEqual(result, 11)
             self.assertEqual(video.save_calls, [['views']])
             mock_f.assert_called_once_with('views')
+
+
+class RecordUserViewTests(TestCase):
+    @patch('api.models.VideoView')
+    def test_record_user_view_authenticated(self, mock_video_view):
+        """Test recording a view for an authenticated user."""
+        # Setup
+        mock_user = MagicMock()
+        mock_user.is_authenticated = True
+        mock_video = MagicMock()
+        mock_get_or_create = MagicMock()
+        mock_video_view.objects.get_or_create = mock_get_or_create
+        
+        # Call the function
+        record_user_view(mock_video, mock_user)
+        
+        # Assert
+        mock_get_or_create.assert_called_once()
+        args, kwargs = mock_get_or_create.call_args
+        self.assertEqual(kwargs['video'], mock_video)
+        self.assertEqual(kwargs['viewer'], mock_user)
+        self.assertIn('defaults', kwargs)
+        self.assertIn('viewed_at', kwargs['defaults'])
+    
+    @patch('api.models.VideoView')
+    def test_record_user_view_not_authenticated(self, mock_video_view):
+        """Test that views are not recorded for unauthenticated users."""
+        # Setup
+        mock_user = MagicMock()
+        mock_user.is_authenticated = False
+        mock_video = MagicMock()
+        mock_get_or_create = MagicMock()
+        mock_video_view.objects.get_or_create = mock_get_or_create
+        
+        # Call the function
+        record_user_view(mock_video, mock_user)
+        
+        # Assert
+        mock_get_or_create.assert_not_called()
+    
+    @patch('api.models.VideoView')
+    def test_record_user_view_none_user(self, mock_video_view):
+        """Test that views are not recorded when user is None."""
+        # Setup
+        mock_user = None
+        mock_video = MagicMock()
+        mock_get_or_create = MagicMock()
+        mock_video_view.objects.get_or_create = mock_get_or_create
+        
+        # Call the function
+        record_user_view(mock_video, mock_user)
+        
+        # Assert
+        mock_get_or_create.assert_not_called()
+    
+    @patch('api.models.VideoView')
+    def test_record_user_view_idempotence(self, mock_video_view):
+        """Test that calling record_user_view multiple times only creates one record."""
+        # Setup
+        mock_user = MagicMock()
+        mock_user.is_authenticated = True
+        mock_video = MagicMock()
+        
+        # Create a mock to simulate get_or_create behavior
+        def side_effect(**kwargs):
+            # First call returns (object, created=True)
+            # Subsequent calls return (object, created=False)
+            return MagicMock(), True
+            
+        mock_get_or_create = MagicMock(side_effect=lambda **kwargs: (MagicMock(), True))
+        mock_video_view.objects.get_or_create = mock_get_or_create
+        
+        # Call the function twice
+        record_user_view(mock_video, mock_user)
+        record_user_view(mock_video, mock_user)
+        
+        # Assert get_or_create was called twice with the same parameters
+        self.assertEqual(mock_get_or_create.call_count, 2)
+        first_call = mock_get_or_create.call_args_list[0]
+        second_call = mock_get_or_create.call_args_list[1]
+        self.assertEqual(first_call[1]['video'], second_call[1]['video'])
+        self.assertEqual(first_call[1]['viewer'], second_call[1]['viewer'])

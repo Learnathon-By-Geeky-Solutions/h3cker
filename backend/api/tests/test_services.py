@@ -6,10 +6,9 @@ from datetime import timedelta
 import os
 
 from api.models import (
-    ViewerProfile, EvaluationForm, EvaluationQuestion, 
-    EvaluationResponse, Video, User
+    ViewerProfile, Video, User # Removed Evaluation models
 )
-from api.services import PointsService, EvaluationService, AzureStorageService
+from api.services import PointsService, AzureStorageService # Removed EvaluationService
 
 User = get_user_model()
 
@@ -35,106 +34,36 @@ def test_video(test_user):
         visibility='public'
     )
 
-@pytest.fixture
-def test_form(test_user, test_video):
-    """Create a test evaluation form"""
-    return EvaluationForm.objects.create(
-        title='Test Form',
-        description='Test form description',
-        created_by=test_user,
-        video=test_video
-    )
-
-@pytest.fixture
-def test_questions(test_form):
-    """Create test evaluation questions"""
-    questions = []
-    
-    # Required rating question
-    questions.append(EvaluationQuestion.objects.create(
-        form=test_form,
-        question_text='How would you rate this video?',
-        question_type='rating',
-        required=True,
-        order=0
-    ))
-    
-    # Optional text question
-    questions.append(EvaluationQuestion.objects.create(
-        form=test_form,
-        question_text='Any comments?',
-        question_type='text',
-        required=False,
-        order=1
-    ))
-    
-    # Required multiple choice question
-    questions.append(EvaluationQuestion.objects.create(
-        form=test_form,
-        question_text='What did you like most?',
-        question_type='multiple_choice',
-        options=['Content', 'Presentation', 'Audio', 'Nothing'],
-        required=True,
-        order=2
-    ))
-    
-    return questions
-
 @pytest.mark.django_db
 class TestPointsService:
     """Tests for the PointsService class"""
     
-    def test_award_points_new_profile(self, test_user):
-        """Test awarding points to a user without an existing profile"""
-        # Make sure no profile exists yet
+    def test_award_points_webcam_upload_new_profile(self, test_user):
+        """Test awarding points for webcam upload to a user without an existing profile"""
         ViewerProfile.objects.filter(user=test_user).delete()
-        
-        # Award points
-        profile, points_awarded = PointsService.award_points_for_evaluation(test_user, 15)
-        
-        # Check that a profile was created
+        profile, points_awarded = PointsService.award_points_for_webcam_upload(test_user, 15)
         assert profile.user == test_user
         assert profile.points == 15
         assert profile.points_earned == 15
         assert points_awarded == 15
-        
-        # Verify the profile was saved to the database
         db_profile = ViewerProfile.objects.get(user=test_user)
         assert db_profile.points == 15
-        assert db_profile.points_earned == 15
     
-    def test_award_points_existing_profile(self, test_user):
-        """Test awarding points to a user with an existing profile"""
-        # Create profile with existing points
-        profile = ViewerProfile.objects.create(
-            user=test_user,
-            points=10,
-            points_earned=10
-        )
-        
-        # Award additional points
-        updated_profile, points_awarded = PointsService.award_points_for_evaluation(test_user, 5)
-        
-        # Check that points were added
-        assert updated_profile.user == test_user
+    def test_award_points_webcam_upload_existing_profile(self, test_user):
+        """Test awarding points for webcam upload to a user with an existing profile"""
+        profile = ViewerProfile.objects.create(user=test_user, points=10, points_earned=10)
+        updated_profile, points_awarded = PointsService.award_points_for_webcam_upload(test_user, 5)
         assert updated_profile.points == 15
         assert updated_profile.points_earned == 15
         assert points_awarded == 5
-        
-        # Verify the profile was updated in the database
         profile.refresh_from_db()
         assert profile.points == 15
-        assert profile.points_earned == 15
-    
-    def test_award_points_default_value(self, test_user):
-        """Test awarding points with the default value"""
-        # Award points with default value (10)
-        profile, points_awarded = PointsService.award_points_for_evaluation(test_user)
-        
-        # Check that the default value was used
-        assert profile.points == 10
-        assert profile.points_earned == 10
-        assert points_awarded == 10
+
+    def test_award_points_webcam_upload_default_value(self, test_user):
+        """Test awarding points for webcam upload with the default value"""
+        profile, points_awarded = PointsService.award_points_for_webcam_upload(test_user)
+        assert profile.points == 5 # Default is 5 for webcam upload
+        assert points_awarded == 5
     
     def test_calculate_points_value(self, test_user):
         """Test calculating the points value"""
@@ -146,111 +75,6 @@ class TestPointsService:
         # Default conversion rate is 10 BDT per point
         value = profile.calculate_points_value()
         assert value == 200  # 20 points * 10 BDT
-
-@pytest.mark.django_db
-class TestEvaluationService:
-    """Tests for the EvaluationService class"""
-    
-    def test_validate_required_answers_valid(self, test_form, test_questions):
-        """Test validation with all required questions answered"""
-        # Create answers with all required questions answered
-        answers = {
-            str(test_questions[0].id): '5',  # Required rating question
-            str(test_questions[2].id): 'Content'  # Required multiple choice question
-            # Optional text question is omitted
-        }
-        
-        # Validate answers
-        valid, error_message = EvaluationService.validate_required_answers(test_form, answers)
-        
-        # Assertions
-        assert valid is True
-        assert error_message is None
-    
-    def test_validate_required_answers_missing(self, test_form, test_questions):
-        """Test validation with missing required answers"""
-        # Create answers with a missing required question
-        answers = {
-            # Missing required rating question
-            str(test_questions[1].id): 'Great video!'  # Optional text question
-            # Missing required multiple choice question
-        }
-        
-        # Validate answers
-        valid, error_message = EvaluationService.validate_required_answers(test_form, answers)
-        
-        # Assertions
-        assert valid is False
-        assert error_message is not None
-        assert test_questions[0].question_text in error_message
-    
-    def test_validate_required_answers_empty(self, test_form, test_questions):
-        """Test validation with empty required answers"""
-        # Create answers with empty required question
-        answers = {
-            str(test_questions[0].id): '',  # Empty required rating question
-            str(test_questions[2].id): 'Content'  # Required multiple choice question
-        }
-        
-        # Validate answers
-        valid, error_message = EvaluationService.validate_required_answers(test_form, answers)
-        
-        # Assertions
-        assert valid is False
-        assert error_message is not None
-        assert test_questions[0].question_text in error_message
-    
-    def test_create_response_and_award_points(self, test_user, test_form, test_questions):
-        """Test creating a response and awarding points"""
-        # Create answers
-        answers = {
-            str(test_questions[0].id): '5',
-            str(test_questions[1].id): 'Great video!',
-            str(test_questions[2].id): 'Content'
-        }
-        
-        # Create response
-        response, profile, points_awarded = EvaluationService.create_response_and_award_points(
-            test_form, test_user, answers, 15
-        )
-        
-        # Check response
-        assert response.form == test_form
-        assert response.user == test_user
-        assert response.answers == answers
-        assert response.points_awarded == 15
-        
-        # Check profile
-        assert profile.user == test_user
-        assert profile.points == 15
-        assert profile.points_earned == 15
-        assert points_awarded == 15
-        
-        # Verify the response was saved to the database
-        db_response = EvaluationResponse.objects.get(id=response.id)
-        assert db_response.form == test_form
-        assert db_response.user == test_user
-        assert db_response.answers == answers
-        assert db_response.points_awarded == 15
-    
-    def test_create_response_default_points(self, test_user, test_form, test_questions):
-        """Test creating a response with default points"""
-        # Create answers
-        answers = {
-            str(test_questions[0].id): '4',
-            str(test_questions[2].id): 'Presentation'
-        }
-        
-        # Create response with default points
-        response, profile, points_awarded = EvaluationService.create_response_and_award_points(
-            test_form, test_user, answers
-        )
-        
-        # Check default points
-        assert response.points_awarded == 10
-        assert profile.points == 10
-        assert profile.points_earned == 10
-        assert points_awarded == 10
 
 @pytest.mark.django_db
 class TestAzureStorageService:

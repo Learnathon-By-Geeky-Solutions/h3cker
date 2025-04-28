@@ -4,7 +4,6 @@ from api.models import User, ViewerProfile, Video
 from api.serializers import (
     OnboardingSerializer,
     UserBasicSerializer,
-    FirebaseTokenSerializer,
     VideoSerializer,
     VideoFeedSerializer,
     VideoDetailSerializer,
@@ -116,25 +115,6 @@ class TestOnboardingSerializer:
         assert not serializer.is_valid()
         assert 'birthday' in serializer.errors
         # content_preferences is not required, so we don't check for it
-
-# --- Test FirebaseTokenSerializer ---
-def test_firebase_token_serializer_valid():
-    data = {'token': 'some_firebase_token_string'}
-    serializer = FirebaseTokenSerializer(data=data)
-    assert serializer.is_valid()
-    assert serializer.validated_data['token'] == 'some_firebase_token_string'
-
-def test_firebase_token_serializer_missing():
-    data = {}
-    serializer = FirebaseTokenSerializer(data=data)
-    assert not serializer.is_valid()
-    assert 'token' in serializer.errors
-
-def test_firebase_token_serializer_blank():
-    data = {'token': ''}
-    serializer = FirebaseTokenSerializer(data=data)
-    assert not serializer.is_valid() # Default CharField behavior requires non-blank
-    assert 'token' in serializer.errors
 
 # --- Test VideoSerializer ---
 @pytest.mark.django_db

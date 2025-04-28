@@ -160,11 +160,12 @@ class VideoDetailView(generics.RetrieveAPIView):
             return Response({"error": str(e)}, status=status.HTTP_404_NOT_FOUND)
 
 
-class RecordVideoViewAPI(APIView):
+class RecordVideoViewAPI(generics.CreateAPIView):
     """Record a view for a video."""
     permission_classes = [AllowAny]
     
-    def post(self, request, video_id):
+    def create(self, request, *args, **kwargs):
+        video_id = kwargs.get('video_id')
         video = get_object_or_404(Video, id=video_id)
         
         # Check if the video is private
@@ -190,11 +191,12 @@ class RecordVideoViewAPI(APIView):
         }, status=status.HTTP_200_OK)
 
 
-class ToggleVideoLikeAPI(APIView):
+class ToggleVideoLikeAPI(generics.CreateAPIView):
     """Toggle like status for a video."""
     permission_classes = [IsAuthenticated]
     
-    def post(self, request, video_id):
+    def create(self, request, *args, **kwargs):
+        video_id = kwargs.get('video_id')
         video = get_object_or_404(Video, id=video_id)
         user = request.user
         
@@ -226,17 +228,19 @@ class ToggleVideoLikeAPI(APIView):
         return super().handle_exception(exc)
 
 
-class CreateVideoShareAPI(APIView):
+class CreateVideoShareAPI(generics.CreateAPIView):
     permission_classes = [IsAuthenticated]
+    serializer_class = VideoShareSerializer
     
-    def post(self, request, video_id):
+    def create(self, request, *args, **kwargs):
+        video_id = kwargs.get('video_id')
         video = get_object_or_404(Video, id=video_id)
         
         # Create a new share record
         share = VideoShare.objects.create(video=video, created_by=request.user)
         
         # Serialize the share record
-        serializer = VideoShareSerializer(share, context={
+        serializer = self.get_serializer(share, context={
             'request': request,
             'frontend_url': settings.FRONTEND_URL
         })
@@ -327,10 +331,11 @@ class UploadVideoView(generics.CreateAPIView):
             )
 
 
-class WebcamUploadView(APIView):
+class WebcamUploadView(generics.CreateAPIView):
     permission_classes = [IsAuthenticated]
-
-    def post(self, request, video_id):
+    
+    def create(self, request, *args, **kwargs):
+        video_id = kwargs.get('video_id')
         video = get_object_or_404(Video, id=video_id)
         
         if 'filename' not in request.data:
@@ -429,19 +434,16 @@ class VideoSearchView(generics.ListAPIView):
         return Video.objects.none()
 
 
-class UserPointsView(APIView):
+class UserPointsView(generics.RetrieveAPIView):
     """
     API endpoint for retrieving user points information.
     """
     permission_classes = [IsAuthenticated]
+    serializer_class = UserPointsSerializer
     
-    def get(self, request):
-        profile, _ = ViewerProfile.objects.get_or_create(user=request.user)
-        serializer = UserPointsSerializer(profile)
-        return Response(serializer.data)
-
-    def get_serializer(self, *args, **kwargs):
-        return UserPointsSerializer(*args, **kwargs)
+    def get_object(self):
+        profile, _ = ViewerProfile.objects.get_or_create(user=self.request.user)
+        return profile
     
     def handle_exception(self, exc):
         if isinstance(exc, (AuthenticationFailed, PermissionError)):
