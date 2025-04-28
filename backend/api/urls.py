@@ -3,7 +3,8 @@ from .views import (
     OnboardingAPIView, UploadVideoView, VideoFeedView, VideoDetailView,
     RecordVideoViewAPI, ToggleVideoLikeAPI, 
     CreateVideoShareAPI, UserHistoryAPI, WebcamUploadView, UserLikedVideosAPI,
-    VideoSearchView, UserPointsView
+    VideoSearchView, UserPointsView, VideoRecommendationsView, FeaturedCarouselVideosView,
+    CategoryVideosView, TrendingVideosView, RecentVideosView
 )
 from .admin_views import (
     UserSearchView, PromoteToAdminView, VideoManagementView, 
@@ -29,6 +30,13 @@ urlpatterns = [
     path('user/history/', UserHistoryAPI.as_view(), name='user-history'),
     path('user/liked/', UserLikedVideosAPI.as_view(), name='user-liked-videos'),
     path('user/points/', UserPointsView.as_view(), name='user-points'),
+    
+    # Recommendation endpoints
+    path('recommendations/', VideoRecommendationsView.as_view(), name='video-recommendations'),
+    path('featured-carousel/', FeaturedCarouselVideosView.as_view(), name='featured-carousel-videos'),
+    path('category-videos/', CategoryVideosView.as_view(), name='category-videos'),
+    path('trending-videos/', TrendingVideosView.as_view(), name='trending-videos'),
+    path('recent-videos/', RecentVideosView.as_view(), name='recent-videos'),
     
     # Admin endpoints
     path('admin/users/search/', UserSearchView.as_view(), name='admin-user-search'),

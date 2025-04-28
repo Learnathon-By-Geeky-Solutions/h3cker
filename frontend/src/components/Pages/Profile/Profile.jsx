@@ -17,33 +17,47 @@ const ProfileAvatar = ({
   isEditing = false, 
   onShowPhotoOptions, 
   previewImage = null 
-}) => (
-  <div className="relative group">
-    <div className="rounded-full overflow-hidden w-24 h-24 md:w-28 md:h-28 border-4 border-blue-600/30 shadow-lg shadow-blue-700/20">
-      <Avatar 
-        img={previewImage || photoURL || DEFAULT_AVATAR} 
-        size="xl" 
-        rounded 
-        alt="Profile picture" 
-        className="w-full h-full object-cover"
-        onError={(e) => {
-          e.target.onerror = null; 
-          e.target.src = DEFAULT_AVATAR;
-        }}
-      />
+}) => {
+  const [imageError, setImageError] = useState(false);
+  
+  // Reset image error when photo URL changes
+  useEffect(() => {
+    setImageError(false);
+  }, [photoURL, previewImage]);
+  
+  return (
+    <div className="relative group">
+      <div className="rounded-full overflow-hidden w-24 h-24 md:w-28 md:h-28 border-4 border-blue-600/30 shadow-lg shadow-blue-700/20 bg-gray-700 flex items-center justify-center">
+        {imageError ? (
+          <HiUser className="w-12 h-12 text-gray-400" />
+        ) : (
+          <Avatar 
+            img={previewImage || photoURL || DEFAULT_AVATAR} 
+            size="xl" 
+            rounded 
+            alt="Profile picture" 
+            className="w-full h-full object-cover"
+            onError={(e) => {
+              e.target.onerror = null;
+              setImageError(true);
+            }}
+            loading="eager"
+          />
+        )}
+      </div>
+      
+      {isEditing && (
+        <button
+          type="button"
+          onClick={onShowPhotoOptions}
+          className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-60 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+        >
+          <Camera size={24} className="text-blue-400" />
+        </button>
+      )}
     </div>
-    
-    {isEditing && (
-      <button
-        type="button"
-        onClick={onShowPhotoOptions}
-        className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-60 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-      >
-        <Camera size={24} className="text-blue-400" />
-      </button>
-    )}
-  </div>
-);
+  );
+};
 
 ProfileAvatar.propTypes = {
   photoURL: PropTypes.string,

@@ -15,13 +15,15 @@ const FullPageLoader = () => (
 );
 
 const Home = () => {
-  const { user } = useContext(AuthContext);
-  const isLoggedIn = Boolean(user);
-  
+  const { user, loading } = useContext(AuthContext);
+
+  if (loading) {
+    return <FullPageLoader />;
+  }
   return (
     <div className="bg-gray-900 min-h-screen">
       <Suspense fallback={<FullPageLoader />}>
-        {isLoggedIn ? <LoggedInView /> : <NotLoggedInView />}
+        {user ? <LoggedInView /> : <NotLoggedInView />}
       </Suspense>
     </div>
   );

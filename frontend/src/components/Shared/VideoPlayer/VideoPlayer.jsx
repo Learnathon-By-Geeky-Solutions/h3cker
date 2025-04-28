@@ -37,6 +37,7 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded,
     }
 
     const videoElement = videoRef.current;
+    if (!videoElement) return;
 
     const manageBufferCache = () => {
       const segmentsToRemove = [];
@@ -148,7 +149,9 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded,
       resetControlsTimer();
     };
 
-    videoContainerRef.current.addEventListener('mousemove', handleMouseMove);
+    if (videoContainerRef.current) {
+      videoContainerRef.current.addEventListener('mousemove', handleMouseMove);
+    }
 
     // Handle page unload to ensure recording is saved
     const handleBeforeUnload = (e) => {

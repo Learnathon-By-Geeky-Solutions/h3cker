@@ -7,12 +7,15 @@ import {
   HiOutlineClock, 
   HiTrendingUp, 
   HiMicrophone, 
-  HiOutlineArrowUp
+  HiOutlineArrowUp,
+  HiTag
 } from "react-icons/hi";
 import VideoService from "../../../utils/VideoService";
+import ApiService from "../../../utils/ApiService";
 
 const MAX_HISTORY = 5;
 const MAX_SUGGESTIONS = 6;
+const MAX_CATEGORY_TILES = 8;
 
 const SearchBar = ({ 
   className = "", 
@@ -21,7 +24,8 @@ const SearchBar = ({
   initialValue = "",
   showTrending = true,
   showMic = true,
-  autoFocus = false
+  autoFocus = false,
+  showCategoryTiles = true
 }) => {
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [searchQuery, setSearchQuery] = useState(initialValue);
@@ -29,7 +33,9 @@ const SearchBar = ({
   const [searchHistory, setSearchHistory] = useState([]);
   const [suggestions, setSuggestions] = useState([]);
   const [trendingSearches, setTrendingSearches] = useState([]);
+  const [recommendedCategories, setRecommendedCategories] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isCategoriesLoading, setIsCategoriesLoading] = useState(false);
   
   const searchRef = useRef(null);
   const suggestionBoxRef = useRef(null);
@@ -38,7 +44,10 @@ const SearchBar = ({
   useEffect(() => {
     loadSearchHistory();
     loadTrendingSearches();
-  }, []);
+    if (showCategoryTiles) {
+      fetchRecommendedCategories();
+    }
+  }, [showCategoryTiles]);
   
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -92,6 +101,59 @@ const SearchBar = ({
       "gaming",
       "music videos"
     ]);
+  };
+  
+  const fetchRecommendedCategories = async () => {
+    setIsCategoriesLoading(true);
+    
+    try {
+      // First try to get personalized recommendations
+      const recommendationsResponse = await ApiService.get('recommendations/?limit=5');
+      
+      // Extract unique categories from recommended videos
+      const categories = new Set();
+      if (Array.isArray(recommendationsResponse)) {
+        recommendationsResponse.forEach(video => {
+          if (video.category && video.category.trim()) {
+            categories.add(video.category.trim());
+          }
+        });
+      }
+      
+      // If we have fewer than 3 recommended categories, fetch trending videos for more categories
+      if (categories.size < 3) {
+        const trendingResponse = await ApiService.get('trending-videos/?limit=10');
+        if (Array.isArray(trendingResponse)) {
+          trendingResponse.forEach(video => {
+            if (video.category && video.category.trim()) {
+              categories.add(video.category.trim());
+            }
+          });
+        }
+      }
+      
+      // If we still need more categories, get from recent videos
+      if (categories.size < MAX_CATEGORY_TILES) {
+        const recentResponse = await ApiService.get('recent-videos/?limit=10');
+        if (Array.isArray(recentResponse)) {
+          recentResponse.forEach(video => {
+            if (video.category && video.category.trim()) {
+              categories.add(video.category.trim());
+            }
+          });
+        }
+      }
+      
+      // Convert set to array and take up to MAX_CATEGORY_TILES elements
+      setRecommendedCategories(Array.from(categories).slice(0, MAX_CATEGORY_TILES));
+      
+    } catch (e) {
+      console.error("Error fetching recommended categories:", e);
+      // Fallback to default categories
+      setRecommendedCategories(["Entertainment", "Education", "Sports", "Music", "Technology", "Comedy"]);
+    } finally {
+      setIsCategoriesLoading(false);
+    }
   };
   
   const fetchSuggestions = async (query) => {
@@ -282,6 +344,10 @@ const SearchBar = ({
     }
   };
   
+  const navigateToCategory = (category) => {
+    navigate(`/videos?category=${encodeURIComponent(category)}`);
+  };
+  
   const clearSearch = () => {
     setSearchQuery('');
     searchRef.current?.focus();
@@ -293,7 +359,7 @@ const SearchBar = ({
   };
   
   const renderSuggestionsList = () => {
-    if (!showSuggestions) return null;
+    if (!showSuggestions || !searchRef.current) return null;
     
     return (
       <div 
@@ -380,6 +446,33 @@ const SearchBar = ({
     );
   };
   
+  const renderCategoryTiles = () => {
+    if (isCategoriesLoading || !searchRef.current || !showSuggestions) {
+      return null;
+    }
+    
+    if (recommendedCategories.length === 0) {
+      return null;
+    }
+    
+    return (
+      <div className="mt-4">
+        <div className="flex flex-wrap gap-2 justify-center">
+          {recommendedCategories.map((category) => (
+            <button
+              key={`category-${category.replace(/\s+/g, '-')}`}
+              className="px-4 py-2 bg-gray-700 hover:bg-blue-600 rounded-full text-sm text-gray-200 transition-colors duration-300 flex items-center"
+              onClick={() => navigateToCategory(category)}
+            >
+              <HiTag className="mr-1 w-4 h-4" />
+              {category}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  };
+  
   return (
     <div className="relative">
       <form 
@@ -445,6 +538,9 @@ const SearchBar = ({
       </form>
 
       {renderSuggestionsList()}
+      
+      {/* Category Tiles */}
+      {showCategoryTiles && renderCategoryTiles()}
     </div>
   );
 };
@@ -456,7 +552,8 @@ SearchBar.propTypes = {
   initialValue: PropTypes.string,
   showTrending: PropTypes.bool,
   showMic: PropTypes.bool,
-  autoFocus: PropTypes.bool
+  autoFocus: PropTypes.bool,
+  showCategoryTiles: PropTypes.bool
 };
 
 export default SearchBar;
