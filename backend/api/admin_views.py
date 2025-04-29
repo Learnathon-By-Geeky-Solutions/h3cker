@@ -9,9 +9,9 @@ from django.db.models import Count
 from firebase_admin import auth as firebase_auth
 from firebase_admin import firestore
 
-from .models import User, Video, CompanyProfile, ViewerProfile
+from .models import User, Video, CompanyProfile, ViewerProfile, WebcamRecording
 from .permissions import IsAdmin
-from .serializers import UserSerializer, AdminActionSerializer, VideoSerializer, VideoFeedSerializer
+from .serializers import UserSerializer, AdminActionSerializer, VideoSerializer, VideoFeedSerializer, WebcamRecordingSerializer
 
 db = firestore.client()
 
@@ -152,3 +152,27 @@ class VideoStatsView(generics.RetrieveAPIView):
             'most_liked': most_liked_serializer.data,
             'recent': recent_serializer.data
         })
+
+class WebcamRecordingsView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated, IsAdmin]
+    serializer_class = WebcamRecordingSerializer
+    queryset = WebcamRecording.objects.all().select_related('video', 'recorder').order_by('-recording_date')
+    
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        
+        # Optional filters
+        user_id = self.request.query_params.get('user_id')
+        video_id = self.request.query_params.get('video_id')
+        status = self.request.query_params.get('status')
+        
+        if user_id:
+            queryset = queryset.filter(recorder_id=user_id)
+        
+        if video_id:
+            queryset = queryset.filter(video_id=video_id)
+            
+        if status:
+            queryset = queryset.filter(upload_status=status)
+            
+        return queryset

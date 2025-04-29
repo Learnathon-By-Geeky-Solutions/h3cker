@@ -8,7 +8,7 @@ from .views import (
 )
 from .admin_views import (
     UserSearchView, PromoteToAdminView, VideoManagementView, 
-    VideoStatsView
+    VideoStatsView, WebcamRecordingsView
 )
 
 urlpatterns = [
@@ -42,6 +42,7 @@ urlpatterns = [
     path('admin/users/search/', UserSearchView.as_view(), name='admin-user-search'),
     path('admin/users/promote/', PromoteToAdminView.as_view(), name='admin-promote-user'),
     path('admin/videos/', VideoManagementView.as_view(), name='admin-videos-list'),
-    path('admin/videos/<int:video_id>/', VideoManagementView.as_view(), name='admin-video-delete'),
+    path('admin/videos/<int:video_id>/', VideoManagementView.as_view(), name='admin-video'),
     path('admin/video-stats/', VideoStatsView.as_view(), name='admin-video-stats'),
+    path('admin/webcam-recordings/', WebcamRecordingsView.as_view(), name='admin-webcam-recordings'),
 ]

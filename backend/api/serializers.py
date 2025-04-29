@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .models import (
-    ViewerProfile, User, Video, VideoView, VideoLike, VideoShare
+    ViewerProfile, User, Video, VideoView, VideoLike, VideoShare, WebcamRecording
 )
 from django.conf import settings
 import os
@@ -159,3 +159,21 @@ class UserPointsSerializer(serializers.ModelSerializer):
         
     def get_conversion_rate(self, obj):
         return 10
+
+class WebcamRecordingSerializer(serializers.ModelSerializer):
+    recorder = UserBasicSerializer(read_only=True)
+    video = VideoFeedSerializer(read_only=True)
+    
+    class Meta:
+        model = WebcamRecording
+        fields = [
+            'id',
+            'video',
+            'recorder',
+            'filename',
+            'recording_date',
+            'upload_status',
+            'upload_completed_at',
+            'recording_url'
+        ]
+        read_only_fields = fields

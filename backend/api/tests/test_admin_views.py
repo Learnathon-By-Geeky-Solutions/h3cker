@@ -5,7 +5,7 @@ from rest_framework.test import APIClient
 from django.contrib.auth import get_user_model
 from django.db.models import F
 from api.models import (
-    User, Video, CompanyProfile, ViewerProfile 
+    User, Video, CompanyProfile, ViewerProfile, WebcamRecording 
 )
 from django.utils import timezone
 from unittest.mock import patch, MagicMock
@@ -405,5 +405,116 @@ class TestPromoteToAdminView:
         }
         
         response = user_client.post(url, data, format='json')
+        
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+@pytest.mark.django_db
+class TestWebcamRecordingsView:
+    """Test the WebcamRecordingsView admin API."""
+    
+    @pytest.fixture
+    def test_webcam_recording(self, test_video, regular_user):
+        """Create a test webcam recording."""
+        recording = WebcamRecording.objects.create(
+            video=test_video,
+            recorder=regular_user,
+            filename='test_recording.webm',
+            recording_url='https://example.com/recordings/test_recording.webm',
+            upload_status='completed'
+        )
+        return recording
+    
+    def test_get_webcam_recordings(self, admin_client, test_webcam_recording):
+        """Test retrieving all webcam recordings as admin."""
+        url = reverse('admin-webcam-recordings')
+        response = admin_client.get(url)
+        
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) == 1
+        assert response.data[0]['filename'] == 'test_recording.webm'
+        assert response.data[0]['recording_url'] == 'https://example.com/recordings/test_recording.webm'
+        assert response.data[0]['recorder']['email'] == test_webcam_recording.recorder.email
+        assert response.data[0]['video']['id'] == test_webcam_recording.video.id
+    
+    def test_filter_by_user(self, admin_client, test_webcam_recording, admin_user):
+        """Test filtering webcam recordings by user."""
+        # Create another recording with a different user
+        WebcamRecording.objects.create(
+            video=test_webcam_recording.video,
+            recorder=admin_user,
+            filename='admin_recording.webm',
+            recording_url='https://example.com/recordings/admin_recording.webm'
+        )
+        
+        # Filter by regular user
+        url = reverse('admin-webcam-recordings')
+        response = admin_client.get(url, {'user_id': test_webcam_recording.recorder.id})
+        
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) == 1
+        assert response.data[0]['filename'] == 'test_recording.webm'
+        
+        # Filter by admin user
+        response = admin_client.get(url, {'user_id': admin_user.id})
+        assert len(response.data) == 1
+        assert response.data[0]['filename'] == 'admin_recording.webm'
+    
+    def test_filter_by_video(self, admin_client, test_webcam_recording, admin_user):
+        """Test filtering webcam recordings by video."""
+        # Create another video and recording
+        new_video = Video.objects.create(
+            title='Another Test Video',
+            video_url='https://example.com/another_video.mp4',
+            uploader=admin_user
+        )
+        
+        WebcamRecording.objects.create(
+            video=new_video,
+            recorder=test_webcam_recording.recorder,
+            filename='another_recording.webm',
+            recording_url='https://example.com/recordings/another_recording.webm'
+        )
+        
+        # Filter by original video
+        url = reverse('admin-webcam-recordings')
+        response = admin_client.get(url, {'video_id': test_webcam_recording.video.id})
+        
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) == 1
+        assert response.data[0]['filename'] == 'test_recording.webm'
+        
+        # Filter by new video
+        response = admin_client.get(url, {'video_id': new_video.id})
+        assert len(response.data) == 1
+        assert response.data[0]['filename'] == 'another_recording.webm'
+    
+    def test_filter_by_status(self, admin_client, test_webcam_recording):
+        """Test filtering webcam recordings by upload status."""
+        # Create another recording with different status
+        WebcamRecording.objects.create(
+            video=test_webcam_recording.video,
+            recorder=test_webcam_recording.recorder,
+            filename='pending_recording.webm',
+            recording_url='https://example.com/recordings/pending_recording.webm',
+            upload_status='pending'
+        )
+        
+        # Filter by completed status
+        url = reverse('admin-webcam-recordings')
+        response = admin_client.get(url, {'status': 'completed'})
+        
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) == 1
+        assert response.data[0]['filename'] == 'test_recording.webm'
+        
+        # Filter by pending status
+        response = admin_client.get(url, {'status': 'pending'})
+        assert len(response.data) == 1
+        assert response.data[0]['filename'] == 'pending_recording.webm'
+    
+    def test_unauthorized_access(self, user_client, test_webcam_recording):
+        """Test that non-admin users cannot access the endpoint."""
+        url = reverse('admin-webcam-recordings')
+        response = user_client.get(url)
         
         assert response.status_code == status.HTTP_403_FORBIDDEN
