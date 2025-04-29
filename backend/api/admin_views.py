@@ -104,6 +104,7 @@ class PromoteToAdminView(generics.CreateAPIView):
                 target_user.save()
                 return Response(
                     {"error": "An internal error occurred while updating Firebase."},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
 
         except Exception as e:

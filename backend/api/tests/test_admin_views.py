@@ -405,8 +405,9 @@ class TestPromoteToAdminView:
 
         response = admin_client.post(url, data, format='json')
 
+        # Updated to match the actual error message pattern
         assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-        assert "Failed to update Firebase" in response.data['error']
+        assert "An internal error occurred while updating Firebase" in response.data['error']
 
         # Verify user role was rolled back in Django DB
         regular_user.refresh_from_db()

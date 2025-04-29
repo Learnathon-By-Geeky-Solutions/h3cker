@@ -9,16 +9,7 @@ class VideoViewService:
 
     @classmethod
     def record_view(cls, video_id, user=None):
-        """
-        Record a view for a video and handle privacy checks.
-        
-        Args:
-            video_id: The ID of the video
-            user: The user who viewed the video (optional)
-            
-        Returns:
-            tuple: (video, new_view_count, privacy_changed)
-        """
+       
         video = get_object_or_404(Video, id=video_id)
         
         # Check if this video is accessible

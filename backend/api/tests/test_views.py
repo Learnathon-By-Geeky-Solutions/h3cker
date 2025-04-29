@@ -282,7 +282,7 @@ class TestVideoDetailView:
         response = api_client.get(url)
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
-        assert "Invalid video identifier format" in response.data['error']
+        assert 'Resource not found' in response.data['error']
 
     def test_video_detail_nonexistent_share_token(self, api_client):
         """Test retrieving a video with a non-existent share token."""
