@@ -1,14 +1,14 @@
+import os
+from django.test import override_settings
 import pytest
 from unittest.mock import patch, MagicMock
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-from datetime import timedelta
-import os
 
 from api.models import (
-    ViewerProfile, Video, User # Removed Evaluation models
+    ViewerProfile, Video, User
 )
-from api.services import PointsService, AzureStorageService # Removed EvaluationService
+from api.services import PointsService, AzureStorageService
 
 User = get_user_model()
 
@@ -80,12 +80,13 @@ class TestPointsService:
 class TestAzureStorageService:
     """Tests for the AzureStorageService class"""
     
-    @patch.dict(os.environ, {
-        'AZURE_STORAGE_ACCOUNT_NAME': 'testaccount',
-        'AZURE_STORAGE_ACCOUNT_KEY': 'testkey',
-        'AZURE_VIDEO_CONTAINER_NAME': 'videos',
-        'AZURE_THUMBNAIL_CONTAINER_NAME': 'thumbnails'
-    })
+    @override_settings(
+        AZURE_STORAGE_ACCOUNT_NAME='testaccount',
+        AZURE_STORAGE_ACCOUNT_KEY='testkey',
+        AZURE_VIDEO_CONTAINER_NAME='videos',
+        AZURE_THUMBNAIL_CONTAINER_NAME='thumbnails',
+        AZURE_WEBCAM_CONTAINER_NAME='emotions' 
+    )
     def test_get_storage_credentials(self):
         """Test getting storage credentials"""
         credentials = AzureStorageService.get_storage_credentials()
@@ -94,6 +95,7 @@ class TestAzureStorageService:
         assert credentials['account_key'] == 'testkey'
         assert credentials['video_container'] == 'videos'
         assert credentials['thumbnail_container'] == 'thumbnails'
+        assert credentials['emotion_container'] == 'emotions' 
     
     @patch('api.services.generate_blob_sas')
     @patch('api.services.timezone')

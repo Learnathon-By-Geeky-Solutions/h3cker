@@ -169,7 +169,7 @@ REST_FRAMEWORK = {
     ]
 }
 
-FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
+FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
 
 CRONJOBS = [
     ('0 * * * *', 'django.core.management.call_command', ['check_video_privacy']),  
@@ -177,10 +177,32 @@ CRONJOBS = [
 
 AUTH_USER_MODEL = 'api.User'
 
+# Firebase Configuration
+FIREBASE_TYPE = os.getenv("FIREBASE_TYPE")
+FIREBASE_PROJECT_ID = os.getenv("FIREBASE_PROJECT_ID")
+FIREBASE_PRIVATE_KEY_ID = os.getenv("FIREBASE_PRIVATE_KEY_ID")
+FIREBASE_PRIVATE_KEY = os.getenv("FIREBASE_PRIVATE_KEY", "").replace('\\n', '\n')
+FIREBASE_CLIENT_EMAIL = os.getenv("FIREBASE_CLIENT_EMAIL")
+FIREBASE_CLIENT_ID = os.getenv("FIREBASE_CLIENT_ID")
+FIREBASE_AUTH_URI = os.getenv("FIREBASE_AUTH_URI")
+FIREBASE_TOKEN_URI = os.getenv("FIREBASE_TOKEN_URI")
+FIREBASE_AUTH_PROVIDER_X509_CERT_URL = os.getenv("FIREBASE_AUTH_PROVIDER_X509_CERT_URL")
+FIREBASE_CLIENT_X509_CERT_URL = os.getenv("FIREBASE_CLIENT_X509_CERT_URL")
+FIREBASE_UNIVERSE_DOMAIN = os.getenv("FIREBASE_UNIVERSE_DOMAIN", "googleapis.com")
+
+# Azure Storage Configuration
+AZURE_STORAGE_ACCOUNT_NAME = os.getenv('AZURE_STORAGE_ACCOUNT_NAME')
+AZURE_STORAGE_ACCOUNT_KEY = os.getenv('AZURE_STORAGE_ACCOUNT_KEY')
+AZURE_VIDEO_CONTAINER_NAME = os.getenv('AZURE_VIDEO_CONTAINER_NAME')
+AZURE_THUMBNAIL_CONTAINER_NAME = os.getenv('AZURE_THUMBNAIL_CONTAINER_NAME')
+AZURE_WEBCAM_CONTAINER_NAME = os.getenv('AZURE_WEBCAM_CONTAINER_NAME')
+
+
 # Logging configuration
 LOG_DIR = BASE_DIR / 'logs'
 if not LOG_DIR.exists():
     os.makedirs(LOG_DIR)
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -189,20 +211,24 @@ LOGGING = {
             'format': '[%(asctime)s] %(levelname)s [%(name)s:%(lineno)s] %(message)s',
             'datefmt': '%Y-%m-%d %H:%M:%S'
         },
-        'simple': {
-            'format': '%(levelname)s %(message)s'
-        },
     },
     'handlers': {
         'file': {
             'level': 'DEBUG',
-            'class': 'logging.FileHandler',
+            'class': 'logging.handlers.RotatingFileHandler',
             'filename': str(LOG_DIR / 'application.log'),
+            'maxBytes': 1024 * 1024 * 10,
+            'backupCount': 5,
+            'formatter': 'verbose',
+        },
+        'console': {
+            'level': 'DEBUG',
+            'class': 'logging.StreamHandler',
             'formatter': 'verbose',
         },
     },
     'root': {
-        'handlers': ['file'],
+        'handlers': ['file', 'console'],
         'level': 'DEBUG',
     },
 }
