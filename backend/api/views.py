@@ -37,6 +37,9 @@ from api.services import (
     PointsService,
     VideoUploadService,
     WebcamUploadService,
+    VideoViewService,
+    VideoLikeService,
+    VideoShareService,
 )
 from api.utils import (
     increment_video_views,
@@ -218,24 +221,17 @@ class RecordVideoViewAPI(generics.CreateAPIView):
 
     def create(self, request, *args, **kwargs):
         video_id = kwargs.get("video_id")
-        video = get_object_or_404(Video, id=video_id)
-
-        if video.visibility == "private" and (
-            not request.user.is_authenticated or video.uploader != request.user
-        ):
+        
+        # Use VideoViewService to handle the business logic
+        video, new_view_count, privacy_changed = VideoViewService.record_view(
+            video_id, request.user
+        )
+        
+        # If the view_count is None, it means the video is private and inaccessible
+        if new_view_count is None:
             return Response(
                 {"error": "Video is private"}, status=status.HTTP_403_FORBIDDEN
             )
-
-        privacy_changed = False
-        if should_make_private(video):
-            make_video_private(video)
-            privacy_changed = True
-
-        new_view_count = increment_video_views(video)
-
-        if request.user.is_authenticated:
-            record_user_view(video, request.user)
 
         return Response(
             {
@@ -255,34 +251,23 @@ class ToggleVideoLikeAPI(generics.CreateAPIView):
 
     def create(self, request, *args, **kwargs):
         video_id = kwargs.get("video_id")
-        video = get_object_or_404(Video, id=video_id)
-        user = request.user
-
-        like, created = VideoLike.objects.get_or_create(video=video, user=user)
-
-        if created:
-            video.likes = F("likes") + 1
-            video.save(update_fields=["likes"])
-            video.refresh_from_db()
+        
+        # Use VideoLikeService to handle the business logic
+        video, liked, like_count = VideoLikeService.toggle_like(video_id, request.user)
+        
+        if not video:
             return Response(
-                {
-                    "liked": True,
-                    "message": "Video liked successfully.",
-                    "likes": video.likes,
-                }
+                {"error": "Authentication required"},
+                status=status.HTTP_401_UNAUTHORIZED
             )
-        else:
-            like.delete()
-            video.likes = F("likes") - 1
-            video.save(update_fields=["likes"])
-            video.refresh_from_db()
-            return Response(
-                {
-                    "liked": False,
-                    "message": "Video unliked successfully.",
-                    "likes": video.likes,
-                }
-            )
+        
+        return Response(
+            {
+                "liked": liked,
+                "message": f"Video {'liked' if liked else 'unliked'} successfully.",
+                "likes": like_count,
+            }
+        )
 
     def handle_exception(self, exc):
         if isinstance(exc, (AuthenticationFailed, PermissionError)):
@@ -298,9 +283,15 @@ class CreateVideoShareAPI(generics.CreateAPIView):
 
     def create(self, request, *args, **kwargs):
         video_id = kwargs.get("video_id")
-        video = get_object_or_404(Video, id=video_id)
-
-        share = VideoShare.objects.create(video=video, created_by=request.user)
+        
+        # Use VideoShareService to handle the business logic
+        share = VideoShareService.create_share(video_id, request.user)
+        
+        if not share:
+            return Response(
+                {"error": "Authentication required"},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
 
         serializer = self.get_serializer(
             share, context={"request": request, "frontend_url": settings.FRONTEND_URL}
@@ -414,7 +405,7 @@ class UploadVideoView(generics.CreateAPIView):
                     "message": "SAS tokens generated successfully",
                 },
                 status=status.HTTP_201_CREATED,
-            ) # Added missing closing parenthesis
+            )
         except Exception as e:
             # Catch exceptions from the service layer
             return Response(
@@ -455,7 +446,7 @@ class WebcamUploadView(generics.CreateAPIView):
                     "total_points": profile.points,
                 },
                 status=status.HTTP_201_CREATED,
-            ) # Added missing closing parenthesis
+            )
         except Exception as e:
             # Catch exceptions from the service layer
             return Response(
