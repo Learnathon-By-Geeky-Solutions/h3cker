@@ -1,8 +1,10 @@
+import logging
 from rest_framework import authentication
 from rest_framework import exceptions
 from firebase_admin import auth, firestore
 from api.models import User
 
+logger = logging.getLogger(__name__)
 db = firestore.client()
 
 class FirebaseAuthentication(authentication.BaseAuthentication):
@@ -16,7 +18,8 @@ class FirebaseAuthentication(authentication.BaseAuthentication):
             user = self._get_or_create_user(firebase_uid)
             return (user, None)
         except Exception as e:
-            raise exceptions.AuthenticationFailed(f'Invalid token: {str(e)}')
+            logger.error(f"Authentication failed due to an exception:{str(e)}", exc_info=True)
+            raise exceptions.AuthenticationFailed("Invalid token.")
     
     def _extract_token(self, request):
         auth_header = request.META.get("HTTP_AUTHORIZATION")

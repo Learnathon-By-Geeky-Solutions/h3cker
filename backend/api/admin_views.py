@@ -1,3 +1,4 @@
+import logging
 from django.db.models import Count
 from django.http import Http404
 from django.shortcuts import get_object_or_404
@@ -21,6 +22,7 @@ from api.serializers import (
 )
 from api.permissions import IsAdmin
 
+logger = logging.getLogger(__name__)
 db = firestore.client()
 
 
@@ -94,11 +96,14 @@ class PromoteToAdminView(generics.CreateAPIView):
                     }
                 )
             except Exception as e:
+                logger.error(
+                    f"Failed to update Firebase for user {target_user.email}: {str(e)}",
+                    exc_info=True,
+                )
                 target_user.role = old_role
                 target_user.save()
                 return Response(
-                    {"error": f"Failed to update Firebase: {str(e)}"},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    {"error": "An internal error occurred while updating Firebase."},
                 )
 
         except Exception as e:

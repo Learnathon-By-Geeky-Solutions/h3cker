@@ -1,5 +1,5 @@
 import uuid
-
+import logging
 from django.conf import settings
 from django.db.models import F
 from django.http import Http404
@@ -10,6 +10,7 @@ from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 
+logger = logging.getLogger(__name__)
 
 # Constants
 AUTH_REQUIRED_MESSAGE = "Authentication required"
@@ -211,7 +212,8 @@ class VideoDetailView(generics.RetrieveAPIView):
             serializer = self.get_serializer(instance)
             return Response(serializer.data)
         except Http404 as e:
-            return Response({"error": str(e)}, status=status.HTTP_404_NOT_FOUND)
+            logger.error("Http404 exception occurred: %s", str(e))
+            return Response({"error": "Resource not found"}, status=status.HTTP_404_NOT_FOUND)
 
 
 class RecordVideoViewAPI(generics.CreateAPIView):
@@ -407,9 +409,9 @@ class UploadVideoView(generics.CreateAPIView):
                 status=status.HTTP_201_CREATED,
             )
         except Exception as e:
-            # Catch exceptions from the service layer
+            logger.error(f"An error occurred during video upload:{str(e)}", exc_info=True)
             return Response(
-                {"error": str(e)},
+                {"error": "An internal error occurred. Please try again later."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -446,9 +448,9 @@ class WebcamUploadView(generics.CreateAPIView):
                 status=status.HTTP_201_CREATED,
             )
         except Exception as e:
-            # Catch exceptions from the service layer
+            logger.error(f"An error occurred during webcam upload:{str(e)}", exc_info=True)
             return Response(
-                {"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"error": "An internal error occurred. Please try again later."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
 

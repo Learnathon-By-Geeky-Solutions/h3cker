@@ -8,6 +8,11 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
 jobs:
   analyze:
     name: Analyze with SonarCloud
@@ -75,7 +80,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pip-
 
-            
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
@@ -89,7 +94,7 @@ jobs:
         run: |
           cd backend
           pytest
-      
+
       - name: Move coverage report and fix paths for SonarCloud
         run: |
           cp ./backend/coverage.xml ./coverage.xml
