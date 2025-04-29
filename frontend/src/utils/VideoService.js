@@ -101,13 +101,10 @@ class VideoService {
       this._cache.inProgress[`videoDetails_${videoId}`] = ApiService.get(`video/${videoId}/`);
       const response = await this._cache.inProgress[`videoDetails_${videoId}`];
       delete this._cache.inProgress[`videoDetails_${videoId}`];
-      
-      console.log(`Fetched details for video ID: ${videoId}`, response);
-      
+  
       this._cache.videoDetails[videoId] = response;
       return response;
     } catch (error) {
-      console.error(`Error fetching details for video ID ${videoId}:`, error);
       delete this._cache.inProgress[`videoDetails_${videoId}`];
       throw error;
     }
@@ -234,16 +231,9 @@ class VideoService {
     if (!videoId) {
       throw new Error("Video ID is required to record a view");
     }
-    
-    try {
-      console.log(`Recording view for video ID: ${videoId}`);
-      const response = await ApiService.post(`videos/${videoId}/view/`);
-      console.log(`View recorded for video ID: ${videoId}`, response);
-      return response;
-    } catch (error) {
-      console.error(`Error recording view for video ID ${videoId}:`, error);
-      throw error;
-    }
+    console.log(`Recording view for video ID: ${videoId}`);
+    const response = await ApiService.post(`videos/${videoId}/view/`);
+    return response;
   }
   
   /**
@@ -255,16 +245,10 @@ class VideoService {
     if (!videoId) {
       throw new Error("Video ID is required to toggle like status");
     }
-    
-    try {
-      console.log(`Toggling like status for video ID: ${videoId}`);
-      const response = await ApiService.post(`videos/${videoId}/like/`);
-      console.log(`Like status updated for video ID: ${videoId}`, response);
-      return response;
-    } catch (error) {
-      console.error(`Error toggling like for video ID ${videoId}:`, error);
-      throw error;
-    }
+    console.log(`Toggling like status for video ID: ${videoId}`);
+    const response = await ApiService.post(`videos/${videoId}/like/`);
+    console.log(`Like status updated for video ID: ${videoId}`, response);
+    return response;
   }
   
   /**
@@ -276,16 +260,9 @@ class VideoService {
     if (!videoId) {
       throw new Error("Video ID is required to create a share link");
     }
-    
-    try {
-      console.log(`Creating share link for video ID: ${videoId}`);
-      const response = await ApiService.post(`videos/${videoId}/share/`);
-      console.log(`Share link created for video ID: ${videoId}`, response);
-      return response;
-    } catch (error) {
-      console.error(`Error creating share link for video ID ${videoId}:`, error);
-      throw error;
-    }
+    console.log(`Creating share link for video ID: ${videoId}`);
+    const response = await ApiService.post(`videos/${videoId}/share/`);
+    return response;
   }
   
   /**
@@ -464,7 +441,11 @@ class VideoService {
       if (filters.status) queryParams.append('status', filters.status);
       
       const queryString = queryParams.toString();
-      const endpoint = `admin/webcam-recordings/${queryString ? `?${queryString}` : ''}`;
+      // Refactored endpoint construction to avoid nested template literal
+      let endpoint = 'admin/webcam-recordings/';
+      if (queryString) {
+        endpoint += `?${queryString}`;
+      }
       
       const response = await ApiService.get(endpoint);
       
@@ -487,20 +468,15 @@ class VideoService {
       throw new Error("Video ID is required for deletion");
     }
     
-    try {
-      console.log(`Deleting video ID: ${videoId} (admin)`);
-      const result = await ApiService.delete(`admin/videos/${videoId}/`);
-      
-      // Clear caches after deletion
-      delete this._cache.videoDetails[videoId];
-      this._cache.videoFeed = null;
-      this._cache.adminVideos = null;
-      
-      return result;
-    } catch (error) {
-      console.error(`Error deleting video ID ${videoId}:`, error);
-      throw error;
-    }
+    console.log(`Deleting video ID: ${videoId} (admin)`);
+    const result = await ApiService.delete(`admin/videos/${videoId}/`);
+    
+    // Clear caches after deletion
+    delete this._cache.videoDetails[videoId];
+    this._cache.videoFeed = null;
+    this._cache.adminVideos = null;
+    
+    return result;
   }
   
   /**
@@ -518,29 +494,24 @@ class VideoService {
       throw new Error("Invalid visibility option");
     }
     
-    try {
-      console.log(`Updating visibility for video ID: ${videoId} to ${visibility} (admin)`);
-      const result = await ApiService.patch(`admin/videos/${videoId}/`, {
-        visibility: visibility
-      });
-      
-      // Update caches
-      if (this._cache.videoDetails[videoId]) {
-        this._cache.videoDetails[videoId] = { 
-          ...this._cache.videoDetails[videoId], 
-          visibility 
-        };
-      }
-      
-      // Force refresh of list caches on next fetch
-      this._cache.videoFeed = null;
-      this._cache.adminVideos = null;
-      
-      return result;
-    } catch (error) {
-      console.error(`Error updating video visibility for ID ${videoId}:`, error);
-      throw error;
+    console.log(`Updating visibility for video ID: ${videoId} to ${visibility} (admin)`);
+    const result = await ApiService.patch(`admin/videos/${videoId}/`, {
+      visibility: visibility
+    });
+    
+    // Update caches
+    if (this._cache.videoDetails[videoId]) {
+      this._cache.videoDetails[videoId] = { 
+        ...this._cache.videoDetails[videoId], 
+        visibility 
+      };
     }
+    
+    // Force refresh of list caches on next fetch
+    this._cache.videoFeed = null;
+    this._cache.adminVideos = null;
+    
+    return result;
   }
 
   /**
@@ -554,27 +525,21 @@ class VideoService {
       throw new Error("Video ID is required for updating");
     }
     
-    try {
-      console.log(`Updating video ID: ${videoId} (admin)`);
-      const result = await ApiService.patch(`admin/videos/${videoId}/`, videoData);
-      
-      // Update caches
-      if (this._cache.videoDetails[videoId]) {
-        this._cache.videoDetails[videoId] = { 
-          ...this._cache.videoDetails[videoId], 
-          ...videoData 
-        };
-      }
-      
-      // Force refresh of list caches on next fetch
-      this._cache.videoFeed = null;
-      this._cache.adminVideos = null;
-      
-      return result;
-    } catch (error) {
-      console.error(`Error updating video ID ${videoId}:`, error);
-      throw error;
+    const result = await ApiService.patch(`admin/videos/${videoId}/`, videoData);
+    
+    // Update caches
+    if (this._cache.videoDetails[videoId]) {
+      this._cache.videoDetails[videoId] = { 
+        ...this._cache.videoDetails[videoId], 
+        ...videoData 
+      };
     }
+    
+    // Force refresh of list caches on next fetch
+    this._cache.videoFeed = null;
+    this._cache.adminVideos = null;
+    
+    return result;
   }
 
   /**
@@ -582,13 +547,7 @@ class VideoService {
    * @returns {Object} Video statistics
    */
   static async adminGetVideoStats() {
-    try {
-      console.log('Fetching video statistics (admin)');
-      return await ApiService.get('admin/video-stats/');
-    } catch (error) {
-      console.error('Error fetching video statistics:', error);
-      throw error;
-    }
+    return await ApiService.get('admin/video-stats/');
   }
   
   /**
@@ -601,13 +560,8 @@ class VideoService {
       throw new Error("Email is required for user search");
     }
     
-    try {
-      console.log(`Searching for user with email: ${email} (admin)`);
-      return await ApiService.get(`admin/users/search/?email=${encodeURIComponent(email)}`);
-    } catch (error) {
-      console.error(`Error searching for user with email ${email}:`, error);
-      throw error;
-    }
+    console.log(`Searching for user with email: ${email} (admin)`);
+    return await ApiService.get(`admin/users/search/?email=${encodeURIComponent(email)}`);
   }
   
   /**
@@ -625,16 +579,11 @@ class VideoService {
       throw new Error("Admin password is required for security verification");
     }
     
-    try {
-      console.log(`Promoting user ID: ${userId} to admin (admin)`);
-      return await ApiService.post('admin/users/promote/', {
-        user_id: userId,
-        admin_password: adminPassword
-      });
-    } catch (error) {
-      console.error(`Error promoting user ID ${userId} to admin:`, error);
-      throw error;
-    }
+    console.log(`Promoting user ID: ${userId} to admin (admin)`);
+    return await ApiService.post('admin/users/promote/', {
+      user_id: userId,
+      admin_password: adminPassword
+    });
   }
 
   /**
@@ -908,7 +857,8 @@ class VideoService {
    * @returns {string} Formatted unit string
    */
   static _formatUnit(value, unit) {
-    return `${value} ${unit}${value !== 1 ? 's' : ''} ago`;
+    const pluralSuffix = value !== 1 ? 's' : '';
+    return `${value} ${unit}${pluralSuffix} ago`;
   }
 }
 
