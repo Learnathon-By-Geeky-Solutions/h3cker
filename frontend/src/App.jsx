@@ -12,6 +12,9 @@ function App() {
   // Check if current page is an authentication page using the predefined list
   const isAuthPage = AUTH_ROUTES.includes(location.pathname);
   
+  // Dashboard routes have their own layout and don't need the main navbar/footer
+  // The dashboard has moved outside the App component's Outlet in the router
+  
   return (
     <div className="min-h-screen bg-gray-900">
       {/* navbar */}

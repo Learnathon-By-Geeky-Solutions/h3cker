@@ -334,8 +334,7 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded,
         <track kind="captions" src="" label="English" />
         Your browser does not support the video tag.
       </video>
-      
-      {/* Webcam recorder component */}
+     
       {videoId && (
         <WebcamRecorder
           ref={webcamRecorderRef}
@@ -345,8 +344,7 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded,
           onError={handleRecordingError}
         />
       )}
-      
-      {/* Recording paused indicator */}
+
       {showRecordingPausedIndicator && (
         <div className="absolute top-4 left-4 z-20 flex items-center bg-black/50 backdrop-blur-sm px-3 py-1.5 rounded-full">
           <div className="h-3 w-3 bg-yellow-500 rounded-full mr-2" />
@@ -366,7 +364,7 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded,
         className={`absolute inset-0 transition-opacity duration-300 bg-gradient-to-t from-black/70 to-transparent flex flex-col justify-end ${showControls || !isPlaying ? 'opacity-100' : 'opacity-0'}`}
         onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => {
-          // Allow keyboard interaction only if needed, e.g., for focus management, but prevent default space/enter actions if they bubble up
+    
           if (e.key === ' ' || e.key === 'Enter') {
              e.stopPropagation(); 
           }
@@ -383,10 +381,10 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded,
           />
         </div>
         
-        {/* Control buttons */}
+     
         <div className="flex items-center justify-between p-4">
           <div className="flex items-center space-x-4">
-            {/* Play/Pause button */}
+   
             <button 
               onClick={togglePlay}
               className="text-white focus:outline-none hover:text-blue-400"
@@ -395,8 +393,7 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded,
             >
               {isPlaying ? <Pause size={24} /> : <Play size={24} />}
             </button>
-            
-            {/* Volume controls */}
+ 
             <div className="flex items-center">
               <button 
                 onClick={toggleMute}

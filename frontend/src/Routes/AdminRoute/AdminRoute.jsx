@@ -4,7 +4,7 @@ import { Spinner } from 'flowbite-react';
 import { useLocation, Navigate } from 'react-router-dom';
 import PropTypes from 'prop-types';
 
-const PrivateRoute = ({ children }) => {
+const AdminRoute = ({ children }) => {
   const { user, loading } = useContext(AuthContext);
   const location = useLocation();
   const [authChecked, setAuthChecked] = useState(false);
@@ -24,15 +24,22 @@ const PrivateRoute = ({ children }) => {
     );
   }
 
+  // Check if user is not logged in
   if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
+  // Check if user is logged in but not an admin
+  if (user && user.role !== 'admin') {
+    return <Navigate to="/dashboard" state={{ from: location }} replace />;
+  }
+
+  // If user is logged in and is an admin, render the children
   return children;
 };
 
-PrivateRoute.propTypes = {
+AdminRoute.propTypes = {
   children: PropTypes.node.isRequired,
 };
 
-export default PrivateRoute;
+export default AdminRoute;

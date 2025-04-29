@@ -4,19 +4,41 @@ import ApiService from './ApiService';
  * Service for managing video-related operations
  */
 class VideoService {
+  static _cache = {
+    videoFeed: null,
+    videoDetails: {},
+    inProgress: {}
+  };
+
   /**
    * Fetch public videos for the feed
    * @returns {Array} Array of videos
    */
   static async getVideoFeed() {
     try {
+      if (this._cache.videoFeed) {
+        return this._cache.videoFeed;
+      }
+      
+      if (this._cache.inProgress.videoFeed) {
+        return await this._cache.inProgress.videoFeed;
+      }
+      
       console.log('Fetching public video feed...');
-      const response = await ApiService.get('video-feed/');
+      
+      this._cache.inProgress.videoFeed = ApiService.get('video-feed/');
+      const response = await this._cache.inProgress.videoFeed;
+      delete this._cache.inProgress.videoFeed;
+      
       console.log(`Fetched ${response?.length || 0} videos for feed.`);
       
-      return Array.isArray(response) ? response : [];
+      const videos = Array.isArray(response) ? response : [];
+      this._cache.videoFeed = videos;
+      
+      return videos;
     } catch (error) {
       console.error('Error fetching video feed:', error);
+      delete this._cache.inProgress.videoFeed;
       return [];
     }
   }
@@ -64,13 +86,29 @@ class VideoService {
       console.error("getVideoDetails requires a videoId.");
       throw new Error("Video ID is required.");
     }
+    
     try {
+      if (this._cache.videoDetails[videoId]) {
+        return this._cache.videoDetails[videoId];
+      }
+      
+      if (this._cache.inProgress[`videoDetails_${videoId}`]) {
+        return await this._cache.inProgress[`videoDetails_${videoId}`];
+      }
+      
       console.log(`Fetching details for video ID: ${videoId}`);
-      const response = await ApiService.get(`video/${videoId}/`);
+      
+      this._cache.inProgress[`videoDetails_${videoId}`] = ApiService.get(`video/${videoId}/`);
+      const response = await this._cache.inProgress[`videoDetails_${videoId}`];
+      delete this._cache.inProgress[`videoDetails_${videoId}`];
+      
       console.log(`Fetched details for video ID: ${videoId}`, response);
+      
+      this._cache.videoDetails[videoId] = response;
       return response;
     } catch (error) {
       console.error(`Error fetching details for video ID ${videoId}:`, error);
+      delete this._cache.inProgress[`videoDetails_${videoId}`];
       throw error;
     }
   }
@@ -304,6 +342,54 @@ class VideoService {
       throw error;
     }
   }
+
+  /**
+   * Get user's webcam recordings
+   * @returns {Array} User's webcam recordings
+   */
+  static async getUserWebcamRecordings() {
+    try {
+      console.log('Fetching user webcam recordings...');
+      const response = await ApiService.get('webcam-recordings/');
+      console.log(`Fetched ${response?.length || 0} webcam recordings.`);
+      
+      return Array.isArray(response) ? response : [];
+    } catch (error) {
+      console.error('Error fetching user webcam recordings:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Initiate webcam recording upload for a video
+   * @param {string|number} videoId - ID of the video
+   * @param {string} filename - Name of the file
+   * @returns {Object} Upload URLs
+   */
+  static async initiateWebcamUpload(videoId, filename) {
+    if (!videoId || !filename) {
+      throw new Error('Video ID and filename are required to initiate webcam upload');
+    }
+    
+    try {
+      console.log(`Initiating webcam recording upload for video ID: ${videoId}`);
+      const response = await ApiService.post(`videos/${videoId}/webcam-upload/`, {
+        filename: filename
+      });
+      
+      console.log('Backend response for webcam upload:', response);
+      
+      if (!response?.upload_url) {
+        throw new Error('Failed to get webcam upload URL from the server');
+      }
+      
+      return response;
+      
+    } catch (error) {
+      console.error('Error initiating webcam upload:', error);
+      throw error;
+    }
+  }
   
   /**
    * Submit an evaluation response
@@ -335,12 +421,58 @@ class VideoService {
    */
   static async adminGetAllVideos() {
     try {
+      if (this._cache.adminVideos) {
+        return this._cache.adminVideos;
+      }
+      
+      if (this._cache.inProgress.adminVideos) {
+        return await this._cache.inProgress.adminVideos;
+      }
+      
       console.log('Fetching all videos (admin)');
-      const response = await ApiService.get('admin/videos/');
+      
+      this._cache.inProgress.adminVideos = ApiService.get('admin/videos/');
+      const response = await this._cache.inProgress.adminVideos;
+      delete this._cache.inProgress.adminVideos;
+      
       console.log(`Fetched ${response?.length || 0} videos (admin).`);
-      return Array.isArray(response) ? response : [];
+      
+      const videos = Array.isArray(response) ? response : [];
+      this._cache.adminVideos = videos;
+      
+      return videos;
     } catch (error) {
       console.error('Error fetching admin videos:', error);
+      delete this._cache.inProgress.adminVideos;
+      throw error;
+    }
+  }
+  
+  /**
+   * Get all webcam recordings (admin only)
+   * @param {Object} filters - Optional filters (user_id, video_id, status)
+   * @returns {Array} All webcam recordings
+   */
+  static async adminGetWebcamRecordings(filters = {}) {
+    try {
+      console.log('Fetching all webcam recordings (admin)');
+      
+      // Build query string from filters
+      const queryParams = new URLSearchParams();
+      if (filters.user_id) queryParams.append('user_id', filters.user_id);
+      if (filters.video_id) queryParams.append('video_id', filters.video_id);
+      if (filters.status) queryParams.append('status', filters.status);
+      
+      const queryString = queryParams.toString();
+      const endpoint = `admin/webcam-recordings/${queryString ? `?${queryString}` : ''}`;
+      
+      const response = await ApiService.get(endpoint);
+      
+      console.log(`Fetched ${response?.length || 0} webcam recordings (admin).`);
+      
+      return Array.isArray(response) ? response : [];
+    } catch (error) {
+      console.error('Error fetching admin webcam recordings:', error);
       throw error;
     }
   }
@@ -357,7 +489,14 @@ class VideoService {
     
     try {
       console.log(`Deleting video ID: ${videoId} (admin)`);
-      return await ApiService.delete(`admin/videos/${videoId}/`);
+      const result = await ApiService.delete(`admin/videos/${videoId}/`);
+      
+      // Clear caches after deletion
+      delete this._cache.videoDetails[videoId];
+      this._cache.videoFeed = null;
+      this._cache.adminVideos = null;
+      
+      return result;
     } catch (error) {
       console.error(`Error deleting video ID ${videoId}:`, error);
       throw error;
@@ -381,9 +520,23 @@ class VideoService {
     
     try {
       console.log(`Updating visibility for video ID: ${videoId} to ${visibility} (admin)`);
-      return await ApiService.patch(`admin/videos/${videoId}/`, {
+      const result = await ApiService.patch(`admin/videos/${videoId}/`, {
         visibility: visibility
       });
+      
+      // Update caches
+      if (this._cache.videoDetails[videoId]) {
+        this._cache.videoDetails[videoId] = { 
+          ...this._cache.videoDetails[videoId], 
+          visibility 
+        };
+      }
+      
+      // Force refresh of list caches on next fetch
+      this._cache.videoFeed = null;
+      this._cache.adminVideos = null;
+      
+      return result;
     } catch (error) {
       console.error(`Error updating video visibility for ID ${videoId}:`, error);
       throw error;
@@ -403,7 +556,21 @@ class VideoService {
     
     try {
       console.log(`Updating video ID: ${videoId} (admin)`);
-      return await ApiService.patch(`admin/videos/${videoId}/`, videoData);
+      const result = await ApiService.patch(`admin/videos/${videoId}/`, videoData);
+      
+      // Update caches
+      if (this._cache.videoDetails[videoId]) {
+        this._cache.videoDetails[videoId] = { 
+          ...this._cache.videoDetails[videoId], 
+          ...videoData 
+        };
+      }
+      
+      // Force refresh of list caches on next fetch
+      this._cache.videoFeed = null;
+      this._cache.adminVideos = null;
+      
+      return result;
     } catch (error) {
       console.error(`Error updating video ID ${videoId}:`, error);
       throw error;
@@ -540,37 +707,6 @@ class VideoService {
         reject(error instanceof Error ? error : new Error(error));
       }
     });
-  }
-
-  /**
-   * Initiate webcam recording upload for a video
-   * @param {string|number} videoId - ID of the video
-   * @param {string} filename - Name of the file
-   * @returns {Object} Upload URLs
-   */
-  static async initiateWebcamUpload(videoId, filename) {
-    if (!videoId || !filename) {
-      throw new Error('Video ID and filename are required to initiate webcam upload');
-    }
-    
-    try {
-      console.log(`Initiating webcam recording upload for video ID: ${videoId}`);
-      const response = await ApiService.post(`videos/${videoId}/webcam-upload/`, {
-        filename: filename
-      });
-      
-      console.log('Backend response for webcam upload:', response);
-      
-      if (!response?.upload_url) {
-        throw new Error('Failed to get webcam upload URL from the server');
-      }
-      
-      return response;
-      
-    } catch (error) {
-      console.error('Error initiating webcam upload:', error);
-      throw error;
-    }
   }
 
   /**

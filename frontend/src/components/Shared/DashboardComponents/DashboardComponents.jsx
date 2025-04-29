@@ -7,6 +7,7 @@ import {
   ThumbsUp,
   BarChart2,
   Activity as ViewsIcon,
+  Clock
 } from 'lucide-react';
 
 export const StatsCard = ({ title, value, icon: Icon, color }) => (
@@ -143,4 +144,29 @@ StatsOverview.propTypes = {
     totalLikes: PropTypes.number.isRequired,
     storageUsed: PropTypes.number.isRequired,
   }).isRequired,
+};
+
+// Create a UserStatsOverview component for regular users (without admin metrics)
+export const UserStatsOverview = () => {
+  return (
+    <div className="mb-6">
+      {/* User-specific content can be added here if needed */}
+      <div className="bg-blue-900/20 border border-blue-800 rounded-lg p-4">
+        <h2 className="text-lg font-semibold text-white mb-2">Your Activity</h2>
+        <p className="text-gray-400 mb-2">
+          Use the links in the sidebar to access your watch history and liked videos.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+          <Link to="/dashboard/history" className="inline-flex items-center px-3 py-2 text-sm font-medium rounded-lg bg-gray-700 hover:bg-gray-600 text-white">
+            <Clock className="mr-2 h-4 w-4" />
+            View Watch History
+          </Link>
+          <Link to="/dashboard/liked-videos" className="inline-flex items-center px-3 py-2 text-sm font-medium rounded-lg bg-gray-700 hover:bg-gray-600 text-white">
+            <ThumbsUp className="mr-2 h-4 w-4" />
+            View Liked Videos
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
 };

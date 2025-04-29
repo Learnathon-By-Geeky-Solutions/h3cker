@@ -2,13 +2,13 @@ import React from 'react';
 import PropTypes from 'prop-types';
 import { Link } from 'react-router-dom';
 import { Button } from 'flowbite-react';
-import { Clock, TrendingUp, Upload as UploadIcon, Users, Video, Settings } from 'lucide-react';
+import { TrendingUp, Upload as UploadIcon, Users, Video, Settings } from 'lucide-react';
 import AdRow from '../../Shared/AdRow/AdRow';
 import { 
   StatsOverview, 
   formatVideosForAdRow, 
-  EmptyAdRow, 
-  AnalyticsPreview 
+  AnalyticsPreview,
+  UserStatsOverview
 } from '../../Shared/DashboardComponents/DashboardComponents';
 import UserPointsCard from './UserPointsCard';
 
@@ -16,11 +16,9 @@ const DashboardHome = ({ user, stats }) => {
   const totalVideos = stats?.totalVideos || 0;
   const hasVideos = totalVideos > 0;
 
-  const recentVideosForAdRow = formatVideosForAdRow(stats?.recentVideos);
   const popularVideosForAdRow = formatVideosForAdRow(stats?.popularVideos, true);
   const displayName = user?.displayName?.split(' ')[0] || user?.email?.split('@')[0] || 'User';
 
-  // Check user role to determine functionality
   const isAdmin = user?.role === 'admin';
   const isCompany = user?.role === 'company';
   const canUpload = isAdmin || isCompany;
@@ -36,50 +34,7 @@ const DashboardHome = ({ user, stats }) => {
     welcomeMessage = "Here's what's happening with your video activity today.";
   }
 
-  // Determine content for the Recent Uploads/Activity section
-  let recentUploadsContent;
-  if (hasVideos) {
-    recentUploadsContent = (
-      <AdRow
-        title="Recent Uploads"
-        ads={recentVideosForAdRow}
-        linkTo="/dashboard/videos"
-        isVideoSection={true}
-        icon={<Clock size={20} className="text-gray-400"/>}
-      />
-    );
-  } else if (canUpload) {
-    recentUploadsContent = (
-      <EmptyAdRow 
-        title="Recent Uploads"
-        icon={<Clock size={20} className="text-gray-400" />}
-        linkPath="/dashboard/upload"
-        linkText="Upload Your First Video"
-      />
-    );
-  } else {
-    recentUploadsContent = (
-      <div className="bg-gray-800 rounded-lg p-6 border border-gray-700 shadow-md">
-        <h2 className="text-xl font-bold text-white mb-4 flex items-center">
-          <Clock size={20} className="mr-2 text-gray-400" /> Your Activity
-        </h2>
-        <p className="text-center py-4 text-gray-400">
-          You haven't watched any videos yet. Start exploring to see your activity here.
-        </p>
-        <div className="text-center">
-          <Button 
-            color="blue" 
-            size="sm" 
-            className="glossy-button" 
-            as={Link} 
-            to="/videos"
-          >
-            Browse Videos
-          </Button>
-        </div>
-      </div>
-    );
-  }
+  
       
   return (
     <div className="space-y-8">
@@ -129,40 +84,39 @@ const DashboardHome = ({ user, stats }) => {
       {/* User Points Card for Viewers */}
       {isViewer && <UserPointsCard compact={true} />}
 
-      <StatsOverview stats={stats} />
+      {/* Show either admin stats or user activity section based on role */}
+      {isViewer ? (
+        <UserStatsOverview />
+      ) : (
+        <StatsOverview stats={stats} />
+      )}
 
-      <div>
-        {recentUploadsContent}
-      </div>
-
-      <div>
-         {hasVideos && popularVideosForAdRow.length > 0 ? (
-           <AdRow
+      {/* Popular Videos section - only for admin/company users */}
+      {!isViewer && (
+        <div>
+          {hasVideos && popularVideosForAdRow.length > 0 ? (
+            <AdRow
               title="Popular Videos"
               ads={popularVideosForAdRow}
               linkTo="/dashboard/analytics"
               isVideoSection={true}
               icon={<TrendingUp size={20} className="text-gray-400"/>}
-           />
-         ) : (
-           hasVideos && (
+            />
+          ) : (
+            hasVideos && (
               <div className="bg-gray-800 rounded-lg p-6 border border-gray-700 shadow-md">
-                 <h2 className="text-xl font-bold text-white mb-4 flex items-center">
-                   <TrendingUp size={20} className="mr-2 text-gray-400" /> Popular Videos
-                 </h2>
-                 <p className="text-center py-4 text-gray-400">No popular videos to display yet.</p>
+                <h2 className="text-xl font-bold text-white mb-4 flex items-center">
+                  <TrendingUp size={20} className="mr-2 text-gray-400" /> Popular Videos
+                </h2>
+                <p className="text-center py-4 text-gray-400">No popular videos to display yet.</p>
               </div>
-           )
-         )}
-      </div>
-
-      {isViewer && (
-        <div>
-          <UserPointsCard />
+            )
+          )}
         </div>
       )}
-
-      <AnalyticsPreview hasVideos={hasVideos} />
+      
+      {/* Analytics Preview - only for admin/company users */}
+      {!isViewer && <AnalyticsPreview hasVideos={hasVideos} />}
     </div>
   );
 };
