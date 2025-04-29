@@ -23,6 +23,7 @@ from api.models import (
     WebcamRecording,
 )
 from api.serializers import (
+    FilenameSerializer,
     OnboardingSerializer,
     VideoSerializer,
     VideoFeedSerializer,
@@ -399,11 +400,10 @@ class UploadVideoView(generics.CreateAPIView):
     serializer_class = VideoSerializer
 
     def create(self, request, *args, **kwargs):
-        filename = request.data.get("filename")
-        if not filename:
-            return Response(
-                {"error": "Filename is required"}, status=status.HTTP_400_BAD_REQUEST
-            )
+        # validate filename via serializer
+        filename_serializer = FilenameSerializer(data=request.data)
+        filename_serializer.is_valid(raise_exception=True)
+        filename = filename_serializer.validated_data["filename"]
 
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -448,13 +448,10 @@ class WebcamUploadView(generics.CreateAPIView):
         video_id = kwargs.get("video_id")
         video = get_object_or_404(Video, id=video_id)
 
-        if "filename" not in request.data:
-            return Response(
-                {"filename": ["This field is required."]},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        filename = request.data.get("filename")
+        # validate filename via serializer
+        filename_serializer = FilenameSerializer(data=request.data)
+        filename_serializer.is_valid(raise_exception=True)
+        filename = filename_serializer.validated_data["filename"]
 
         try:
             upload_url, view_url = AzureStorageService.get_emotion_urls(filename)

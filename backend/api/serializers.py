@@ -11,6 +11,9 @@ from api.models import (
     WebcamRecording,
 )
 
+class FilenameSerializer(serializers.Serializer):
+    filename = serializers.CharField(required=True)
+
 
 class OnboardingSerializer(serializers.ModelSerializer):
     class Meta:
