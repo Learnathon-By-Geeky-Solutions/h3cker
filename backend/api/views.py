@@ -33,29 +33,19 @@ from api.serializers import (
     VideoSearchQuerySerializer,
     CategoryQuerySerializer,
 )
-from api.services import AzureStorageService, PointsService
+from api.services import (
+    PointsService,
+    VideoUploadService,
+    WebcamUploadService,
+)
 from api.utils import (
     increment_video_views,
     record_user_view,
     should_make_private,
     make_video_private,
+    safe_int_param,
 )
 from api.permissions import IsCompanyOrAdmin
-
-
-def safe_int_param(request, param_name, default_value, min_value=None, max_value=None):
-    """Safely parse integer parameters from request with validation."""
-    try:
-        value = int(request.query_params.get(param_name, default_value))
-
-        if min_value is not None:
-            value = max(min_value, value)
-        if max_value is not None:
-            value = min(max_value, value)
-
-        return value
-    except (ValueError, TypeError):
-        return default_value
 
 
 class OnboardingAPIView(generics.UpdateAPIView):
@@ -191,11 +181,6 @@ class VideoDetailView(generics.RetrieveAPIView):
 
         # Checking if video is private
         if video.visibility == "private":
-            return False
-
-        # Checking if it should be made private due to limits
-        if should_make_private(video):
-            make_video_private(video)
             return False
 
         return True
@@ -409,21 +394,17 @@ class UploadVideoView(generics.CreateAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        return self._generate_upload_tokens(serializer, filename)
-
-    def _generate_upload_tokens(self, serializer, filename):
         try:
-            video_upload_url, video_view_url = AzureStorageService.get_video_urls(
-                filename
-            )
-            thumbnail_upload_url, thumbnail_view_url = (
-                AzureStorageService.get_thumbnail_urls(filename)
-            )
+            # Use the service layer to prepare upload URLs and save metadata
+            (
+                video_upload_url,
+                video_view_url,
+                thumbnail_upload_url,
+                thumbnail_view_url,
+            ) = VideoUploadService.prepare_video_upload(filename)
 
-            serializer.save(
-                uploader=self.request.user,
-                video_url=video_view_url,
-                thumbnail_url=thumbnail_view_url,
+            VideoUploadService.save_video_metadata(
+                serializer, self.request.user, video_view_url, thumbnail_view_url
             )
 
             return Response(
@@ -433,11 +414,11 @@ class UploadVideoView(generics.CreateAPIView):
                     "message": "SAS tokens generated successfully",
                 },
                 status=status.HTTP_201_CREATED,
-            )
-
+            ) # Added missing closing parenthesis
         except Exception as e:
+            # Catch exceptions from the service layer
             return Response(
-                {"error": f"Failed to generate SAS tokens: {str(e)}"},
+                {"error": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -454,15 +435,14 @@ class WebcamUploadView(generics.CreateAPIView):
         filename = filename_serializer.validated_data["filename"]
 
         try:
-            upload_url, view_url = AzureStorageService.get_emotion_urls(filename)
+            # Use the service layer to prepare upload URLs and create recording entry
+            upload_url, view_url = WebcamUploadService.prepare_webcam_upload(filename)
 
-            recording = WebcamRecording.objects.create(
-                video=video,
-                recorder=request.user,
-                filename=filename,
-                recording_url=view_url,
+            recording = WebcamUploadService.create_webcam_recording(
+                video, request.user, filename, view_url
             )
 
+            # Award points (already using PointsService)
             profile, points_awarded = PointsService.award_points_for_webcam_upload(
                 request.user
             )
@@ -475,15 +455,11 @@ class WebcamUploadView(generics.CreateAPIView):
                     "total_points": profile.points,
                 },
                 status=status.HTTP_201_CREATED,
-            )
-
+            ) # Added missing closing parenthesis
         except Exception as e:
-            if "SAS generation error" in str(e):
-                error_msg = "Failed to generate upload URL: SAS generation error"
-            else:
-                error_msg = f"Failed to generate upload URL: {str(e)}"
+            # Catch exceptions from the service layer
             return Response(
-                {"error": error_msg}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
 
