@@ -426,14 +426,12 @@ class WebcamUploadView(generics.CreateAPIView):
         filename = filename_serializer.validated_data["filename"]
 
         try:
-            # Use the service layer to prepare upload URLs and create recording entry
             upload_url, view_url = WebcamUploadService.prepare_webcam_upload(filename)
 
             recording = WebcamUploadService.create_webcam_recording(
                 video, request.user, filename, view_url
             )
 
-            # Award points (already using PointsService)
             profile, points_awarded = PointsService.award_points_for_webcam_upload(
                 request.user
             )

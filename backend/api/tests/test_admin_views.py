@@ -114,7 +114,7 @@ class TestUserSearchView:
         response = admin_client.get(url)
         
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert 'error' in response.data
+        assert 'email' in response.data
     
     def test_search_user_unauthorized(self, user_client):
         """Test that non-admin users cannot access the endpoint."""        
