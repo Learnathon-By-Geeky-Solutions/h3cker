@@ -55,45 +55,14 @@ const UserPointsCard = ({ compact = false }) => {
     );
   }
 
-  // Compact version for dashboard overview
-  if (compact) {
-    return (
-      <Card className="bg-gray-800 border-gray-700">
-        <div className="flex justify-between items-center">
-          <h3 className="text-lg font-medium text-white flex items-center">
-            <Award className="mr-2 text-yellow-400" size={20} />
-            Your Reward Points
-          </h3>
-          <Badge color="indigo" size="lg" className="px-3 py-1.5">
-            {pointsData.points} Points
-          </Badge>
-        </div>
-        <div className="mt-4 grid grid-cols-2 gap-4">
-          <div className="bg-gray-700/50 p-3 rounded-lg">
-            <p className="text-sm text-gray-400">Points Value</p>
-            <p className="text-xl font-semibold text-white flex items-center">
-              <DollarSign size={16} className="text-green-400 mr-1" />
-              {pointsData.points_value} BDT
-            </p>
-          </div>
-          <div className="bg-gray-700/50 p-3 rounded-lg">
-            <p className="text-sm text-gray-400">Total Earned</p>
-            <p className="text-xl font-semibold text-white">
-              {pointsData.points_earned} Points
-            </p>
-          </div>
-        </div>
-      </Card>
-    );
-  }
+  
 
-  // Full version
   return (
     <Card className="bg-gray-800 border-gray-700">
       <div className="flex justify-between items-center">
         <h3 className="text-xl font-bold text-white flex items-center">
           <Award className="mr-2 text-yellow-400" size={24} />
-          Your Reward Points
+          Your Reward Points 
         </h3>
         <Badge color="indigo" size="xl" className="px-4 py-2 text-lg">
           {pointsData.points} Points

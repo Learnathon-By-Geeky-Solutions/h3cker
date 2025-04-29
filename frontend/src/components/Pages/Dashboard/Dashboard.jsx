@@ -1,14 +1,12 @@
 import React, { useState, useContext, useEffect, lazy, Suspense } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { Outlet, useLocation, Link } from 'react-router-dom';
 import { AuthContext } from '../../../contexts/AuthProvider/AuthProvider';
-import { Alert, Spinner } from 'flowbite-react';
+import { Alert, Spinner, Button } from 'flowbite-react';
 import { AlertCircle } from 'lucide-react';
-import DashboardSideNavbar from '../../Shared/DashboardSideNavbar/DashboardSideNavbar';
 import VideoService from '../../../utils/VideoService';
 import { LoadingState } from '../../Shared/VideoLoadingStates/VideoLoadingStates';
 import DashboardHome from './DashboardHome';
 
-// Lazy load the AdminDashboard component
 const AdminDashboard = lazy(() => import('./AdminDashboard'));
 
 const Dashboard = () => {
@@ -24,7 +22,6 @@ const Dashboard = () => {
     recentVideos: [],
     popularVideos: []
   });
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const isMainDashboard = location.pathname === '/dashboard';
 
   useEffect(() => {
@@ -48,7 +45,6 @@ const Dashboard = () => {
 
     const fetchDashboardData = async () => {
       try {
-        // Admin users get all videos, regular users only get their own
         const allVideos = user?.role === 'admin' ? 
           await VideoService.adminGetAllVideos() : 
           await VideoService.getVideoFeed();
@@ -117,6 +113,23 @@ const Dashboard = () => {
 
   const renderDashboardContent = () => {
     if (!isMainDashboard) {
+      // For admin routes, we need to check permissions
+      const isAdminRoute = location.pathname.includes('/dashboard/edit-video/') || 
+                       location.pathname === '/dashboard/videos';
+                       
+      if (isAdminRoute && user?.role !== 'admin' && user?.role !== 'company') {
+        return (
+          <div className="p-6 bg-gray-800 rounded-lg border border-gray-700 text-center">
+            <Alert color="failure" className="mb-4">
+              You don't have permission to access this page
+            </Alert>
+            <Button color="blue" as={Link} to="/dashboard">
+              Return to Dashboard
+            </Button>
+          </div>
+        );
+      }
+      
       return <Outlet />;
     }
     
@@ -140,16 +153,7 @@ const Dashboard = () => {
         )}
         
         {isAdmin ? (
-          <div className="space-y-8">
-            <div className="mb-6">
-              <h1 className="text-3xl font-bold text-white">
-                Admin Dashboard
-              </h1>
-              <p className="text-gray-400 mt-1">
-                Manage users, videos, and platform settings.
-              </p>
-            </div>
-            
+          <div className="space-y-8">            
             <Suspense fallback={<div className="flex justify-center py-12"><Spinner size="xl" /></div>}>
               <AdminDashboard />
             </Suspense>
@@ -162,20 +166,8 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="flex bg-gray-900 min-h-screen text-white">
-      <DashboardSideNavbar isOpen={sidebarOpen} setIsOpen={setSidebarOpen} />
-      <main className={`flex-1 p-4 sm:p-6 md:p-8 ${sidebarOpen ? 'ml-64' : 'ml-0 md:ml-20'} lg:ml-64 transition-all duration-300 ease-in-out overflow-y-auto`}>
-        <button 
-          onClick={() => setSidebarOpen(!sidebarOpen)} 
-          className="md:hidden fixed top-4 left-4 z-50 p-2 bg-gray-700 rounded text-white hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500" 
-          aria-label="Toggle sidebar"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-          </svg>
-        </button>
-        {renderDashboardContent()}
-      </main>
+    <div className="p-4 sm:p-6 md:p-8 overflow-y-auto">
+      {renderDashboardContent()}
     </div>
   );
 };

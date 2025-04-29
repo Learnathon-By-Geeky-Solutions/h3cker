@@ -7,12 +7,19 @@ import ForgetPassword from "../../components/Shared/ForgetPassword/forgetpasswor
 import About from "../../components/Pages/About/About.jsx";
 import Profile from "../../components/Pages/Profile/Profile.jsx";
 import Dashboard from "../../components/Pages/Dashboard/Dashboard.jsx";
+import DashboardLayout from "../../components/Shared/DashboardLayout/DashboardLayout.jsx";
 import UploadVideo from "../../components/Pages/Dashboard/UploadVideo.jsx";
 import VideoDetail from "../../components/Shared/VideoPlayer/VideoDetail.jsx";
 import PrivateRoute from "../PrivateRoute/Privateroute.jsx";
+import AdminRoute from "../AdminRoute/AdminRoute.jsx";
 import Video from "../../components/Pages/Video/Video.jsx";
 import DeviceManager from "../../components/Shared/DeviceManager/DeviceManager.jsx";
 import UserWatchHistory from "../../components/Pages/Dashboard/UserWatchHistory.jsx";
+import AdminVideos from "../../components/Pages/AdminVideos/AdminVideos.jsx";
+import EditVideo from "../../components/Pages/EditVideo/EditVideo.jsx";
+import AdminRoleManagement from "../../components/Pages/AdminRoleManagement/AdminRoleManagement.jsx";
+import UserLikedVideo from "../../components/Pages/Dashboard/UserLikedVideo.jsx";
+import RecordedVideos from "../../components/Pages/RecordedVideos/RecordedVideos.jsx";
 
 
 const router = createBrowserRouter([
@@ -49,29 +56,54 @@ const router = createBrowserRouter([
         element: <PrivateRoute><DeviceManager /></PrivateRoute>,
       },
       {
-        path: "/dashboard",
-        element: <PrivateRoute><Dashboard /></PrivateRoute>
-      },
-      {
-        path: "/dashboard/upload",
-        element: <PrivateRoute><UploadVideo /></PrivateRoute>
-      },
-      {
-        path: "/dashboard/history",
-        element: <PrivateRoute><UserWatchHistory /></PrivateRoute>
-      },
-      {
-        path: "/dashboard/liked",
-        element: <PrivateRoute><UserWatchHistory initialTab="liked" /></PrivateRoute>
-      },
-      {
         path: "/video/:id", 
         element: <PrivateRoute><VideoDetail /></PrivateRoute>,
       },
       {
         path: "/videos",
         element: <PrivateRoute><Video /></PrivateRoute>,
+      }
+
+    ]
+  },
+
+  {
+    path: "/dashboard",
+    element: <PrivateRoute><DashboardLayout /></PrivateRoute>,
+    children: [
+      {
+        path: "", 
+        element: <Dashboard />
       },
+  
+      {
+        path: "upload",
+        element: <AdminRoute><UploadVideo /></AdminRoute>
+      },
+      {
+        path: "videos",
+        element: <AdminRoute><AdminVideos /></AdminRoute>
+      },
+      {
+        path: "edit-video/:id",
+        element: <AdminRoute><EditVideo /></AdminRoute>
+      },
+      {
+        path: "role-management",
+        element: <AdminRoute><AdminRoleManagement /></AdminRoute>
+      },
+      {
+        path: "recorded-videos",
+        element: <AdminRoute><RecordedVideos /></AdminRoute>
+      },
+      {
+        path: "liked-videos",
+        element: <PrivateRoute><UserLikedVideo /></PrivateRoute>,
+      },
+      {
+        path: "history",
+        element: <PrivateRoute><UserWatchHistory /></PrivateRoute>,
+      }
     ]
   }
 ]);

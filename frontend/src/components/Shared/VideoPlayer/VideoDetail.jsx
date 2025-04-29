@@ -22,7 +22,6 @@ import {
   Trash,
   Eye,
   EyeOff,
-
 } from 'lucide-react';
 import VideoService from '../../../utils/VideoService';
 import VideoPlayer from '../../Shared/VideoPlayer/VideoPlayer';
