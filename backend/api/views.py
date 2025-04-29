@@ -23,36 +23,32 @@ from api.models import (
     WebcamRecording,
 )
 from api.serializers import (
+    FilenameSerializer,
     OnboardingSerializer,
     VideoSerializer,
     VideoFeedSerializer,
     VideoDetailSerializer,
     VideoShareSerializer,
     UserPointsSerializer,
+    VideoSearchQuerySerializer,
+    CategoryQuerySerializer,
 )
-from api.services import AzureStorageService, PointsService
+from api.services import (
+    PointsService,
+    VideoUploadService,
+    WebcamUploadService,
+    VideoViewService,
+    VideoLikeService,
+    VideoShareService,
+)
 from api.utils import (
     increment_video_views,
     record_user_view,
     should_make_private,
     make_video_private,
+    safe_int_param,
 )
 from api.permissions import IsCompanyOrAdmin
-
-
-def safe_int_param(request, param_name, default_value, min_value=None, max_value=None):
-    """Safely parse integer parameters from request with validation."""
-    try:
-        value = int(request.query_params.get(param_name, default_value))
-
-        if min_value is not None:
-            value = max(min_value, value)
-        if max_value is not None:
-            value = min(max_value, value)
-
-        return value
-    except (ValueError, TypeError):
-        return default_value
 
 
 class OnboardingAPIView(generics.UpdateAPIView):
@@ -190,11 +186,6 @@ class VideoDetailView(generics.RetrieveAPIView):
         if video.visibility == "private":
             return False
 
-        # Checking if it should be made private due to limits
-        if should_make_private(video):
-            make_video_private(video)
-            return False
-
         return True
 
     def get_serializer_context(self):
@@ -230,24 +221,17 @@ class RecordVideoViewAPI(generics.CreateAPIView):
 
     def create(self, request, *args, **kwargs):
         video_id = kwargs.get("video_id")
-        video = get_object_or_404(Video, id=video_id)
-
-        if video.visibility == "private" and (
-            not request.user.is_authenticated or video.uploader != request.user
-        ):
+        
+        # Use VideoViewService to handle the business logic
+        video, new_view_count, privacy_changed = VideoViewService.record_view(
+            video_id, request.user
+        )
+        
+        # If the view_count is None, it means the video is private and inaccessible
+        if new_view_count is None:
             return Response(
                 {"error": "Video is private"}, status=status.HTTP_403_FORBIDDEN
             )
-
-        privacy_changed = False
-        if should_make_private(video):
-            make_video_private(video)
-            privacy_changed = True
-
-        new_view_count = increment_video_views(video)
-
-        if request.user.is_authenticated:
-            record_user_view(video, request.user)
 
         return Response(
             {
@@ -267,34 +251,23 @@ class ToggleVideoLikeAPI(generics.CreateAPIView):
 
     def create(self, request, *args, **kwargs):
         video_id = kwargs.get("video_id")
-        video = get_object_or_404(Video, id=video_id)
-        user = request.user
-
-        like, created = VideoLike.objects.get_or_create(video=video, user=user)
-
-        if created:
-            video.likes = F("likes") + 1
-            video.save(update_fields=["likes"])
-            video.refresh_from_db()
+        
+        # Use VideoLikeService to handle the business logic
+        video, liked, like_count = VideoLikeService.toggle_like(video_id, request.user)
+        
+        if not video:
             return Response(
-                {
-                    "liked": True,
-                    "message": "Video liked successfully.",
-                    "likes": video.likes,
-                }
+                {"error": "Authentication required"},
+                status=status.HTTP_401_UNAUTHORIZED
             )
-        else:
-            like.delete()
-            video.likes = F("likes") - 1
-            video.save(update_fields=["likes"])
-            video.refresh_from_db()
-            return Response(
-                {
-                    "liked": False,
-                    "message": "Video unliked successfully.",
-                    "likes": video.likes,
-                }
-            )
+        
+        return Response(
+            {
+                "liked": liked,
+                "message": f"Video {'liked' if liked else 'unliked'} successfully.",
+                "likes": like_count,
+            }
+        )
 
     def handle_exception(self, exc):
         if isinstance(exc, (AuthenticationFailed, PermissionError)):
@@ -310,9 +283,15 @@ class CreateVideoShareAPI(generics.CreateAPIView):
 
     def create(self, request, *args, **kwargs):
         video_id = kwargs.get("video_id")
-        video = get_object_or_404(Video, id=video_id)
-
-        share = VideoShare.objects.create(video=video, created_by=request.user)
+        
+        # Use VideoShareService to handle the business logic
+        share = VideoShareService.create_share(video_id, request.user)
+        
+        if not share:
+            return Response(
+                {"error": "Authentication required"},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
 
         serializer = self.get_serializer(
             share, context={"request": request, "frontend_url": settings.FRONTEND_URL}
@@ -399,30 +378,24 @@ class UploadVideoView(generics.CreateAPIView):
     serializer_class = VideoSerializer
 
     def create(self, request, *args, **kwargs):
-        filename = request.data.get("filename")
-        if not filename:
-            return Response(
-                {"error": "Filename is required"}, status=status.HTTP_400_BAD_REQUEST
-            )
+        filename_serializer = FilenameSerializer(data=request.data)
+        filename_serializer.is_valid(raise_exception=True)
+        filename = filename_serializer.validated_data["filename"]
 
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        return self._generate_upload_tokens(serializer, filename)
-
-    def _generate_upload_tokens(self, serializer, filename):
         try:
-            video_upload_url, video_view_url = AzureStorageService.get_video_urls(
-                filename
-            )
-            thumbnail_upload_url, thumbnail_view_url = (
-                AzureStorageService.get_thumbnail_urls(filename)
-            )
+            # Use the service layer to prepare upload URLs and save metadata
+            (
+                video_upload_url,
+                video_view_url,
+                thumbnail_upload_url,
+                thumbnail_view_url,
+            ) = VideoUploadService.prepare_video_upload(filename)
 
-            serializer.save(
-                uploader=self.request.user,
-                video_url=video_view_url,
-                thumbnail_url=thumbnail_view_url,
+            VideoUploadService.save_video_metadata(
+                serializer, self.request.user, video_view_url, thumbnail_view_url
             )
 
             return Response(
@@ -433,10 +406,10 @@ class UploadVideoView(generics.CreateAPIView):
                 },
                 status=status.HTTP_201_CREATED,
             )
-
         except Exception as e:
+            # Catch exceptions from the service layer
             return Response(
-                {"error": f"Failed to generate SAS tokens: {str(e)}"},
+                {"error": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -448,22 +421,15 @@ class WebcamUploadView(generics.CreateAPIView):
         video_id = kwargs.get("video_id")
         video = get_object_or_404(Video, id=video_id)
 
-        if "filename" not in request.data:
-            return Response(
-                {"filename": ["This field is required."]},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        filename = request.data.get("filename")
+        filename_serializer = FilenameSerializer(data=request.data)
+        filename_serializer.is_valid(raise_exception=True)
+        filename = filename_serializer.validated_data["filename"]
 
         try:
-            upload_url, view_url = AzureStorageService.get_emotion_urls(filename)
+            upload_url, view_url = WebcamUploadService.prepare_webcam_upload(filename)
 
-            recording = WebcamRecording.objects.create(
-                video=video,
-                recorder=request.user,
-                filename=filename,
-                recording_url=view_url,
+            recording = WebcamUploadService.create_webcam_recording(
+                video, request.user, filename, view_url
             )
 
             profile, points_awarded = PointsService.award_points_for_webcam_upload(
@@ -479,14 +445,10 @@ class WebcamUploadView(generics.CreateAPIView):
                 },
                 status=status.HTTP_201_CREATED,
             )
-
         except Exception as e:
-            if "SAS generation error" in str(e):
-                error_msg = "Failed to generate upload URL: SAS generation error"
-            else:
-                error_msg = f"Failed to generate upload URL: {str(e)}"
+            # Catch exceptions from the service layer
             return Response(
-                {"error": error_msg}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
 
@@ -495,19 +457,19 @@ class VideoSearchView(generics.ListAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        filename = self.request.query_params.get("filename")
-        if filename:
-            parts = filename.split("?")[0].split("/")
-            base_filename = parts[-1] if parts else filename
+        params_serializer = VideoSearchQuerySerializer(data=self.request.query_params)
+        params_serializer.is_valid(raise_exception=True)
+        filename = params_serializer.validated_data["filename"]
 
-            videos = Video.objects.filter(video_url__contains=base_filename)
+        parts = filename.split("?")[0].split("/")
+        base_filename = parts[-1] if parts else filename
 
-            if self.request.user.role == "admin":
-                return videos
+        videos = Video.objects.filter(video_url__contains=base_filename)
 
-            return videos.filter(uploader=self.request.user)
+        if self.request.user.role == "admin":
+            return videos
 
-        return Video.objects.none()
+        return videos.filter(uploader=self.request.user)
 
 
 class UserPointsView(generics.RetrieveAPIView):
@@ -552,9 +514,12 @@ class CategoryVideosView(generics.ListAPIView):
     serializer_class = VideoFeedSerializer
 
     def get_queryset(self):
-        category = self.request.query_params.get("category", "")
-        limit = safe_int_param(self.request, "limit", 20, 1, 50)
-        offset = safe_int_param(self.request, "offset", 0, 0)
+        params_serializer = CategoryQuerySerializer(data=self.request.query_params)
+        params_serializer.is_valid(raise_exception=True)
+        qs = params_serializer.validated_data
+        category = qs.get("category", "")
+        limit = qs["limit"]
+        offset = qs["offset"]
 
         return Video.get_category_videos(category, limit, offset)
 

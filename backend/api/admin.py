@@ -11,6 +11,7 @@ from api.models import (
     VideoView,
     VideoLike,
     VideoShare,
+    WebcamRecording,
 )
 from api.utils import should_make_private, make_video_private
 
@@ -217,5 +218,19 @@ class VideoShareAdmin(admin.ModelAdmin):
     reset_access_count.short_description = "Reset access count for selected share links"
 
 
+@admin.register(ViewerProfile)
+class ViewerProfileAdmin(admin.ModelAdmin):
+    """Admin interface for ViewerProfile model."""
+    list_display = ('user', 'points', 'points_earned', 'points_redeemed', 'onboarding_completed')
+    list_filter = ('onboarding_completed',)
+    search_fields = ('user__email', 'user__first_name', 'user__last_name')
+    fieldsets = (
+        (None, {'fields': ('user', 'onboarding_completed')}),
+        ('Points', {'fields': ('points', 'points_earned', 'points_redeemed')}),
+        ('Demographics', {'fields': ('birthday', 'gender', 'country', 'city', 'education_level', 'occupation')}),
+        ('Preferences', {'fields': ('content_preferences',)}),
+    )
+    readonly_fields = ('points',)
+
+# Register CompanyProfile directly as there's no custom admin class for it
 admin.site.register(CompanyProfile)
-admin.site.register(ViewerProfile)

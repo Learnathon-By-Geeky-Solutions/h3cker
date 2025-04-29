@@ -1,7 +1,7 @@
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 from api.models import Video
-from api.utils import should_make_private, make_video_private
+from api.services import VideoViewService
 
 class Command(BaseCommand):
     help = 'Check and update video privacy based on limits and expiry dates'
@@ -29,9 +29,8 @@ class Command(BaseCommand):
         
         limit_count = 0
         for video in limit_videos:
-            if video.views >= video.view_limit:
-                video.visibility = 'private'
-                video.save(update_fields=['visibility'])
+            if VideoViewService.should_make_private(video):
+                VideoViewService.make_video_private(video)
                 limit_count += 1
         
         self.stdout.write(f'Updated {limit_count} videos that reached view limit')
