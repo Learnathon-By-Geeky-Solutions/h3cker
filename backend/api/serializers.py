@@ -14,6 +14,17 @@ from api.models import (
 class FilenameSerializer(serializers.Serializer):
     filename = serializers.CharField(required=True)
 
+class UserSearchSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+
+class VideoSearchQuerySerializer(serializers.Serializer):
+    filename = serializers.CharField(required=True)
+
+class CategoryQuerySerializer(serializers.Serializer):
+    category = serializers.CharField(required=False, allow_blank=True)
+    limit = serializers.IntegerField(required=False, min_value=1, max_value=50, default=20)
+    offset = serializers.IntegerField(required=False, min_value=0, default=0)
+
 
 class OnboardingSerializer(serializers.ModelSerializer):
     class Meta:

@@ -30,6 +30,8 @@ from api.serializers import (
     VideoDetailSerializer,
     VideoShareSerializer,
     UserPointsSerializer,
+    VideoSearchQuerySerializer,
+    CategoryQuerySerializer,
 )
 from api.services import AzureStorageService, PointsService
 from api.utils import (
@@ -400,7 +402,6 @@ class UploadVideoView(generics.CreateAPIView):
     serializer_class = VideoSerializer
 
     def create(self, request, *args, **kwargs):
-        # validate filename via serializer
         filename_serializer = FilenameSerializer(data=request.data)
         filename_serializer.is_valid(raise_exception=True)
         filename = filename_serializer.validated_data["filename"]
@@ -448,7 +449,6 @@ class WebcamUploadView(generics.CreateAPIView):
         video_id = kwargs.get("video_id")
         video = get_object_or_404(Video, id=video_id)
 
-        # validate filename via serializer
         filename_serializer = FilenameSerializer(data=request.data)
         filename_serializer.is_valid(raise_exception=True)
         filename = filename_serializer.validated_data["filename"]
@@ -492,19 +492,19 @@ class VideoSearchView(generics.ListAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        filename = self.request.query_params.get("filename")
-        if filename:
-            parts = filename.split("?")[0].split("/")
-            base_filename = parts[-1] if parts else filename
+        params_serializer = VideoSearchQuerySerializer(data=self.request.query_params)
+        params_serializer.is_valid(raise_exception=True)
+        filename = params_serializer.validated_data["filename"]
 
-            videos = Video.objects.filter(video_url__contains=base_filename)
+        parts = filename.split("?")[0].split("/")
+        base_filename = parts[-1] if parts else filename
 
-            if self.request.user.role == "admin":
-                return videos
+        videos = Video.objects.filter(video_url__contains=base_filename)
 
-            return videos.filter(uploader=self.request.user)
+        if self.request.user.role == "admin":
+            return videos
 
-        return Video.objects.none()
+        return videos.filter(uploader=self.request.user)
 
 
 class UserPointsView(generics.RetrieveAPIView):
@@ -549,9 +549,12 @@ class CategoryVideosView(generics.ListAPIView):
     serializer_class = VideoFeedSerializer
 
     def get_queryset(self):
-        category = self.request.query_params.get("category", "")
-        limit = safe_int_param(self.request, "limit", 20, 1, 50)
-        offset = safe_int_param(self.request, "offset", 0, 0)
+        params_serializer = CategoryQuerySerializer(data=self.request.query_params)
+        params_serializer.is_valid(raise_exception=True)
+        qs = params_serializer.validated_data
+        category = qs.get("category", "")
+        limit = qs["limit"]
+        offset = qs["offset"]
 
         return Video.get_category_videos(category, limit, offset)
 

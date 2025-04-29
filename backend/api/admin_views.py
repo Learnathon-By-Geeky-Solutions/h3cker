@@ -13,6 +13,7 @@ from firebase_admin import firestore
 from api.models import User, Video, CompanyProfile, ViewerProfile, WebcamRecording
 from api.serializers import (
     UserSerializer,
+    UserSearchSerializer,
     AdminActionSerializer,
     VideoSerializer,
     VideoFeedSerializer,
@@ -30,12 +31,9 @@ class UserSearchView(generics.GenericAPIView):
     serializer_class = UserSerializer
 
     def get(self, request):
-        email = request.query_params.get("email", "").strip().lower()
-        if not email:
-            return Response(
-                {"error": "Email parameter is required"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        params_serializer = UserSearchSerializer(data=request.query_params)
+        params_serializer.is_valid(raise_exception=True)
+        email = params_serializer.validated_data["email"].strip().lower()
 
         try:
             user = User.objects.get(email__iexact=email)
