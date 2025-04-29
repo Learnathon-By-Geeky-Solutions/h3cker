@@ -377,3 +377,10 @@ class VideoAdminTest(AdminTestCase):
         self.assertEqual(rows[1][0], str(self.video.id))
         self.assertEqual(rows[1][1], self.video.title)
         self.assertEqual(rows[1][2], self.video.uploader.email)
+        self.assertEqual(rows[1][3], self.video.category)
+        self.assertEqual(rows[1][4], self.video.visibility)
+        self.assertEqual(rows[1][5], str(self.video.views))
+        self.assertEqual(rows[1][6], str(self.video.likes))
+        # Add assertions for other columns like Upload Date, Duration, View Limit if needed
+        # Example for upload date (requires formatting):
+        # self.assertEqual(rows[1][7], self.video.upload_date.strftime('%Y-%m-%d %H:%M:%S')) # Adjust format as needed

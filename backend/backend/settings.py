@@ -176,3 +176,33 @@ CRONJOBS = [
 ]
 
 AUTH_USER_MODEL = 'api.User'
+
+# Logging configuration
+LOG_DIR = BASE_DIR / 'logs'
+if not LOG_DIR.exists():
+    os.makedirs(LOG_DIR)
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '[%(asctime)s] %(levelname)s [%(name)s:%(lineno)s] %(message)s',
+            'datefmt': '%Y-%m-%d %H:%M:%S'
+        },
+        'simple': {
+            'format': '%(levelname)s %(message)s'
+        },
+    },
+    'handlers': {
+        'file': {
+            'level': 'DEBUG',
+            'class': 'logging.FileHandler',
+            'filename': str(LOG_DIR / 'application.log'),
+            'formatter': 'verbose',
+        },
+    },
+    'root': {
+        'handlers': ['file'],
+        'level': 'DEBUG',
+    },
+}

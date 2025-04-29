@@ -199,7 +199,8 @@ def test_video_detail_serializer(video_data):
     assert data['video_url'] == video_data.video_url
     assert data['thumbnail_url'] == video_data.thumbnail_url
     assert 'upload_date' in data
-    assert data['uploader']['id'] == video_data.uploader.id
+    assert data['uploader']['id'] == video_data.uploader.id # Nested serializer check
     assert data['views'] == video_data.views
     assert data['likes'] == video_data.likes
     assert data['duration'] == video_data.duration
+    # Add checks for any other fields specific to VideoDetailSerializer if needed
