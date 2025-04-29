@@ -638,7 +638,6 @@ const UploadVideo = () => {
                     className="absolute top-0 left-0 w-full h-full object-contain" 
                     aria-label="Video Preview"
                   >
-                    <track kind="captions" src="" label="English" />
                     Your browser does not support the video tag.
                   </video>
                  </div>
