@@ -223,7 +223,7 @@ class RecordVideoViewAPI(generics.CreateAPIView):
         video_id = kwargs.get("video_id")
         
         # Use VideoViewService to handle the business logic
-        video, new_view_count, privacy_changed = VideoViewService.record_view(
+        _, new_view_count, privacy_changed = VideoViewService.record_view(
             video_id, request.user
         )
         
@@ -257,7 +257,7 @@ class ToggleVideoLikeAPI(generics.CreateAPIView):
         
         if not video:
             return Response(
-                {"error": "Authentication required"},
+                {"error":AUTH_REQUIRED_MESSAGE},
                 status=status.HTTP_401_UNAUTHORIZED
             )
         
@@ -289,7 +289,7 @@ class CreateVideoShareAPI(generics.CreateAPIView):
         
         if not share:
             return Response(
-                {"error": "Authentication required"},
+                {"error":AUTH_REQUIRED_MESSAGE},
                 status=status.HTTP_401_UNAUTHORIZED
             )
 

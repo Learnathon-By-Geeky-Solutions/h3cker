@@ -1,6 +1,6 @@
 asgiref==3.8.1
 azure-storage-blob==12.25.0
-Django==5.1.7
+Django>=5.1.8
 django-cors-headers==4.7.0
 django-crontab==0.7.1
 django-extensions==3.2.3
