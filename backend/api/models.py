@@ -152,11 +152,10 @@ class Video(models.Model):
     def __str__(self):
         return self.title
 
-    # Recommendation methods
     @classmethod
     def get_recommendations_for_user(cls, user, limit=10, offset=0):
         limit = max(1, min(limit, 50))
-        offset = max(0, offset)  # Offset must be non-negative
+        offset = max(0, offset)
 
         if not user.is_authenticated:
             return cls.get_popular_videos(limit, offset)

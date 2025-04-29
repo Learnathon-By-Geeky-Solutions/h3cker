@@ -7,8 +7,9 @@ import datetime
 import csv
 from io import StringIO
 from unittest.mock import patch, MagicMock
+import pytest
 
-from api.admin import VideoViewAdmin, VideoLikeAdmin, VideoShareAdmin, VideoAdmin
+from api.admin import VideoViewAdmin, VideoLikeAdmin, VideoShareAdmin, VideoAdmin, UserAdmin, ViewerProfileAdmin
 from api.models import User, Video, VideoView, VideoLike, VideoShare
 
 
@@ -384,3 +385,60 @@ class VideoAdminTest(AdminTestCase):
         # Add assertions for other columns like Upload Date, Duration, View Limit if needed
         # Example for upload date (requires formatting):
         # self.assertEqual(rows[1][7], self.video.upload_date.strftime('%Y-%m-%d %H:%M:%S')) # Adjust format as needed
+
+
+@pytest.mark.django_db
+class TestUserAdmin:
+    """Test suite for UserAdmin."""
+
+    def test_user_admin_queryset_filtering(self, admin_site, test_user, company_user, admin_user, request_factory):
+        """Test queryset filtering in UserAdmin."""
+        user_admin = UserAdmin(User, admin_site)
+        request = request_factory.get('/')
+        request.user = admin_user # Simulate an admin user making the request
+
+        # No filter
+        changelist = user_admin.get_changelist_instance(request)
+        queryset = changelist.get_queryset(request)
+        assert queryset.count() == 3
+
+        # Filter by role=user
+        request_user = request_factory.get('/', {'role': 'user'})
+        request_user.user = admin_user
+        changelist_user = user_admin.get_changelist_instance(request_user)
+        queryset_user = changelist_user.get_queryset(request_user)
+        assert queryset_user.count() == 1
+        assert queryset_user.first() == test_user
+
+        # Filter by is_staff=True (should be empty unless an admin is staff)
+        admin_user.is_staff = True
+        admin_user.save()
+        request_staff = request_factory.get('/', {'is_staff': 'True'})
+        request_staff.user = admin_user
+        changelist_staff = user_admin.get_changelist_instance(request_staff)
+        queryset_staff = changelist_staff.get_queryset(request_staff)
+        assert queryset_staff.count() == 1
+        assert queryset_staff.first() == admin_user
+
+
+@pytest.mark.django_db
+class TestViewerProfileAdmin:
+    """Test suite for ViewerProfileAdmin."""
+
+    def test_viewer_profile_admin_search(self, admin_site, viewer_user, request_factory, admin_user):
+        """Test searching in ViewerProfileAdmin."""
+        profile_admin = ViewerProfileAdmin(ViewerProfile, admin_site)
+        request = request_factory.get('/', {'q': viewer_user.email})
+        request.user = admin_user # Simulate admin
+
+        changelist = profile_admin.get_changelist_instance(request)
+        queryset = changelist.get_queryset(request)
+
+        assert queryset.count() == 1
+        assert queryset.first().user == viewer_user
+
+        request_no_match = request_factory.get('/', {'q': 'nomatch@example.com'})
+        request_no_match.user = admin_user
+        changelist_no_match = profile_admin.get_changelist_instance(request_no_match)
+        queryset_no_match = changelist_no_match.get_queryset(request_no_match)
+        assert queryset_no_match.count() == 0

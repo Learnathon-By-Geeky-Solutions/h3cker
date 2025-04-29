@@ -142,6 +142,22 @@ class TestVideoManagementView:
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data) == 2
     
+    def test_get_single_video(self, admin_client, test_video):
+        """Test retrieving a single video by ID."""
+        url = reverse('admin-video', kwargs={'video_id': test_video.id})
+        response = admin_client.get(url)
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['id'] == test_video.id
+        assert response.data['title'] == test_video.title
+
+    def test_get_single_video_not_found(self, admin_client):
+        """Test retrieving a non-existent single video."""
+        url = reverse('admin-video', kwargs={'video_id': 9999})
+        response = admin_client.get(url)
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+    
     def test_update_video(self, admin_client, test_video):
         """Test updating a video's metadata."""        
         url = reverse('admin-video', kwargs={'video_id': test_video.id})
@@ -368,31 +384,31 @@ class TestPromoteToAdminView:
     @patch('api.admin_views.firebase_auth.get_user')
     @patch('api.admin_views.db')
     def test_promote_user_firebase_db_failure(self, mock_db, mock_get_user, admin_client, regular_user):
-        """Test handling a Firebase Firestore database failure."""        
-        # Mock Firebase auth
-        mock_get_user.return_value = {'uid': regular_user.firebase_uid}
-        
+        """Test handling a Firebase Firestore database failure during promotion."""        
+        # Mock Firebase auth for the requesting admin
+        mock_get_user.return_value = {'uid': admin_client.handler._force_user.firebase_uid}
+
         # Create mock for Firestore document that raises an exception when updated
         mock_document = MagicMock()
         mock_document.update.side_effect = Exception("Firestore error")
-        
+
         mock_collection = MagicMock()
         mock_collection.document.return_value = mock_document
-        
+
         mock_db.collection.return_value = mock_collection
-        
+
         url = reverse('admin-promote-user')
         data = {
             'user_id': regular_user.id,
             'admin_password': 'testpassword'
         }
-        
+
         response = admin_client.post(url, data, format='json')
-        
+
         assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
         assert "Failed to update Firebase" in response.data['error']
-        
-        # Verify user role was not changed (should be rolled back)
+
+        # Verify user role was rolled back in Django DB
         regular_user.refresh_from_db()
         assert regular_user.role == 'user'
     
