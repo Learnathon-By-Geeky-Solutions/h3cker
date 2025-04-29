@@ -387,58 +387,72 @@ class VideoAdminTest(AdminTestCase):
         # self.assertEqual(rows[1][7], self.video.upload_date.strftime('%Y-%m-%d %H:%M:%S')) # Adjust format as needed
 
 
-@pytest.mark.django_db
-class TestUserAdmin:
+# Use AdminTestCase setup for consistency
+class TestUserAdmin(AdminTestCase):
     """Test suite for UserAdmin."""
 
-    def test_user_admin_queryset_filtering(self, admin_site, test_user, company_user, admin_user, request_factory):
+    def test_user_admin_queryset_filtering(self):
         """Test queryset filtering in UserAdmin."""
-        user_admin = UserAdmin(User, admin_site)
-        request = request_factory.get('/')
-        request.user = admin_user # Simulate an admin user making the request
+        user_admin = UserAdmin(User, self.site)
+        request = self.factory.get('/')
+        request.user = self.superuser # Use the superuser from setup
 
         # No filter
         changelist = user_admin.get_changelist_instance(request)
         queryset = changelist.get_queryset(request)
-        assert queryset.count() == 3
+        # Adjust count based on users created in AdminTestCase.setUp
+        self.assertEqual(queryset.count(), 3) # superuser, company_user, regular_user
 
         # Filter by role=user
-        request_user = request_factory.get('/', {'role': 'user'})
-        request_user.user = admin_user
+        request_user = self.factory.get('/', {'role': 'user'})
+        request_user.user = self.superuser
         changelist_user = user_admin.get_changelist_instance(request_user)
         queryset_user = changelist_user.get_queryset(request_user)
-        assert queryset_user.count() == 1
-        assert queryset_user.first() == test_user
+        self.assertEqual(queryset_user.count(), 1)
+        self.assertEqual(queryset_user.first(), self.regular_user) # Use regular_user from setup
 
-        # Filter by is_staff=True (should be empty unless an admin is staff)
-        admin_user.is_staff = True
-        admin_user.save()
-        request_staff = request_factory.get('/', {'is_staff': 'True'})
-        request_staff.user = admin_user
+        # Filter by is_staff=True (should only include superuser)
+        self.superuser.is_staff = True # Ensure is_staff is True
+        self.superuser.save()
+        request_staff = self.factory.get('/', {'is_staff': 'True'})
+        request_staff.user = self.superuser
         changelist_staff = user_admin.get_changelist_instance(request_staff)
         queryset_staff = changelist_staff.get_queryset(request_staff)
-        assert queryset_staff.count() == 1
-        assert queryset_staff.first() == admin_user
+        self.assertEqual(queryset_staff.count(), 1)
+        self.assertEqual(queryset_staff.first(), self.superuser)
 
 
-@pytest.mark.django_db
-class TestViewerProfileAdmin:
+# Use AdminTestCase setup for consistency
+# Note: ViewerProfile is not created in AdminTestCase.setUp, needs adjustment
+# We might need to create a ViewerProfile for regular_user here.
+from api.models import ViewerProfile # Ensure ViewerProfile is imported
+
+class TestViewerProfileAdmin(AdminTestCase):
     """Test suite for ViewerProfileAdmin."""
 
-    def test_viewer_profile_admin_search(self, admin_site, viewer_user, request_factory, admin_user):
+    def setUp(self):
+        # Call parent setUp first
+        super().setUp()
+        # Create a ViewerProfile for the regular user for testing
+        self.viewer_profile = ViewerProfile.objects.create(user=self.regular_user)
+
+    def test_viewer_profile_admin_search(self):
         """Test searching in ViewerProfileAdmin."""
-        profile_admin = ViewerProfileAdmin(ViewerProfile, admin_site)
-        request = request_factory.get('/', {'q': viewer_user.email})
-        request.user = admin_user # Simulate admin
+        profile_admin = ViewerProfileAdmin(ViewerProfile, self.site)
+        # Search using the regular user's email
+        request = self.factory.get('/', {'q': self.regular_user.email})
+        request.user = self.superuser # Simulate admin
 
         changelist = profile_admin.get_changelist_instance(request)
         queryset = changelist.get_queryset(request)
 
-        assert queryset.count() == 1
-        assert queryset.first().user == viewer_user
+        self.assertEqual(queryset.count(), 1)
+        self.assertEqual(queryset.first().user, self.regular_user)
+        self.assertEqual(queryset.first(), self.viewer_profile)
 
-        request_no_match = request_factory.get('/', {'q': 'nomatch@example.com'})
-        request_no_match.user = admin_user
+        # Test search with no match
+        request_no_match = self.factory.get('/', {'q': 'nomatch@example.com'})
+        request_no_match.user = self.superuser
         changelist_no_match = profile_admin.get_changelist_instance(request_no_match)
         queryset_no_match = changelist_no_match.get_queryset(request_no_match)
-        assert queryset_no_match.count() == 0
+        self.assertEqual(queryset_no_match.count(), 0)

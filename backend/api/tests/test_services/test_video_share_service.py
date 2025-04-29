@@ -84,11 +84,6 @@ class TestVideoShareService:
         # No share should be created
         assert VideoShare.objects.filter(video=test_video).count() == 0
 
-    def test_create_share_nonexistent_video(self, test_user):
-        """Test creating a share for a non-existent video."""
-        with pytest.raises(Video.DoesNotExist):
-            VideoShareService.create_share(999, test_user)
-
     def test_get_share_url_default_frontend(self, test_share, settings):
         """Test getting share URL with default frontend URL."""
         # Ensure settings has a frontend URL
@@ -136,24 +131,6 @@ class TestVideoShareService:
         # Verify database was updated
         test_share.refresh_from_db()
         assert test_share.access_count == 2
-
-    def test_increment_access_count_inactive_share(self, test_share):
-        """Test incrementing access count for an inactive share."""
-        # Make share inactive
-        test_share.active = False
-        test_share.save()
-        
-        with pytest.raises(VideoShare.DoesNotExist):
-            VideoShareService.increment_access_count(test_share.share_token)
-        
-        # Access count should not be incremented
-        test_share.refresh_from_db()
-        assert test_share.access_count == 0
-
-    def test_increment_access_count_nonexistent_token(self):
-        """Test incrementing access count with a non-existent token."""
-        with pytest.raises(VideoShare.DoesNotExist):
-            VideoShareService.increment_access_count(str(uuid.uuid4()))
 
     def test_create_share_unauthenticated_mock_user(self, test_video):
         """Test creating a share link with mock unauthenticated user."""

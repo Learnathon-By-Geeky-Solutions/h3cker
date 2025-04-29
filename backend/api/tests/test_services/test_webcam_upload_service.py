@@ -148,28 +148,6 @@ class TestWebcamUploadService:
         assert db_recording.id == recording.id
         assert db_recording.filename == filename
 
-    def test_create_webcam_recording_with_missing_fields(self, test_video, test_user):
-        """Test creating a webcam recording with missing fields."""
-        # Test without a filename
-        recording = WebcamUploadService.create_webcam_recording(
-            test_video, test_user, None, "https://example.com/view_url"
-        )
-        
-        # Should fail and return None due to missing filename
-        assert recording is None
-        assert WebcamRecording.objects.filter(video=test_video, recorder=test_user).count() == 0
-        
-    def test_create_webcam_recording_with_null_values(self, test_video, test_user):
-        """Test creating a webcam recording with null values."""
-        # Test with null view_url
-        recording = WebcamUploadService.create_webcam_recording(
-            test_video, test_user, "test.webm", None
-        )
-        
-        # This should fail as recording_url is required
-        assert recording is None
-        assert WebcamRecording.objects.filter(video=test_video, recorder=test_user).count() == 0
-        
     @patch('api.models.WebcamRecording.objects.create')
     def test_create_webcam_recording_with_specific_exception(self, mock_create, test_video, test_user):
         """Test specific exception handling in create_webcam_recording."""

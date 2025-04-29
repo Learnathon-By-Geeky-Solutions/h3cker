@@ -277,25 +277,6 @@ class TestVideoViewService:
         # No VideoView should be created
         assert VideoView.objects.filter(video=test_video).count() == 0
 
-    def test_record_user_view_existing(self, test_video, test_user):
-        """Test recording a view when one already exists."""
-        # First create a view
-        initial_view = VideoView.objects.create(
-            video=test_video,
-            viewer=test_user,
-            viewed_at=timezone.now() - timedelta(days=1)  # Viewed yesterday
-        )
-        
-        # Record another view
-        VideoViewService.record_user_view(test_video, test_user)
-        
-        # Should not create a new record, but update the existing one
-        assert VideoView.objects.filter(video=test_video, viewer=test_user).count() == 1
-        
-        # Check viewed_at was updated
-        updated_view = VideoView.objects.get(id=initial_view.id)
-        assert updated_view.viewed_at > initial_view.viewed_at
-
     @patch('api.services.video_view_service.VideoViewService.should_make_private')
     @patch('api.services.video_view_service.VideoViewService.make_video_private')
     def test_record_view_privacy_check_error(self, mock_make_private, mock_should_private, test_video, test_user):

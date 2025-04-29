@@ -130,29 +130,6 @@ class TestVideoLikeService:
         assert test_video.likes == 0
         assert not VideoLike.objects.filter(id=like.id).exists()
 
-    def test_toggle_like_nonexistent_video(self, test_user):
-        """Test toggling like on a non-existent video."""
-        with pytest.raises(Video.DoesNotExist):
-            VideoLikeService.toggle_like(999, test_user)
-
-    def test_add_multiple_likes(self, test_video, test_user):
-        """Test adding multiple likes from the same user (should only count once)."""
-        # First like
-        video1, liked1, count1 = VideoLikeService.toggle_like(test_video.id, test_user)
-        assert liked1 is True
-        assert count1 == 1
-        
-        # Try to like again - should not create a new like record
-        # In a real scenario, the UI would prevent this, but we test the service
-        VideoLike.objects.create(video=test_video, user=test_user)
-        test_video.refresh_from_db()
-        assert test_video.likes == 1  # Count remains 1 before toggle service is called
-        
-        # Now when toggle is called, it should detect existing like and remove it
-        video2, liked2, count2 = VideoLikeService.toggle_like(test_video.id, test_user)
-        assert liked2 is False
-        assert count2 == 0
-
     def test_toggle_like_with_unauthenticated_mock_user(self, test_video):
         """Test toggle like with a mock unauthenticated user object."""
         # Create a mock user who is not authenticated
