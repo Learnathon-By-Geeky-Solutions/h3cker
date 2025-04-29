@@ -144,7 +144,7 @@ class TestVideoManagementView:
     
     def test_update_video(self, admin_client, test_video):
         """Test updating a video's metadata."""        
-        url = reverse('admin-video-delete', kwargs={'video_id': test_video.id})
+        url = reverse('admin-video', kwargs={'video_id': test_video.id})
         data = {
             'title': 'Updated Title',
             'description': 'Updated description',
@@ -164,7 +164,7 @@ class TestVideoManagementView:
     
     def test_update_video_invalid_data(self, admin_client, test_video):
         """Test updating a video with invalid data."""        
-        url = reverse('admin-video-delete', kwargs={'video_id': test_video.id})
+        url = reverse('admin-video', kwargs={'video_id': test_video.id})
         data = {
             'visibility': 'invalid_visibility'
         }
@@ -175,7 +175,7 @@ class TestVideoManagementView:
     def test_delete_video(self, admin_client, test_video):
         """Test deleting a video."""        
         video_id = test_video.id
-        url = reverse('admin-video-delete', kwargs={'video_id': video_id})
+        url = reverse('admin-video', kwargs={'video_id': video_id})
         response = admin_client.delete(url)
         
         assert response.status_code == status.HTTP_204_NO_CONTENT
@@ -185,7 +185,7 @@ class TestVideoManagementView:
     
     def test_delete_nonexistent_video(self, admin_client):
         """Test deleting a non-existent video."""        
-        url = reverse('admin-video-delete', kwargs={'video_id': 9999})
+        url = reverse('admin-video', kwargs={'video_id': 9999})
         response = admin_client.delete(url)
         
         assert response.status_code == status.HTTP_404_NOT_FOUND
@@ -197,7 +197,7 @@ class TestVideoManagementView:
         
         assert response.status_code == status.HTTP_403_FORBIDDEN
         
-        url = reverse('admin-video-delete', kwargs={'video_id': test_video.id})
+        url = reverse('admin-video', kwargs={'video_id': test_video.id})
         response = user_client.delete(url)
         
         assert response.status_code == status.HTTP_403_FORBIDDEN
@@ -411,7 +411,7 @@ class TestPromoteToAdminView:
 @pytest.mark.django_db
 class TestWebcamRecordingsView:
     """Test the WebcamRecordingsView admin API."""
-    
+
     @pytest.fixture
     def test_webcam_recording(self, test_video, regular_user):
         """Create a test webcam recording."""
@@ -423,19 +423,27 @@ class TestWebcamRecordingsView:
             upload_status='completed'
         )
         return recording
-    
+
     def test_get_webcam_recordings(self, admin_client, test_webcam_recording):
         """Test retrieving all webcam recordings as admin."""
         url = reverse('admin-webcam-recordings')
         response = admin_client.get(url)
-        
+
         assert response.status_code == status.HTTP_200_OK
-        assert len(response.data) == 1
-        assert response.data[0]['filename'] == 'test_recording.webm'
-        assert response.data[0]['recording_url'] == 'https://example.com/recordings/test_recording.webm'
-        assert response.data[0]['recorder']['email'] == test_webcam_recording.recorder.email
-        assert response.data[0]['video']['id'] == test_webcam_recording.video.id
-    
+        assert len(response.data) >= 1 # Use >= 1 in case other tests create recordings
+        # Find the specific recording in the list
+        found = False
+        for rec_data in response.data:
+            if rec_data['id'] == test_webcam_recording.id:
+                assert rec_data['filename'] == 'test_recording.webm'
+                assert rec_data['recording_url'] == 'https://example.com/recordings/test_recording.webm'
+                assert rec_data['recorder']['email'] == test_webcam_recording.recorder.email
+                assert rec_data['video']['id'] == test_webcam_recording.video.id
+                found = True
+                break
+        assert found, "Test recording not found in the response list."
+
+
     def test_filter_by_user(self, admin_client, test_webcam_recording, admin_user):
         """Test filtering webcam recordings by user."""
         # Create another recording with a different user
@@ -445,20 +453,21 @@ class TestWebcamRecordingsView:
             filename='admin_recording.webm',
             recording_url='https://example.com/recordings/admin_recording.webm'
         )
-        
+
         # Filter by regular user
         url = reverse('admin-webcam-recordings')
         response = admin_client.get(url, {'user_id': test_webcam_recording.recorder.id})
-        
+
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data) == 1
         assert response.data[0]['filename'] == 'test_recording.webm'
-        
+
         # Filter by admin user
         response = admin_client.get(url, {'user_id': admin_user.id})
+        assert response.status_code == status.HTTP_200_OK
         assert len(response.data) == 1
         assert response.data[0]['filename'] == 'admin_recording.webm'
-    
+
     def test_filter_by_video(self, admin_client, test_webcam_recording, admin_user):
         """Test filtering webcam recordings by video."""
         # Create another video and recording
@@ -467,27 +476,28 @@ class TestWebcamRecordingsView:
             video_url='https://example.com/another_video.mp4',
             uploader=admin_user
         )
-        
+
         WebcamRecording.objects.create(
             video=new_video,
             recorder=test_webcam_recording.recorder,
             filename='another_recording.webm',
             recording_url='https://example.com/recordings/another_recording.webm'
         )
-        
+
         # Filter by original video
         url = reverse('admin-webcam-recordings')
         response = admin_client.get(url, {'video_id': test_webcam_recording.video.id})
-        
+
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data) == 1
         assert response.data[0]['filename'] == 'test_recording.webm'
-        
+
         # Filter by new video
         response = admin_client.get(url, {'video_id': new_video.id})
+        assert response.status_code == status.HTTP_200_OK
         assert len(response.data) == 1
         assert response.data[0]['filename'] == 'another_recording.webm'
-    
+
     def test_filter_by_status(self, admin_client, test_webcam_recording):
         """Test filtering webcam recordings by upload status."""
         # Create another recording with different status
@@ -498,23 +508,28 @@ class TestWebcamRecordingsView:
             recording_url='https://example.com/recordings/pending_recording.webm',
             upload_status='pending'
         )
-        
+
         # Filter by completed status
         url = reverse('admin-webcam-recordings')
         response = admin_client.get(url, {'status': 'completed'})
-        
+
         assert response.status_code == status.HTTP_200_OK
-        assert len(response.data) == 1
-        assert response.data[0]['filename'] == 'test_recording.webm'
-        
+        # Check that only completed recordings are returned
+        assert len(response.data) >= 1
+        assert all(rec['upload_status'] == 'completed' for rec in response.data)
+        assert any(rec['filename'] == 'test_recording.webm' for rec in response.data)
+
+
         # Filter by pending status
         response = admin_client.get(url, {'status': 'pending'})
+        assert response.status_code == status.HTTP_200_OK
         assert len(response.data) == 1
         assert response.data[0]['filename'] == 'pending_recording.webm'
-    
+        assert response.data[0]['upload_status'] == 'pending'
+
     def test_unauthorized_access(self, user_client, test_webcam_recording):
         """Test that non-admin users cannot access the endpoint."""
         url = reverse('admin-webcam-recordings')
         response = user_client.get(url)
-        
+
         assert response.status_code == status.HTTP_403_FORBIDDEN

@@ -115,7 +115,7 @@ class RecordUserViewTests(TestCase):
         
         # Assert
         mock_get_or_create.assert_called_once()
-        args, kwargs = mock_get_or_create.call_args
+        _, kwargs = mock_get_or_create.call_args
         self.assertEqual(kwargs['video'], mock_video)
         self.assertEqual(kwargs['viewer'], mock_user)
         self.assertIn('defaults', kwargs)
@@ -159,23 +159,33 @@ class RecordUserViewTests(TestCase):
         mock_user = MagicMock()
         mock_user.is_authenticated = True
         mock_video = MagicMock()
-        
+
         # Create a mock to simulate get_or_create behavior
-        def side_effect(**kwargs):
-            # First call returns (object, created=True)
-            # Subsequent calls return (object, created=False)
-            return MagicMock(), True
-            
-        mock_get_or_create = MagicMock(side_effect=lambda **kwargs: (MagicMock(), True))
+        # First call returns (object, created=True)
+        # Subsequent calls return (object, created=False)
+        mock_instance = MagicMock()
+        side_effect_results = [(mock_instance, True), (mock_instance, False)]
+        mock_get_or_create = MagicMock(side_effect=side_effect_results)
         mock_video_view.objects.get_or_create = mock_get_or_create
-        
+
         # Call the function twice
         record_user_view(mock_video, mock_user)
         record_user_view(mock_video, mock_user)
-        
+
         # Assert get_or_create was called twice with the same parameters
         self.assertEqual(mock_get_or_create.call_count, 2)
-        first_call = mock_get_or_create.call_args_list[0]
-        second_call = mock_get_or_create.call_args_list[1]
-        self.assertEqual(first_call[1]['video'], second_call[1]['video'])
-        self.assertEqual(first_call[1]['viewer'], second_call[1]['viewer'])
+        _, first_call_kwargs = mock_get_or_create.call_args_list[0]
+        _, second_call_kwargs = mock_get_or_create.call_args_list[1]
+
+        # Check kwargs are the same for both calls
+        self.assertEqual(first_call_kwargs['video'], mock_video)
+        self.assertEqual(first_call_kwargs['viewer'], mock_user)
+        self.assertEqual(second_call_kwargs['video'], mock_video)
+        self.assertEqual(second_call_kwargs['viewer'], mock_user)
+
+        # Check that defaults were only used in the first call implicitly
+        # (get_or_create handles this internally, we mainly check it was called correctly)
+        self.assertIn('defaults', first_call_kwargs)
+        self.assertIn('viewed_at', first_call_kwargs['defaults'])
+        # The second call might or might not pass defaults depending on implementation,
+        # but the key is that get_or_create handles idempotence.

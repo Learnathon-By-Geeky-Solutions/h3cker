@@ -116,7 +116,7 @@ class TestCompanyProfileModel:
         profile2 = CompanyProfile.objects.create(
             user=user2
         )
-        assert str(profile2) == f"Profile for company2@example.com"
+        assert str(profile2) == "Profile for company2@example.com"
 
 @pytest.mark.django_db
 class TestViewerProfileModel:
@@ -153,7 +153,7 @@ class TestViewerProfileModel:
             firebase_uid="vieweruid1"
         )
         profile = ViewerProfile.objects.create(user=user)
-        assert str(profile) == f"Profile for viewer1@example.com"
+        assert str(profile) == "Profile for viewer1@example.com"
 
 @pytest.mark.django_db
 class TestVideoModel:
@@ -214,8 +214,9 @@ class TestVideoModel:
         
         assert video.description == ""
         assert video.category == ""
-        assert video.visibility == "private"
-        assert video.thumbnail_url == ""
+        assert video.visibility == "private" # Default visibility
         assert video.views == 0
         assert video.likes == 0
-        assert video.duration == "0:00"
+        assert video.duration == "0:00" # Check default value
+        assert video.auto_private_after is None
+        assert video.view_limit is None

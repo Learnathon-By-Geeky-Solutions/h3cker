@@ -245,9 +245,9 @@ class TestIsCompanyOrAdminPermission:
         permission = IsCompanyOrAdmin()
         view = DummyView()
         request = factory.get('/')
-        
+
         # Create an AnonymousUser
         from django.contrib.auth.models import AnonymousUser
         request.user = AnonymousUser()
-        
+
         assert permission.has_permission(request, view) is False

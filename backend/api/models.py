@@ -1,10 +1,10 @@
+import uuid
+import datetime
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.utils import timezone
 from django.core.validators import MinValueValidator
 from django.db.models import Q, F, FloatField, ExpressionWrapper, Count
-import datetime
-import uuid
 
 class CustomUserManager(BaseUserManager):
     def create_user(self, email, firebase_uid, password=None, **extra_fields):
@@ -218,17 +218,16 @@ class Video(models.Model):
             additional_needed = limit
             additional_offset = max(0, offset - total_count)
             
-            additional_videos = cls.get_popular_videos(
-                additional_needed, additional_offset
-            ).exclude(id__in=recommended_ids)
+            # Apply exclusion *before* slicing
+            popular_query = cls.get_popular_videos_queryset().exclude(id__in=recommended_ids)
+            additional_videos = popular_query[additional_offset:additional_offset + additional_needed]
             
             return list(additional_videos)
         return cls.get_popular_videos(limit, offset)
     
     @classmethod
-    def get_popular_videos(cls, limit, offset=0):
-        limit = max(1, min(limit, 50))
-        offset = max(0, offset)       
+    def get_popular_videos_queryset(cls):
+        """Returns the queryset for popular videos, ordered but not sliced."""
         return cls.objects.filter(
             visibility='public'
         ).annotate(
@@ -236,7 +235,13 @@ class Video(models.Model):
                 (F('views') * 0.6) + (F('likes') * 0.4),
                 output_field=FloatField()
             )
-        ).order_by('-popularity_score')[offset:offset+limit]
+        ).order_by('-popularity_score')
+
+    @classmethod
+    def get_popular_videos(cls, limit, offset=0):
+        limit = max(1, min(limit, 50))
+        offset = max(0, offset)       
+        return cls.get_popular_videos_queryset()[offset:offset+limit]
     
     @classmethod
     def get_trending_videos(cls, limit=10, offset=0):

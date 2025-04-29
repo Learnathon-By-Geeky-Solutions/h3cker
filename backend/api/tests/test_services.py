@@ -213,6 +213,6 @@ class TestAzureStorageService:
             'thumbnails',
             'thumb_testvideo.jpg',
             'testkey',
-            mock_generate_sas_url.call_args_list[1][0][4],  # Permission object
+            mock_generate_sas_url.call_args_list[1][0][4], # Permission object
             24 * 60
         )
