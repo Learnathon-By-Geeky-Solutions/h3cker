@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { Link } from 'react-router-dom';
 import { Button } from 'flowbite-react';
@@ -10,14 +10,30 @@ import {
   AnalyticsPreview,
   UserStatsOverview
 } from '../../Shared/DashboardComponents/DashboardComponents';
-import UserPointsCard from './UserPointsCard';
+import UserPointsCard from './User/UserPointsCard';
 
 const DashboardHome = ({ user, stats }) => {
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
+  
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 640);
+    };
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   const totalVideos = stats?.totalVideos || 0;
   const hasVideos = totalVideos > 0;
 
   const popularVideosForAdRow = formatVideosForAdRow(stats?.popularVideos, true);
-  const displayName = user?.displayName?.split(' ')[0] || user?.email?.split('@')[0] || 'User';
+  
+  // Optimize display name for small screens
+  let displayName = user?.displayName || user?.email?.split('@')[0] || 'User';
+  if (displayName.length > 15) {
+    displayName = displayName.split(' ')[0] || displayName.substring(0, 15);
+  }
 
   const isAdmin = user?.role === 'admin';
   const isCompany = user?.role === 'company';
@@ -27,11 +43,11 @@ const DashboardHome = ({ user, stats }) => {
   // Determine welcome message based on user role
   let welcomeMessage;
   if (isAdmin) {
-    welcomeMessage = "Manage your videos and platform users from your admin dashboard.";
+    welcomeMessage = isMobile ? "Manage videos and users" : "Manage your videos and platform users from your admin dashboard.";
   } else if (isCompany) {
-    welcomeMessage = "Upload and manage your company's video content.";
+    welcomeMessage = isMobile ? "Manage your content" : "Upload and manage your company's video content.";
   } else {
-    welcomeMessage = "Here's what's happening with your video activity today.";
+    welcomeMessage = isMobile ? "Your video activity today" : "Here's what's happening with your video activity today.";
   }
 
   
@@ -114,8 +130,7 @@ const DashboardHome = ({ user, stats }) => {
           )}
         </div>
       )}
-      
-      {/* Analytics Preview - only for admin/company users */}
+    
       {!isViewer && <AnalyticsPreview hasVideos={hasVideos} />}
     </div>
   );

@@ -20,7 +20,7 @@ import {
   AlertCircle,
   ArrowLeft
 } from 'lucide-react';
-import VideoService from "../../../utils/VideoService";
+import VideoService from '../../../../utils/VideoService';
 
 const UploadVideo = () => {
   const thumbnailCanvasRef = useRef(null);
@@ -211,7 +211,7 @@ const UploadVideo = () => {
     setStatusMessage('Initializing upload...');
 
     try {
-      const response = await VideoService.initiateVideoUpload(metadataPayload);
+      const response = await Promise.resolve(VideoService.initiateVideoUpload(metadataPayload));
 
       if (!response?.video_upload_url || !response?.thumbnail_upload_url) {
         throw new Error("Backend did not return valid upload URLs.");
@@ -229,6 +229,10 @@ const UploadVideo = () => {
       setUploadStatus('error');
       setStatusMessage(error.message || 'Failed to initialize upload. Please check details and try again.');
     }
+  };
+
+  const validateUrl = (url) => {
+    return url?.startsWith('blob:') ?? false;
   };
 
   const handleVideoChange = (e) => {
@@ -256,8 +260,18 @@ const UploadVideo = () => {
     setUploadStatus(null);
     setStatusMessage('');
 
-    const newPreviewUrl = URL.createObjectURL(file);
-    setVideoPreviewUrl(newPreviewUrl);
+    try {
+      const newPreviewUrl = URL.createObjectURL(file);
+      if (validateUrl(newPreviewUrl)) {
+        setVideoPreviewUrl(newPreviewUrl);
+      } else {
+        throw new Error('Invalid URL format');
+      }
+    } catch (error) {
+      console.error('Error creating video preview:', error);
+      setStatusMessage('Failed to create video preview.');
+      setUploadStatus('error');
+    }
     
     generateThumbnailFromVideo(file);
   };
@@ -300,7 +314,28 @@ const UploadVideo = () => {
       console.error('Error extracting thumbnail from video');
     };
     
-    video.src = URL.createObjectURL(videoFile);
+    try {
+      const videoUrl = URL.createObjectURL(videoFile);
+      if (validateUrl(videoUrl)) {
+        video.src = videoUrl;
+        
+        
+        video.addEventListener('loadeddata', () => {
+          URL.revokeObjectURL(videoUrl);
+        }, { once: true });
+        
+            video.addEventListener('error', () => {
+          URL.revokeObjectURL(videoUrl);
+          console.error('Error loading video for thumbnail generation');
+        }, { once: true });
+      } else {
+        throw new Error('Invalid URL format');
+      }
+    } catch (error) {
+      console.error('Error creating video preview:', error);
+      setStatusMessage('Failed to generate thumbnail from video.');
+      setUploadStatus('error');
+    }
   };
 
   const handleThumbnailChange = (e) => {
@@ -336,7 +371,11 @@ const UploadVideo = () => {
       const processedFile = await processThumbnail(file);
       
       const newPreviewUrl = URL.createObjectURL(processedFile);
-      setThumbnailPreviewUrl(newPreviewUrl);
+      if (validateUrl(newPreviewUrl)) {
+        setThumbnailPreviewUrl(newPreviewUrl);
+      } else {
+        throw new Error('Invalid URL format');
+      }
       
       const img = new Image();
       img.onload = () => {
@@ -627,7 +666,7 @@ const UploadVideo = () => {
           </div>
 
           <div className="flex-grow flex flex-col min-h-[150px]">
-            {videoPreviewUrl ? (
+            {videoPreviewUrl && validateUrl(videoPreviewUrl) ? (
               <div className="p-3 border border-gray-600 rounded-lg bg-gray-700/50 flex flex-col h-full"> 
                 <Label value="Video Preview" className="text-sm font-medium text-gray-300 mb-2 block flex-shrink-0"/>
                 <div className="relative w-full aspect-video bg-black rounded overflow-hidden flex-grow">

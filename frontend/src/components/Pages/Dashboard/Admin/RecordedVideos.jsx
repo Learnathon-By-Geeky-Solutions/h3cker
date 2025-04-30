@@ -1,13 +1,12 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, Button, Spinner, Alert, Table, Badge, TextInput, Select, Pagination } from 'flowbite-react';
 import { ArrowLeft, Search, Eye, Download, Filter, Clock, UserRound, Video as VideoIcon, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { AuthContext } from '../../../contexts/AuthProvider/AuthProvider';
-import VideoService from '../../../utils/VideoService';
+import VideoService from '../../../../utils/VideoService';
 import { formatDistanceToNow, parseISO } from 'date-fns';
 
 const RecordedVideos = () => {
-  const { user } = useContext(AuthContext);
+
   const navigate = useNavigate();
   const [recordings, setRecordings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -29,26 +28,27 @@ const RecordedVideos = () => {
     fetchRecordings();
   }, []);
 
-  const fetchRecordings = async () => {
-    try {
-      setLoading(true);
-      setError(null);
+  const fetchRecordings = () => {
+    setLoading(true);
+    setError(null);
 
-      const apiFilters = {};
-      if (filters.user_id) apiFilters.user_id = filters.user_id;
-      if (filters.video_id) apiFilters.video_id = filters.video_id;
-      if (filters.status) apiFilters.status = filters.status;
-      
-      const data = await VideoService.adminGetWebcamRecordings(apiFilters);
-      
-      setRecordings(data);
-      setCurrentPage(1);
-    } catch (err) {
-      console.error('Error fetching webcam recordings:', err);
-      setError(err.message || 'An error occurred while fetching recordings');
-    } finally {
-      setLoading(false);
-    }
+    const apiFilters = {};
+    if (filters.user_id) apiFilters.user_id = filters.user_id;
+    if (filters.video_id) apiFilters.video_id = filters.video_id;
+    if (filters.status) apiFilters.status = filters.status;
+    
+    VideoService.adminGetWebcamRecordings(apiFilters)
+      .then(data => {
+        setRecordings(data);
+        setCurrentPage(1);
+      })
+      .catch(err => {
+        console.error('Error fetching webcam recordings:', err);
+        setError(err.message || 'An error occurred while fetching recordings');
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   };
 
   const handleFilterChange = (e) => {
@@ -105,7 +105,8 @@ const RecordedVideos = () => {
     try {
       return formatDistanceToNow(parseISO(dateString), { addSuffix: true });
     } catch (e) {
-      return dateString;
+      console.error('Error parsing or formatting date:', e);
+      return 'Invalid date format';
     }
   };
 

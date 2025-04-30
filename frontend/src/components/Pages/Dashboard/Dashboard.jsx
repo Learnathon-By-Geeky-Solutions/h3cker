@@ -7,7 +7,7 @@ import VideoService from '../../../utils/VideoService';
 import { LoadingState } from '../../Shared/VideoLoadingStates/VideoLoadingStates';
 import DashboardHome from './DashboardHome';
 
-const AdminDashboard = lazy(() => import('./AdminDashboard'));
+const AdminDashboard = lazy(() => import('./Admin/AdminDashboard'));
 
 const Dashboard = () => {
   const { user } = useContext(AuthContext);
@@ -46,8 +46,8 @@ const Dashboard = () => {
     const fetchDashboardData = async () => {
       try {
         const allVideos = user?.role === 'admin' ? 
-          await VideoService.adminGetAllVideos() : 
-          await VideoService.getVideoFeed();
+          await Promise.resolve(VideoService.adminGetAllVideos()) : 
+          await Promise.resolve(VideoService.getVideoFeed());
         
         if (!isMounted) return;
         

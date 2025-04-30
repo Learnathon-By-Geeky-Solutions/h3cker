@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, Badge, Spinner, Alert } from 'flowbite-react';
 import { DollarSign, Award, History } from 'lucide-react';
 import PropTypes from 'prop-types';
-import ApiService from '../../../utils/ApiService';
+import ApiService from '../../../../utils/ApiService';
 
 const UserPointsCard = ({ compact = false }) => {
   const [pointsData, setPointsData] = useState(null);
@@ -70,18 +70,14 @@ const UserPointsCard = ({ compact = false }) => {
       </div>
       
       <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-gray-700/50 p-4 rounded-lg">
-          <p className="text-sm text-gray-400">Current Balance</p>
-          <p className="text-2xl font-bold text-white">{pointsData.points} Points</p>
+        <div className={`bg-gray-700/50 p-3 md:p-4 rounded-lg ${compact ? 'text-sm' : ''}`}>
+          <p className="text-xs md:text-sm text-gray-400">Total Points Earned</p>
+          <p className="text-xl md:text-2xl font-bold text-white">{pointsData.points_earned} Points</p>
         </div>
-        <div className="bg-gray-700/50 p-4 rounded-lg">
-          <p className="text-sm text-gray-400">Total Points Earned</p>
-          <p className="text-2xl font-bold text-white">{pointsData.points_earned} Points</p>
-        </div>
-        <div className="bg-green-900/30 border border-green-800 p-4 rounded-lg">
-          <p className="text-sm text-gray-300">Points Value</p>
-          <p className="text-2xl font-bold text-white flex items-center">
-            <DollarSign size={20} className="text-green-400 mr-1" />
+        <div className={`bg-green-900/30 border border-green-800 p-3 md:p-4 rounded-lg ${compact ? 'text-sm' : ''}`}>
+          <p className="text-xs md:text-sm text-gray-300">Points Value</p>
+          <p className="text-xl md:text-2xl font-bold text-white flex items-center">
+            <DollarSign size={compact ? 16 : 20} className="text-green-400 mr-1" />
             {pointsData.points_value} BDT
           </p>
           <p className="text-xs text-gray-400 mt-1">
@@ -90,13 +86,13 @@ const UserPointsCard = ({ compact = false }) => {
         </div>
       </div>
       
-      <div className="mt-6">
-        <h4 className="text-lg font-medium text-white flex items-center mb-4">
-          <History className="mr-2 text-blue-400" size={18} />
+      <div className="mt-4 md:mt-6">
+        <h4 className={`text-base md:text-lg font-medium text-white flex items-center mb-2 md:mb-4 ${compact ? 'text-sm' : ''}`}>
+          <History className="mr-2 text-blue-400" size={compact ? 16 : 18} />
           Points Activity
         </h4>
-        <div className="bg-gray-700/50 rounded-lg p-4 text-center">
-          <p className="text-gray-400">
+        <div className="bg-gray-700/50 rounded-lg p-3 md:p-4 text-center">
+          <p className="text-xs md:text-sm text-gray-400">
             Complete video evaluations to earn more points! Each evaluation is worth 10 points.
           </p>
         </div>

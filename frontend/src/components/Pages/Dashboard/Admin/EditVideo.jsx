@@ -2,8 +2,8 @@ import React, { useState, useEffect, useContext, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, TextInput, Textarea, Select, Button, Spinner, Alert } from 'flowbite-react';
 import { Save, ArrowLeft, Trash } from 'lucide-react';
-import VideoService from '../../../utils/VideoService';
-import { AuthContext } from '../../../contexts/AuthProvider/AuthProvider';
+import VideoService from '../../../../utils/VideoService';
+import { AuthContext } from '../../../../contexts/AuthProvider/AuthProvider';
 
 const EditVideo = () => {
   const { id } = useParams();
@@ -63,7 +63,7 @@ const EditVideo = () => {
         setError(null);
         fetchAttempted.current = true;
         
-        const videoData = await VideoService.getVideoDetails(id);
+        const videoData = await Promise.resolve(VideoService.getVideoDetails(id));
         
         if (videoData && isMounted.current) {
           setVideo(videoData);
@@ -127,13 +127,12 @@ const EditVideo = () => {
         updateData.auto_private_after = null;
       }
       
-      await VideoService.adminEditVideo(id, updateData);
+      await Promise.resolve(VideoService.adminEditVideo(id, updateData));
       
       setSuccess('Video updated successfully');
       
-      // Get updated data without causing a loop
       try {
-        const updatedVideo = await VideoService.getVideoDetails(id);
+        const updatedVideo = await Promise.VideoService.getVideoDetails(id);
         if (isMounted.current) {
           setVideo(updatedVideo);
         }

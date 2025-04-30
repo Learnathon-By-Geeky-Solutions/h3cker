@@ -10,7 +10,7 @@ const WebcamRecorder = forwardRef(({
   onPermissionChange,
   onError
 }, ref) => {
-  const [webcamPermission, setWebcamPermission] = useState('pending'); // 'pending', 'granted', 'denied'
+  const [webcamPermission, setWebcamPermission] = useState('pending'); 
   const [showPermissionModal, setShowPermissionModal] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -30,7 +30,7 @@ const WebcamRecorder = forwardRef(({
   const streamRef = useRef(null);
   const recordingTimeoutRef = useRef(null);
   
-  // Expose functions to parent component via ref
+
   useImperativeHandle(ref, () => ({
     stopAndUploadRecording: async () => {
       console.log('Stopping and uploading webcam recording...');
@@ -38,7 +38,6 @@ const WebcamRecorder = forwardRef(({
     }
   }));
   
-  // Check webcam permission on component mount
   useEffect(() => {
     checkWebcamPermission();
     
@@ -49,14 +48,14 @@ const WebcamRecorder = forwardRef(({
     };
   }, []);
   
-  // Cleanup on unmount
+
   useEffect(() => {
     return () => {
       stopAndCleanupWebcam();
     };
   }, []);
   
-  // Handle recording state based on video playback state
+
   useEffect(() => {
     if (webcamPermission === 'granted') {
       if (isVideoPlaying && !isRecording) {
@@ -72,16 +71,14 @@ const WebcamRecorder = forwardRef(({
   // This function gets a single label for a device
   const getDeviceLabel = async (deviceId) => {
     try {
-      // Request access to the specific device to get its label
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { deviceId: { exact: deviceId } }
       });
       
-      // Get all devices again to get the updated labels
       const devices = await navigator.mediaDevices.enumerateDevices();
       const device = devices.find(d => d.deviceId === deviceId);
       
-      // Stop the stream we just created
       stream.getTracks().forEach(track => track.stop());
       
       return device?.label || `Camera ${deviceId.slice(0, 4)}`;
@@ -91,32 +88,31 @@ const WebcamRecorder = forwardRef(({
     }
   };
   
-  // Detect all available video devices with proper labels
+ 
   const getVideoDevices = async () => {
     try {
       console.log('Enumerating video devices...');
       
-      // First request access to get labels (browsers don't expose labels without permission)
+  
       let initialStream;
       try {
         initialStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       } catch (err) {
         console.error('Error getting initial media stream:', err);
-        // Continue anyway, we might still get device IDs without labels
+     
       }
       
-      // Now enumerate all devices
+      // enumerate all devices
       const devices = await navigator.mediaDevices.enumerateDevices();
       const videoInputs = devices.filter(device => device.kind === 'videoinput');
       
       console.log('Available video devices:', videoInputs);
       
-      // Stop the initial stream if we have one
       if (initialStream) {
         initialStream.getTracks().forEach(track => track.stop());
       }
       
-      // If no labels are available (which can happen), we need to fetch them one by one
+   
       const enhancedDevices = await Promise.all(
         videoInputs.map(async (device) => {
           if (!device.label) {
@@ -129,15 +125,14 @@ const WebcamRecorder = forwardRef(({
       
       console.log('Enhanced video devices with labels:', enhancedDevices);
       setVideoDevices(enhancedDevices);
-      
-      // If only one device, select it automatically
+
       if (enhancedDevices.length === 1) {
         setSelectedDeviceId(enhancedDevices[0].deviceId);
         return enhancedDevices;
       } 
-      // If multiple devices and none selected yet, show selector
+    
       else if (enhancedDevices.length > 1) {
-        // Select the first device by default
+       
         if (!selectedDeviceId) {
           setSelectedDeviceId(enhancedDevices[0].deviceId);
         }
@@ -158,28 +153,26 @@ const WebcamRecorder = forwardRef(({
       
       let permissionState;
       try {
-        // Check if permission was previously granted
+
         const result = await navigator.permissions.query({ name: 'camera' });
         permissionState = result.state;
         console.log('Camera permission state:', permissionState);
       } catch (err) {
         console.warn('Could not query camera permission:', err);
-        // Fall back to showing the permission modal
         setShowPermissionModal(true);
         return;
       }
       
       if (permissionState === 'granted') {
         setWebcamPermission('granted');
-        
-        // Get available devices
+ 
         const devices = await getVideoDevices();
         
-        // If we have multiple devices, show the device selector
+      
         if (devices.length > 1) {
           setShowDeviceSelector(true);
         }
-        // Setup webcam if we have a device already selected or only one device
+       
         else if (selectedDeviceId || devices.length === 1) {
           try {
             await setupWebcam(selectedDeviceId || devices[0]?.deviceId);
@@ -213,12 +206,11 @@ const WebcamRecorder = forwardRef(({
         audio: true 
       });
       
-      // Stop the stream right away, we'll create a new one with the selected device
       initialStream.getTracks().forEach(track => track.stop());
       
       console.log('Initial permission granted, retrieving devices');
       
-      // Now get all video devices
+ 
       const devices = await getVideoDevices();
       
       if (devices.length > 0) {
@@ -293,7 +285,7 @@ const WebcamRecorder = forwardRef(({
       const devices = await getVideoDevices();
       
       if (devices.length > 0) {
-        // Try to use the first device if no device is selected
+  
         const deviceId = selectedDeviceId || devices[0].deviceId;
         await setupWebcam(deviceId);
         setWebcamPermission('granted');
@@ -310,8 +302,7 @@ const WebcamRecorder = forwardRef(({
   const handleDeviceSelection = async (deviceId) => {
     try {
       console.log('Selecting device:', deviceId);
-      
-      // Stop any existing stream
+
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
         streamRef.current = null;
@@ -334,18 +325,17 @@ const WebcamRecorder = forwardRef(({
     
     try {
       console.log('Setting up webcam with device ID:', deviceId);
-      
-      // First try to release any existing streams
+
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
         streamRef.current = null;
       }
       
-      // Try different constraints based on retry count
+
       let constraints = {};
       
       if (retryCount > 1) {
-        // Fallback to basic constraints after multiple retries
+    
         constraints = { 
           video: { deviceId: { exact: deviceId } },
           audio: true 
@@ -384,7 +374,7 @@ const WebcamRecorder = forwardRef(({
     }
     
     try {
-      // Clear the previous recorder if it exists
+  
       if (mediaRecorderRef.current) {
         if (mediaRecorderRef.current.state !== 'inactive') {
           mediaRecorderRef.current.stop();
@@ -392,13 +382,12 @@ const WebcamRecorder = forwardRef(({
         mediaRecorderRef.current = null;
       }
       
-      // Clear previous chunks
+
       chunksRef.current = [];
       
       // Create a new MediaRecorder
       const options = { videoBitsPerSecond: 2500000 }; // 2.5 Mbps
-      
-      // Try to use specific codecs, but fall back to browser default if not supported
+  
       try {
         if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) {
           options.mimeType = 'video/webm;codecs=vp9,opus';
@@ -412,15 +401,13 @@ const WebcamRecorder = forwardRef(({
       }
       
       mediaRecorderRef.current = new MediaRecorder(streamRef.current, options);
-      
-      // Set up data available event handler
+
       mediaRecorderRef.current.ondataavailable = (event) => {
         if (event.data && event.data.size > 0) {
           chunksRef.current.push(event.data);
         }
       };
       
-      // Set up error handler
       mediaRecorderRef.current.onerror = (event) => {
         console.error('MediaRecorder error:', event);
         if (onError) onError('Recording error: ' + (event.error?.message || 'Unknown error'));
@@ -443,7 +430,6 @@ const WebcamRecorder = forwardRef(({
         if (isRecording && !isPaused && mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
           console.log('Restarting recording to prevent browser issues...');
           
-          // Stop the current recorder
           mediaRecorderRef.current.stop();
           
           // Start a new recorder after a short delay
@@ -467,8 +453,7 @@ const WebcamRecorder = forwardRef(({
         mediaRecorderRef.current.pause();
         setIsPaused(true);
         console.log('Webcam recording paused');
-        
-        // Clear restart timeout when paused
+       
         if (recordingTimeoutRef.current) {
           clearTimeout(recordingTimeoutRef.current);
           recordingTimeoutRef.current = null;
@@ -541,7 +526,11 @@ const WebcamRecorder = forwardRef(({
           }
         } catch (error) {
           console.error('Error processing recording:', error);
-          reject(error);
+          if (error instanceof Error) {
+            reject(error);
+          } else {
+            reject(new Error(String(error || 'Unknown error processing recording')));
+          }
         }
       };
       
@@ -846,7 +835,6 @@ const WebcamRecorder = forwardRef(({
           <Button
             color="gray"
             onClick={() => {
-              // Only allow canceling if a camera is already set up
               if (streamRef.current) {
                 setShowDeviceSelector(false);
               } else {
@@ -869,7 +857,6 @@ const WebcamRecorder = forwardRef(({
         </Modal.Footer>
       </Modal>
       
-      {/* Troubleshoot modal */}
       <Modal
         show={showTroubleshootModal}
         onClose={() => setShowTroubleshootModal(false)}
@@ -931,7 +918,6 @@ const WebcamRecorder = forwardRef(({
         </Modal.Footer>
       </Modal>
       
-      {/* Error message */}
       {uploadError && (
         <Alert color="failure" className="mt-4">
           {uploadError}
@@ -941,7 +927,7 @@ const WebcamRecorder = forwardRef(({
   );
 });
 
-// Add a global error handler to catch any issues with MediaRecorder
+//global error handler to catch any issues with MediaRecorder
 window.addEventListener('error', (event) => {
   if (event.error && event.error.message && event.error.message.includes('MediaRecorder')) {
     console.error('Global MediaRecorder error:', event.error);

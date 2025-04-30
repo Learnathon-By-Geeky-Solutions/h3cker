@@ -163,23 +163,6 @@ const DashboardSideNavbar = ({ isOpen, setIsOpen, isHovering, setIsHovering }) =
     );
   };
 
-  const renderToggleButton = () => {
-    if (!isMobile) return null;
-    
-    const buttonClass = `p-1 rounded-lg bg-gray-800 border-gray-700 text-white hover:bg-gray-700 ${
-      !isOpen && !isHovering ? 'mx-auto' : ''
-    }`;
-    
-    return (
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className={buttonClass}
-      >
-        {isOpen ? <X size={16} /> : <Menu size={16} />}
-      </button>
-    );
-  };
-
   return (
     <>
       <nav 
@@ -188,18 +171,6 @@ const DashboardSideNavbar = ({ isOpen, setIsOpen, isHovering, setIsHovering }) =
         onMouseLeave={handleMouseLeave}
       >
         <div className="h-full flex flex-col justify-between py-4 px-3">
-          <div className="flex items-center justify-between mb-6 px-2">
-            {(isOpen || isHovering) && (
-              <div className="flex items-center">
-                <span className="self-center text-xl font-semibold whitespace-nowrap text-white">
-                  VideoApp
-                </span>
-              </div>
-            )}
-            {renderToggleButton()}
-          </div>
-
-  
           {renderUserProfile()}
 
    

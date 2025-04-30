@@ -8,18 +8,19 @@ import About from "../../components/Pages/About/About.jsx";
 import Profile from "../../components/Pages/Profile/Profile.jsx";
 import Dashboard from "../../components/Pages/Dashboard/Dashboard.jsx";
 import DashboardLayout from "../../components/Shared/DashboardLayout/DashboardLayout.jsx";
-import UploadVideo from "../../components/Pages/Dashboard/UploadVideo.jsx";
+import UploadVideo from "../../components/Pages/Dashboard/Admin/UploadVideo.jsx";
 import VideoDetail from "../../components/Shared/VideoPlayer/VideoDetail.jsx";
 import PrivateRoute from "../PrivateRoute/Privateroute.jsx";
 import AdminRoute from "../AdminRoute/AdminRoute.jsx";
 import Video from "../../components/Pages/Video/Video.jsx";
 import DeviceManager from "../../components/Shared/DeviceManager/DeviceManager.jsx";
-import UserWatchHistory from "../../components/Pages/Dashboard/UserWatchHistory.jsx";
-import AdminVideos from "../../components/Pages/AdminVideos/AdminVideos.jsx";
-import EditVideo from "../../components/Pages/EditVideo/EditVideo.jsx";
-import AdminRoleManagement from "../../components/Pages/AdminRoleManagement/AdminRoleManagement.jsx";
-import UserLikedVideo from "../../components/Pages/Dashboard/UserLikedVideo.jsx";
-import RecordedVideos from "../../components/Pages/RecordedVideos/RecordedVideos.jsx";
+import UserWatchHistory from "../../components/Pages/Dashboard/User/UserWatchHistory.jsx";
+import AdminVideos from "../../components/Pages/Dashboard/Admin/AdminVideos.jsx";
+import EditVideo from "../../components/Pages/Dashboard/Admin/EditVideo.jsx";
+import AdminRoleManagement from "../../components/Pages/Dashboard/Admin/AdminRoleManagement.jsx";
+import UserLikedVideo from "../../components/Pages/Dashboard/User/UserLikedVideo.jsx";
+import RecordedVideos from "../../components/Pages/Dashboard/Admin/RecordedVideos.jsx";
+import DetailedAnalytics from "../../components/Pages/Dashboard/Admin/DetailedAnalytics.jsx";
 
 
 const router = createBrowserRouter([
@@ -95,6 +96,10 @@ const router = createBrowserRouter([
       {
         path: "recorded-videos",
         element: <AdminRoute><RecordedVideos /></AdminRoute>
+      },
+      {
+        path: "detailed-analytics",
+        element: <AdminRoute><DetailedAnalytics /></AdminRoute>
       },
       {
         path: "liked-videos",

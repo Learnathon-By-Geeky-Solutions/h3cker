@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, TextInput, Button, Spinner, Alert, Modal } from 'flowbite-react';
 import { Search, UserPlus } from 'lucide-react';
-import VideoService from '../../../utils/VideoService';
+import VideoService from '../../../../utils/VideoService';
 
 const AdminRoleManagement = () => {
   const [searchEmail, setSearchEmail] = useState('');

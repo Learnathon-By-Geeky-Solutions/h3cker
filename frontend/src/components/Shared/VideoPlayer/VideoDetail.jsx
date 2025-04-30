@@ -16,12 +16,12 @@ import {
   Calendar,
   Tag,
   Copy, 
-  MessageSquare,
   Link as LinkIcon,
   Edit,
   Trash,
   Eye,
   EyeOff,
+  BarChart2 as ChartBar
 } from 'lucide-react';
 import VideoService from '../../../utils/VideoService';
 import VideoPlayer from '../../Shared/VideoPlayer/VideoPlayer';
@@ -152,21 +152,35 @@ const VideoHeader = ({ video, handleBack, handleLike, handleShare, liked }) => {
 };
 
 // Separate component for the uploader info
-const UploaderInfo = ({ video }) => (
-  <div className="flex items-center mb-6">
-    <div className="h-10 w-10 rounded-full bg-gray-600 overflow-hidden flex-shrink-0">
-      <Avatar rounded size="md" />
+const UploaderInfo = ({ video }) => {
+  const { user } = useContext(AuthContext);
+  const isRegularUser = user && user.role === 'user';
+  
+  return (
+    <div className="flex items-center mb-6">
+      <div className="h-10 w-10 rounded-full bg-gray-600 overflow-hidden flex-shrink-0">
+        <Avatar rounded size="md" />
+      </div>
+      <div className="ml-3">
+        <p className="text-white font-medium">
+          {isRegularUser 
+            ? (video.uploader_name || 'Uploaded by Admin') 
+            : (video.uploader_name || video.uploader?.email || 'Video Creator')}
+        </p>
+        {isRegularUser ? (
+          <p className="text-blue-400 text-sm flex items-center">
+            <ChartBar size={14} className="mr-1" />
+            Engage Analytics
+          </p>
+        ) : (
+          <p className="text-gray-400 text-sm">
+            {video.uploader_email || video.uploader?.email || 'Creator'}
+          </p>
+        )}
+      </div>
     </div>
-    <div className="ml-3">
-      <p className="text-white font-medium">
-        {video.uploader_name || video.uploader?.email || 'Video Creator'}
-      </p>
-      <p className="text-gray-400 text-sm">
-        {video.uploader_email || video.uploader?.email || 'Creator'}
-      </p>
-    </div>
-  </div>
-);
+  );
+};
 
 UploaderInfo.propTypes = {
   video: PropTypes.shape({
@@ -196,64 +210,6 @@ VideoDescription.propTypes = {
   description: PropTypes.string
 };
 
-const CommentInput = ({ onSubmit }) => {
-  const [comment, setComment] = useState('');
-  
-  const handleSubmit = () => {
-    if (comment.trim()) {
-      onSubmit(comment);
-      setComment('');
-    }
-  };
-  
-  return (
-    <div className="flex items-start gap-3 mb-4">
-      <div className="h-8 w-8 rounded-full bg-gray-600 overflow-hidden flex-shrink-0">
-        <Avatar rounded size="sm" />
-      </div>
-      <div className="flex-1">
-        <input 
-          type="text" 
-          value={comment}
-          onChange={(e) => setComment(e.target.value)}
-          placeholder="Add a comment..." 
-          className="w-full bg-gray-700/50 border border-gray-600 rounded-[12px] px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-        />
-      </div>
-      <motion.button
-        onClick={handleSubmit}
-        disabled={!comment.trim()}
-        className="p-2 bg-blue-600 text-white rounded-full disabled:opacity-50 disabled:bg-gray-600"
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
-      >
-        <MessageSquare size={16} />
-      </motion.button>
-    </div>
-  );
-};
-
-
-const CommentsSection = () => {
-  const handleCommentSubmit = (comment) => {
-    console.log('New comment:', comment);
-  };
-  
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="bg-gray-800/80 backdrop-blur-md rounded-[16px] border border-gray-700 shadow-md p-5 mb-6"
-    >
-      <h3 className="text-lg font-medium text-white mb-4">Comments</h3>
-      <CommentInput onSubmit={handleCommentSubmit} />
-      <div className="text-center text-gray-400 py-6">
-        No comments yet. Be the first to comment!
-      </div>
-    </motion.div>
-  );
-};
-
 const ShareModal = ({ isOpen, onClose, videoId, videoTitle }) => {
   const [shareUrl, setShareUrl] = useState('');
   const [isCopied, setIsCopied] = useState(false);
@@ -268,7 +224,8 @@ const ShareModal = ({ isOpen, onClose, videoId, videoTitle }) => {
       
       const generateShareLink = async () => {
         try {
-          const response = await VideoService.createVideoShare(videoId);
+          const shareResult = VideoService.createVideoShare(videoId);
+          const response = await (shareResult instanceof Promise ? shareResult : Promise.resolve(shareResult));
           if (response?.share_url) {
             setShareUrl(response.share_url);
           } else {
@@ -303,7 +260,9 @@ const ShareModal = ({ isOpen, onClose, videoId, videoTitle }) => {
   return (
     <Modal show={isOpen} onClose={onClose} size="md">
       <Modal.Header className="bg-gray-800 text-white border-b border-gray-700">
+        <p className="text-white">
         Share "{videoTitle}"
+        </p>
       </Modal.Header>
       <Modal.Body className="bg-gray-800 text-gray-300">
         <AnimatePresence mode="wait">
@@ -449,11 +408,13 @@ const VideoDetail = () => {
         setError(null);
         setViewRecorded(false);
         
-        const videoData = await VideoService.getVideoDetails(id);
+        const videoDataResult = VideoService.getVideoDetails(id);
+        const videoData = await (videoDataResult instanceof Promise ? videoDataResult : Promise.resolve(videoDataResult));
         setVideo(videoData);
         setLiked(!!videoData.is_liked);
         
-        await fetchRelatedVideos(videoData);
+        // Call fetchRelatedVideos without awaiting it
+        fetchRelatedVideos(videoData);
         
         setLoading(false);
       } catch (error) {
@@ -477,7 +438,8 @@ const VideoDetail = () => {
       if (!currentVideo) return;
       
       try {
-        const videoFeed = await VideoService.getVideoFeed();
+        const videoFeedResult = VideoService.getVideoFeed();
+        const videoFeed = await (videoFeedResult instanceof Promise ? videoFeedResult : Promise.resolve(videoFeedResult));
         if (Array.isArray(videoFeed) && videoFeed.length > 0) {
           const related = videoFeed
             .filter(v => v.id !== currentVideo.id) 
@@ -510,7 +472,8 @@ const VideoDetail = () => {
     if (!id || viewRecorded) return;
     
     try {
-      await VideoService.recordVideoView(id);
+      const recordResult = VideoService.recordVideoView(id);
+      await (recordResult instanceof Promise ? recordResult : Promise.resolve(recordResult));
       setViewRecorded(true);
       
       setVideo(prev => ({
@@ -526,7 +489,8 @@ const VideoDetail = () => {
     if (!id) return;
     
     try {
-      const response = await VideoService.toggleVideoLike(id);
+      const likeResult = VideoService.toggleVideoLike(id);
+      const response = await (likeResult instanceof Promise ? likeResult : Promise.resolve(likeResult));
       
       if (response) {
         const newLikedStatus = response.liked;
@@ -555,7 +519,8 @@ const VideoDetail = () => {
   const handleToggleVisibility = async () => {
     try {
       const newVisibility = video.visibility === 'private' ? 'public' : 'private';
-      await VideoService.adminUpdateVideoVisibility(id, newVisibility);
+      const visibilityResult = VideoService.adminUpdateVideoVisibility(id, newVisibility);
+      await (visibilityResult instanceof Promise ? visibilityResult : Promise.resolve(visibilityResult));
       setVideo({
         ...video,
         visibility: newVisibility
@@ -569,7 +534,8 @@ const VideoDetail = () => {
 
   const handleDeleteVideo = async () => {
     try {
-      await VideoService.adminDeleteVideo(id);
+      const deleteResult = VideoService.adminDeleteVideo(id);
+      await (deleteResult instanceof Promise ? deleteResult : Promise.resolve(deleteResult));
       navigate('/dashboard', { replace: true });
     } catch (error) {
       console.error('Error deleting video:', error);
@@ -668,8 +634,6 @@ const VideoDetail = () => {
             <UploaderInfo video={video} />
             <VideoDescription description={video.description} />
           </motion.div>
-          
-          <CommentsSection />
         </div>
         <div className="lg:col-span-1">
           <RelatedVideos videos={relatedVideos} navigate={navigate} />
@@ -748,10 +712,6 @@ RelatedVideoCard.propTypes = {
     upload_date: PropTypes.string
   }).isRequired,
   onClick: PropTypes.func.isRequired
-};
-
-CommentInput.propTypes = {
-  onSubmit: PropTypes.func.isRequired
 };
 
 ShareModal.propTypes = {
