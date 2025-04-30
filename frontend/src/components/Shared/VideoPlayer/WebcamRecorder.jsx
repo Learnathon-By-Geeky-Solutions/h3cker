@@ -756,7 +756,9 @@ const WebcamRecorder = forwardRef(({
         dismissible={false}
       >
         <Modal.Header className="bg-gray-800 text-white border-b border-gray-700">
+          <p className="text-white">
           Webcam Permission Required
+          </p>
         </Modal.Header>
         <Modal.Body className="bg-gray-800 text-gray-300">
           <div className="flex flex-col items-center">
