@@ -1,6 +1,6 @@
 import React, { useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart2, PieChart, Activity, ChevronRight } from 'lucide-react';
+import { BarChart2, PieChart, Activity, Video, ChevronRight } from 'lucide-react';
 import FeatureCard from '../FeatureCard/FeatureCard.jsx';
 
 const ALLOWED_URLS = ['/login', '/dashboard'];
@@ -9,60 +9,54 @@ const NotLoggedInView = () => {
   const navigate = useNavigate();
 
   const handleGetStarted = useCallback(() => {
-    const url = '/login';
-    if (ALLOWED_URLS.includes(url)) {
-      navigate(url);
-    } else {
-      console.error('Invalid URL redirection attempt:', url);
-    }
+    navigate('/login');
   }, [navigate]);
-
+  
   const features = [
     {
-      icon: <BarChart2 size={32} />,
-      title: "Emotion Heatmaps",
-      description: "Visualize exactly when and how viewers emotionally respond to your content"
+      icon: <Video className="w-7 h-7 md:w-8 md:h-8" />,
+      title: "Video Emotion Analytics",
+      description: "Analyze viewer reactions to your video ads with DeepFace technology"
     },
     {
-      icon: <PieChart size={32} />,
-      title: "Detailed Analytics",
-      description: "Track happiness, surprise, neutrality and other key emotional responses"
+      icon: <BarChart2 className="w-7 h-7 md:w-8 md:h-8" />,
+      title: "Emotional Heatmaps",
+      description: "Visualize emotional responses linked to specific video segments"
     },
     {
-      icon: <Activity size={32} />,
-      title: "Performance Insights",
-      description: "Optimize your ads based on real emotional engagement data"
+      icon: <PieChart className="w-7 h-7 md:w-8 md:h-8" />,
+      title: "Engagement Metrics",
+      description: "Move beyond views and clicks with advanced audience engagement analysis"
+    },
+    {
+      icon: <Activity className="w-7 h-7 md:w-8 md:h-8" />,
+      title: "Interactive Dashboard",
+      description: "Access actionable insights to improve your ad content strategy"
     }
   ];
 
   return (
-    <div className="min-h-screen w-full flex flex-col items-center justify-center relative overflow-x-hidden py-8">
-      {/* Background elements */}
-      <div className="absolute top-10 -left-40 w-72 h-72 md:w-96 md:h-96 bg-blue-700 opacity-20 rounded-full filter blur-3xl" />
-      <div className="absolute bottom-10 -right-40 w-72 h-72 md:w-96 md:h-96 bg-purple-600 opacity-20 rounded-full filter blur-3xl" />
+    <div className="min-h-screen w-full flex flex-col items-center justify-center relative overflow-hidden py-8">
+      <div className="absolute top-10 -left-40 w-80 h-80 bg-blue-700 opacity-20 rounded-full filter blur-3xl" />
+      <div className="absolute bottom-10 -right-40 w-80 h-80 bg-purple-600 opacity-20 rounded-full filter blur-3xl" />
       
-      <div className="max-w-3xl text-center z-10 px-4 sm:px-6">
-        <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-3 sm:mb-4 leading-tight text-white">
-          Unlock the <span className="text-blue-400">emotional impact</span> of your video ads
+      <div className="max-w-4xl text-center z-10 px-6">
+        <h1 className="text-4xl md:text-5xl font-bold mb-4 leading-tight text-white">
+          Unlock <span className="text-blue-400">emotional insights</span> from your video ads
         </h1>
-        <h2 className="text-lg sm:text-xl md:text-2xl mb-6 sm:mb-8 text-gray-300">Facial emotion detection for data-driven advertising</h2>
-        <p className="text-base sm:text-lg mb-8 sm:mb-10 text-gray-400">See how viewers really feel about your content. Optimize ad performance with EngageAnalytics.</p>
-        
+        <h2 className="text-xl md:text-2xl mb-6 text-gray-300">Video emotion analytics powered by DeepFace technology</h2>
+        <p className="text-lg mb-8 text-gray-400 max-w-2xl mx-auto">Understand how viewers truly react to your content with EngageAnalytics and make data-driven improvements to your video campaigns.</p>
+
         <button 
           onClick={handleGetStarted}
-          className="relative group px-6 sm:px-8 py-3 sm:py-4 bg-blue-600 text-white text-base sm:text-lg font-semibold rounded-full overflow-hidden shadow-lg"
+          className="px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white text-lg font-medium rounded-full shadow-lg transition-all duration-300 flex items-center justify-center mx-auto"
           type="button"
         >
-          <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-blue-500 to-blue-700 rounded-full shadow-md" />
-          <span className="absolute inset-0 w-full h-full bg-white/15 rounded-full blur-[2px]" />
-          <span className="absolute inset-0 w-full h-full bg-blue-600 rounded-full transform transition-transform group-hover:scale-105" />
-          <span className="relative flex items-center justify-center whitespace-nowrap">
-            Get Started <ChevronRight className="ml-2" size={18} />
-          </span>
+          Get Started <ChevronRight className="ml-2 w-5 h-5" />
         </button>
-        
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6 mt-12 sm:mt-16">
-          {features.map((feature, index) => (
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-16 max-w-3xl mx-auto">
+          {features.map((feature) => (
             <FeatureCard 
               key={feature.title}
               icon={feature.icon}
@@ -70,6 +64,10 @@ const NotLoggedInView = () => {
               description={feature.description} 
             />
           ))}
+        </div>
+        
+        <div className="mt-10 text-sm text-gray-400">
+          <p>Note: Our facial emotion detection feature is currently under development and will be available soon.</p>
         </div>
       </div>
     </div>
