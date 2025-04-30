@@ -1,34 +1,120 @@
-# h3cker
 
-## Team Members
-- ismailariyan (Team Leader)
-- Utchash007
-- SiamFS
+<div align="center">
+  <h1>EngageAnalytics 🎥📊</h1>
+  <p><strong>Video Emotion Analytics Tool</strong></p>
 
-## Mentor
-- Jugal-Chanda
+  <p>Unlock emotional insights from your video ads using DeepFace-powered analytics</p>
 
-## Project Overview
-EngageAnalytics is a **video analytics tool** designed to help businesses measure and optimize their **Video advertisements(OVC)** using advanced **facial emotion detection**. By tracking user expressions in while watching ads, the tool provides detailed **heatmaps** and **data-driven insights** to enhance engagement and maximize reach.
+  <img src="https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB" />
+  <img src="https://img.shields.io/badge/Django-092E20?style=for-the-badge&logo=django&logoColor=white" />
+  <img src="https://img.shields.io/badge/Django%20REST-092E20?style=for-the-badge&logo=django&logoColor=white" />
+  <img src="https://img.shields.io/badge/PostgreSQL-336791?style=for-the-badge&logo=postgresql&logoColor=white" />
+  <img src="https://img.shields.io/badge/Firebase-FFCA28?style=for-the-badge&logo=firebase&logoColor=black" />
+  <img src="https://img.shields.io/badge/Render-46E3B7?style=for-the-badge&logo=render&logoColor=white" />
+  <a href="https://opensource.org/licenses/MIT" target="_blank">
+    <img src="https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge" />
+  </a>
+  <br/>
+  <div align="center">
+  <h4>SonarCloud Analysis</h4>
 
-## Project Summary
+  <a href="https://sonarcloud.io/dashboard?id=Learnathon-By-Geeky-Solutions_h3cker">
+    <img src="https://sonarcloud.io/api/project_badges/measure?project=Learnathon-By-Geeky-Solutions_h3cker&metric=alert_status" />
+  </a>
+  <a href="https://sonarcloud.io/dashboard?id=Learnathon-By-Geeky-Solutions_h3cker">
+    <img src="https://sonarcloud.io/api/project_badges/measure?project=Learnathon-By-Geeky-Solutions_h3cker&metric=coverage" />
+  </a>
+  <a href="https://sonarcloud.io/dashboard?id=Learnathon-By-Geeky-Solutions_h3cker">
+    <img src="https://sonarcloud.io/api/project_badges/measure?project=Learnathon-By-Geeky-Solutions_h3cker&metric=bugs" />
+  </a>
+  <a href="https://sonarcloud.io/dashboard?id=Learnathon-By-Geeky-Solutions_h3cker">
+    <img src="https://sonarcloud.io/api/project_badges/measure?project=Learnathon-By-Geeky-Solutions_h3cker&metric=vulnerabilities" />
+  </a>
+  <a href="https://sonarcloud.io/dashboard?id=Learnathon-By-Geeky-Solutions_h3cker">
+    <img src="https://sonarcloud.io/api/project_badges/measure?project=Learnathon-By-Geeky-Solutions_h3cker&metric=reliability_rating" />
+  </a>
+  <a href="https://sonarcloud.io/dashboard?id=Learnathon-By-Geeky-Solutions_h3cker">
+    <img src="https://sonarcloud.io/api/project_badges/measure?project=Learnathon-By-Geeky-Solutions_h3cker&metric=security_rating" />
+  </a>
+  <a href="https://sonarcloud.io/dashboard?id=Learnathon-By-Geeky-Solutions_h3cker">
+    <img src="https://sonarcloud.io/api/project_badges/measure?project=Learnathon-By-Geeky-Solutions_h3cker&metric=code_smells" />
+  </a>
+</div>
+</div>
 
-Our project web-based video analytics platform designed to empower businesses and advertisers by providing actionable insights into the emotional impact of their online video content (OVC). By harnessing advanced facial emotion detection powered by DeepFace, the platform goes beyond traditional metrics such as views or clicks, enabling companies to understand the true emotional engagement of their target audiences.
-- **Core Functionality:**  
-  EngageAnalytics captures user facial expressions in as they watch video ads. Each frame of the user's reaction is processed through the DeepFace-powered emotion detection model, mapping emotions such as happiness, sadness, anger, and neutrality to corresponding video segments. The system then aggregates this data to generate visual heatmaps and comprehensive analytical reports, which will be presented through an interactive dashboard. These insights help advertisers refine their creative strategies and target improvements where needed.
+---
 
-- **Business Impact:**  
-  By providing deeper insights into how audiences emotionally connect with video content, EngageAnalytics bridges the gap between ad creation and performance. It equips advertisers with the precise data necessary to enhance ad effectiveness, optimize budgets, and improve overall campaign ROI. This level of analysis is particularly valuable in a market where understanding the subtle nuances of consumer response can lead to a significant competitive advantage.
+## 🚀 About EngageAnalytics
 
-## 🏗️ Technology Stack
-- **Frontend:** React
-- **Backend:** Django
-- **Machine Learning:** DeepFace
-- **Database:** PostgreSQL and MongoDB
-- **Cloud Services:** Azure
-- **Deployment:** Docker
+**EngageAnalytics** is a web-based platform that helps businesses understand the emotional reactions of viewers to video advertisements (OVCs). Using DeepFace for facial emotion detection, it provides real-time emotional tracking, heatmaps, and actionable insights via an interactive dashboard.
 
-## Resources
-- [Project Documentation](docs/)
-- [Development Setup](docs/setup.md)
-- [Contributing Guidelines](CONTRIBUTING.md)
+### 🎯 Why Use It?
+- Analyze emotional response data to improve ad effectiveness
+- Move beyond views/clicks with advanced audience engagement metrics
+- Targeted improvements backed by real data
+
+---
+
+## 🔍 Key Features
+
+- 🎥 Real-time facial expression capture during video playback
+- 🧠 Emotion recognition (happy, sad, angry, neutral, etc.)
+- 📊 Visual heatmaps linked to video segments
+- 📈 Interactive analytics dashboard
+- 💬 Insightful feedback for ad content strategy
+
+---
+
+## 💻 Technology Stack
+
+| Category         | Tools Used |
+|------------------|------------|
+| **Frontend**     | React |
+| **Backend**      | Django, Django REST Framework |
+| **Authentication** | Firebase |
+| **Database**     | PostgreSQL |
+| **Deployment**   | Render |
+
+---
+## 🧠 System Design 
+[![](https://mermaid.ink/img/pako:eNqVVF1vmzAU_SuWq0qJRLMQIHw8TCJhkSatWpe0e1iyBwcuCSvBmW3Wpk3--ww2jFaZtvIAtu-5x8eHe_2MY5oADvCGkf0W3UarAsnnjgPr9ao37_fR1dV7NGO0EFAkKq7evFyrtCa4nAOJRTv9rmB_y5qQ-L5Kin6QYkOb6T-SFoIysoFlRARpJjqlemYZgzXhsGwGKCzFtgO4oVxsGPBlT48WXz71O_HwqWSw7NUfNMnpun9e0OUlmlIJmdKigFhktOAq0By-du1Y7Y7m8LMELvixlXcWevOxg9RunAN-zRKg6G6fU5IcleCuMp2pscCy9IBuqVx6vf0LYGUlvJuDYBn8AlTZe2zNOkdci_i8B0bqw58RIi2KCLtH17LCpE85ZZoozgnnEaSorAoMpVmeBxeO4xhcMCk0uAjDUI-vHrJEbANz_2jEFUPwsM0EvKJJG3sU0yhyZl7YknmTiffBewvfWh9UC5vYljf8o833nGj8FjquqlTTuWPbtOyWLvJD07f-g65DWrenMq-72lZJ-qJXVbD5eetuXamQ7iKjqQ6j-e2G6gKtHxt4B2xHskReF88VwQqLLexghQM5TCAlZS5WeFWcJJSUgi4ORYwDwUowMKPlZouDlORyA1zuEyIgyohs6l27uifFN0p3TQokmdz5Wt1P9TVVQ3DwjB9xYPrewPVN3x17nmOZY9s28AEHvjmwTNcZD23P8q2RZZ0M_FSTDgeuPTId03bH_nDoub5jyFuvOo1WKG0BNqVlIXBgm87pNw9bp8Y?type=png)](https://mermaid.live/edit#pako:eNqVVF1vmzAU_SuWq0qJRLMQIHw8TCJhkSatWpe0e1iyBwcuCSvBmW3Wpk3--ww2jFaZtvIAtu-5x8eHe_2MY5oADvCGkf0W3UarAsnnjgPr9ao37_fR1dV7NGO0EFAkKq7evFyrtCa4nAOJRTv9rmB_y5qQ-L5Kin6QYkOb6T-SFoIysoFlRARpJjqlemYZgzXhsGwGKCzFtgO4oVxsGPBlT48WXz71O_HwqWSw7NUfNMnpun9e0OUlmlIJmdKigFhktOAq0By-du1Y7Y7m8LMELvixlXcWevOxg9RunAN-zRKg6G6fU5IcleCuMp2pscCy9IBuqVx6vf0LYGUlvJuDYBn8AlTZe2zNOkdci_i8B0bqw58RIi2KCLtH17LCpE85ZZoozgnnEaSorAoMpVmeBxeO4xhcMCk0uAjDUI-vHrJEbANz_2jEFUPwsM0EvKJJG3sU0yhyZl7YknmTiffBewvfWh9UC5vYljf8o833nGj8FjquqlTTuWPbtOyWLvJD07f-g65DWrenMq-72lZJ-qJXVbD5eetuXamQ7iKjqQ6j-e2G6gKtHxt4B2xHskReF88VwQqLLexghQM5TCAlZS5WeFWcJJSUgi4ORYwDwUowMKPlZouDlORyA1zuEyIgyohs6l27uifFN0p3TQokmdz5Wt1P9TVVQ3DwjB9xYPrewPVN3x17nmOZY9s28AEHvjmwTNcZD23P8q2RZZ0M_FSTDgeuPTId03bH_nDoub5jyFuvOo1WKG0BNqVlIXBgm87pNw9bp8Y)
+## Database Schema
+
+![Database Schema](https://github.com/Learnathon-By-Geeky-Solutions/h3cker/blob/7b5dc0676240f1061d6e0e1d02dfbb45972a4ee5/docs/images/ER_DIAGRAM.jpg)
+
+
+---
+
+## 👨‍💻 Team Members
+
+| Name           | Role         | GitHub |
+|----------------|--------------|--------|
+| ismailariyan   | Team Leader  | <a href="https://github.com/ismailariyan"><img src="https://img.shields.io/badge/-ismailariyan-181717?style=flat-square&logo=github&logoColor=white" /> |<a>
+| Utchash007     | Developer    | <a href="https://github.com/SiamFS"><img src="https://img.shields.io/badge/-Utchash007-181717?style=flat-square&logo=github&logoColor=white" /> |</a>
+| SiamFS         | Developer    | <a href="https://github.com/Utchash007"><img src="https://img.shields.io/badge/-SiamFS-181717?style=flat-square&logo=github&logoColor=white" /> |</a>
+
+### 🧑‍🏫 Project Mentor
+- **Jugal-Chanda** - <a href="https://github.com/jugal-chanda"><img src="https://img.shields.io/badge/-Jugal--Chanda-181717?style=flat-square&logo=github&logoColor=white" /></a>
+
+---
+
+## 📂 Resources
+
+- [📘 Project Documentation](docs/)
+- [⚙️ Development Setup](docs/SETUP.md)
+- [🧾 Contributing Guidelines](docs/CONTRIBUTING.md)
+
+---
+
+## 🎥 Live Demo
+
+> <a href="https://h3cker.onrender.com/" target="_blank">
+  <img src="https://img.shields.io/badge/Live%20Demo-Online-brightgreen?style=for-the-badge&logo=rocket" />
+</a>
+
+
+---
+
+## 📌 License
+
+This project is licensed under the [MIT License](LICENSE.md).
