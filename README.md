@@ -78,11 +78,9 @@
 ---
 ## 🧠 System Design 
 [![](https://mermaid.ink/img/pako:eNqVVF1vmzAU_SuWq0qJRLMQIHw8TCJhkSatWpe0e1iyBwcuCSvBmW3Wpk3--ww2jFaZtvIAtu-5x8eHe_2MY5oADvCGkf0W3UarAsnnjgPr9ao37_fR1dV7NGO0EFAkKq7evFyrtCa4nAOJRTv9rmB_y5qQ-L5Kin6QYkOb6T-SFoIysoFlRARpJjqlemYZgzXhsGwGKCzFtgO4oVxsGPBlT48WXz71O_HwqWSw7NUfNMnpun9e0OUlmlIJmdKigFhktOAq0By-du1Y7Y7m8LMELvixlXcWevOxg9RunAN-zRKg6G6fU5IcleCuMp2pscCy9IBuqVx6vf0LYGUlvJuDYBn8AlTZe2zNOkdci_i8B0bqw58RIi2KCLtH17LCpE85ZZoozgnnEaSorAoMpVmeBxeO4xhcMCk0uAjDUI-vHrJEbANz_2jEFUPwsM0EvKJJG3sU0yhyZl7YknmTiffBewvfWh9UC5vYljf8o833nGj8FjquqlTTuWPbtOyWLvJD07f-g65DWrenMq-72lZJ-qJXVbD5eetuXamQ7iKjqQ6j-e2G6gKtHxt4B2xHskReF88VwQqLLexghQM5TCAlZS5WeFWcJJSUgi4ORYwDwUowMKPlZouDlORyA1zuEyIgyohs6l27uifFN0p3TQokmdz5Wt1P9TVVQ3DwjB9xYPrewPVN3x17nmOZY9s28AEHvjmwTNcZD23P8q2RZZ0M_FSTDgeuPTId03bH_nDoub5jyFuvOo1WKG0BNqVlIXBgm87pNw9bp8Y?type=png)](https://mermaid.live/edit#pako:eNqVVF1vmzAU_SuWq0qJRLMQIHw8TCJhkSatWpe0e1iyBwcuCSvBmW3Wpk3--ww2jFaZtvIAtu-5x8eHe_2MY5oADvCGkf0W3UarAsnnjgPr9ao37_fR1dV7NGO0EFAkKq7evFyrtCa4nAOJRTv9rmB_y5qQ-L5Kin6QYkOb6T-SFoIysoFlRARpJjqlemYZgzXhsGwGKCzFtgO4oVxsGPBlT48WXz71O_HwqWSw7NUfNMnpun9e0OUlmlIJmdKigFhktOAq0By-du1Y7Y7m8LMELvixlXcWevOxg9RunAN-zRKg6G6fU5IcleCuMp2pscCy9IBuqVx6vf0LYGUlvJuDYBn8AlTZe2zNOkdci_i8B0bqw58RIi2KCLtH17LCpE85ZZoozgnnEaSorAoMpVmeBxeO4xhcMCk0uAjDUI-vHrJEbANz_2jEFUPwsM0EvKJJG3sU0yhyZl7YknmTiffBewvfWh9UC5vYljf8o833nGj8FjquqlTTuWPbtOyWLvJD07f-g65DWrenMq-72lZJ-qJXVbD5eetuXamQ7iKjqQ6j-e2G6gKtHxt4B2xHskReF88VwQqLLexghQM5TCAlZS5WeFWcJJSUgi4ORYwDwUowMKPlZouDlORyA1zuEyIgyohs6l27uifFN0p3TQokmdz5Wt1P9TVVQ3DwjB9xYPrewPVN3x17nmOZY9s28AEHvjmwTNcZD23P8q2RZZ0M_FSTDgeuPTId03bH_nDoub5jyFuvOo1WKG0BNqVlIXBgm87pNw9bp8Y)
+
 ## Database Schema
-
-![Database Schema](https://github.com/Learnathon-By-Geeky-Solutions/h3cker/blob/7b5dc0676240f1061d6e0e1d02dfbb45972a4ee5/docs/images/ER_DIAGRAM.jpg)
-
-
+![ER Diagram](https://github.com/Learnathon-By-Geeky-Solutions/h3cker/blob/340dc9ed5045c94a2fefaa2309db4645025697f3/docs/images/er_diagram.svg)
 ---
 
 ## 👨‍💻 Team Members
@@ -108,10 +106,7 @@
 
 ## 🎥 Live Demo
 
-> <a href="https://h3cker.onrender.com/" target="_blank">
-  <img src="https://img.shields.io/badge/Live%20Demo-Online-brightgreen?style=for-the-badge&logo=rocket" />
-</a>
-
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Online-brightgreen?style=for-the-badge&logo=rocket)](https://h3cker.onrender.com/)
 
 ---
 
