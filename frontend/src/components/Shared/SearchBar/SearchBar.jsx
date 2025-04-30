@@ -114,7 +114,7 @@ const SearchBar = ({
       const categories = new Set();
       if (Array.isArray(recommendationsResponse)) {
         recommendationsResponse.forEach(video => {
-          if (video.category && video.category.trim()) {
+          if (video.category?.trim()) {
             categories.add(video.category.trim());
           }
         });
@@ -125,7 +125,7 @@ const SearchBar = ({
         const trendingResponse = await ApiService.get('trending-videos/?limit=10');
         if (Array.isArray(trendingResponse)) {
           trendingResponse.forEach(video => {
-            if (video.category && video.category.trim()) {
+            if (video.category?.trim()) {
               categories.add(video.category.trim());
             }
           });
@@ -137,7 +137,7 @@ const SearchBar = ({
         const recentResponse = await ApiService.get('recent-videos/?limit=10');
         if (Array.isArray(recentResponse)) {
           recentResponse.forEach(video => {
-            if (video.category && video.category.trim()) {
+            if (video.category?.trim()) {
               categories.add(video.category.trim());
             }
           });
@@ -160,7 +160,8 @@ const SearchBar = ({
     setIsLoading(true);
     
     try {
-      const allVideos = await VideoService.getVideoFeed();
+   
+      const allVideos = await Promise.resolve(VideoService.getVideoFeed());
       
       if (Array.isArray(allVideos)) {
         const processedSuggestions = generateSuggestions(allVideos, query);

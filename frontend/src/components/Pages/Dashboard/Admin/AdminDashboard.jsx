@@ -1,13 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, Button, Spinner, Alert } from 'flowbite-react';
-import { BarChart2, Upload, Users, DollarSign, VideoIcon, ArrowRight } from 'lucide-react';
-import VideoService from '../../../utils/VideoService';
-import ApiService from '../../../utils/ApiService';
+import { BarChart2, Upload,VideoIcon, ArrowRight } from 'lucide-react';
+import VideoService from '../../../../utils/VideoService';
 import { useNavigate } from 'react-router-dom';
-import { StatsCard } from '../../Shared/DashboardComponents/DashboardComponents';
+import { StatsCard } from '../../../Shared/DashboardComponents/DashboardComponents';
 
 const AdminDashboard = () => {
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [fetchAttempted, setFetchAttempted] = useState(false);
@@ -55,7 +53,11 @@ const AdminDashboard = () => {
         }
         
         if (statsResponse.status === 'fulfilled' && statsResponse.value) {
-
+          const { totalVideos, totalWebcamRecordings } = statsResponse.value;
+          setAdminStats({
+            totalVideos: totalVideos || 0,
+            totalWebcamRecordings: totalWebcamRecordings || 0
+          });
         }
         
         if (isMounted.current) {
@@ -79,12 +81,23 @@ const AdminDashboard = () => {
     fetchDashboardData();
   }, [fetchAttempted]);
 
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
+  
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 640);
+    };
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   return (
-    <div className="space-y-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-white mb-2">Admin Dashboard</h1>
-        <p className="text-gray-400">
-          View platform statistics and manage your site.
+    <div className="space-y-4 md:space-y-6">
+      <div className="mb-4 md:mb-6">
+        <h1 className="text-xl md:text-2xl font-bold text-white mb-1 md:mb-2">Admin Dashboard</h1>
+        <p className="text-sm md:text-base text-gray-400">
+          {isMobile ? "Manage platform stats & content" : "View platform statistics and manage your site."}
         </p>
       </div>
       
@@ -145,7 +158,7 @@ const AdminDashboard = () => {
             <BarChart2 className="mr-2 text-blue-400" size={24} />
             Platform Analytics
           </h2>
-          <Button color="blue" size="sm" onClick={() => navigate('/dashboard/analytics')}>
+          <Button color="blue" size="sm" onClick={() => navigate('detailed-analytics')}>
             View Detailed Analytics <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
         </div>

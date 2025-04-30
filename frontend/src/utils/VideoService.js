@@ -247,7 +247,6 @@ class VideoService {
     }
     console.log(`Toggling like status for video ID: ${videoId}`);
     const response = await ApiService.post(`videos/${videoId}/like/`);
-    console.log(`Like status updated for video ID: ${videoId}`, response);
     return response;
   }
   
@@ -499,15 +498,14 @@ class VideoService {
       visibility: visibility
     });
     
-    // Update caches
+
     if (this._cache.videoDetails[videoId]) {
       this._cache.videoDetails[videoId] = { 
         ...this._cache.videoDetails[videoId], 
         visibility 
       };
     }
-    
-    // Force refresh of list caches on next fetch
+
     this._cache.videoFeed = null;
     this._cache.adminVideos = null;
     

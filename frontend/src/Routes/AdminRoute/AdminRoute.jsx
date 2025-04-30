@@ -9,7 +9,6 @@ const AdminRoute = ({ children }) => {
   const location = useLocation();
   const [authChecked, setAuthChecked] = useState(false);
 
-  // Only process auth state once to prevent repeated re-renders
   useEffect(() => {
     if (!loading) {
       setAuthChecked(true);
@@ -24,7 +23,6 @@ const AdminRoute = ({ children }) => {
     );
   }
 
-  // Check if user is not logged in
   if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
@@ -33,8 +31,6 @@ const AdminRoute = ({ children }) => {
   if (user && user.role !== 'admin') {
     return <Navigate to="/dashboard" state={{ from: location }} replace />;
   }
-
-  // If user is logged in and is an admin, render the children
   return children;
 };
 

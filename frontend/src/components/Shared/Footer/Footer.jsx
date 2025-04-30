@@ -2,7 +2,7 @@ import React from "react";
 import { Footer } from "flowbite-react";
 import { Link } from "react-router-dom";
 import { BarChart3 } from "lucide-react";
-import { BsFacebook, BsInstagram, BsTwitter, BsGithub, BsLinkedin } from "react-icons/bs";
+import { BsGithub } from "react-icons/bs";
 
 const MainFooter = () => {
   const currentYear = new Date().getFullYear();
@@ -43,7 +43,7 @@ const MainFooter = () => {
   return (
     <Footer container className="bg-gray-900 rounded-none border-t border-gray-800 z-10 relative" theme={customTheme}>
       <div className="w-full max-w-7xl mx-auto">
-        <div className="grid w-full grid-cols-1 gap-8 px-6 py-8 md:grid-cols-4">
+        <div className="grid w-full grid-cols-1 gap-8 px-6 py-8 md:grid-cols-2">
           <div>
             <Footer.Brand
               as={Link}
@@ -60,42 +60,17 @@ const MainFooter = () => {
               </div>
             </Footer.Brand>
             <p className="text-gray-400 mb-6 text-sm">
-              Advanced facial emotion detection for video advertisements. Optimize your content with data-driven insights.
+              Video analytics platform for improved marketing insights. Track viewer engagement with our interactive dashboard.
             </p>
-            <div className="flex space-x-4">
-              <Footer.Icon href="#" icon={BsFacebook} />
-              <Footer.Icon href="#" icon={BsInstagram} />
-              <Footer.Icon href="#" icon={BsTwitter} />
+            <div className="flex space-x-4 mb-4">
               <Footer.Icon href="https://github.com/Learnathon-By-Geeky-Solutions/h3cker" icon={BsGithub} />
-              <Footer.Icon href="#" icon={BsLinkedin} />
             </div>
           </div>
           
           <div>
-            <Footer.Title title="Products" />
-            <Footer.LinkGroup col className="text-gray-400">
-              <Footer.Link as={Link} to="/features" className="text-gray-400 hover:text-blue-500">Features</Footer.Link>
-              <Footer.Link as={Link} to="/pricing" className="text-gray-400 hover:text-blue-500">Pricing</Footer.Link>
-              <Footer.Link as={Link} to="/analytics" className="text-gray-400 hover:text-blue-500">Analytics</Footer.Link>
-              <Footer.Link as={Link} to="/api" className="text-gray-400 hover:text-blue-500">API</Footer.Link>
-            </Footer.LinkGroup>
-          </div>
-          
-          <div>
-            <Footer.Title title="Resources" />
-            <Footer.LinkGroup col className="text-gray-400">
-              <Footer.Link as={Link} to="/documentation" className="text-gray-400 hover:text-blue-500">Documentation</Footer.Link>
-              <Footer.Link as={Link} to="/guides" className="text-gray-400 hover:text-blue-500">Guides</Footer.Link>
-              <Footer.Link as={Link} to="/blog" className="text-gray-400 hover:text-blue-500">Blog</Footer.Link>
-              <Footer.Link as={Link} to="/support" className="text-gray-400 hover:text-blue-500">Support</Footer.Link>
-            </Footer.LinkGroup>
-          </div>
-          
-          <div>
-            <Footer.Title title="Company" />
+            <Footer.Title title="Quick Links" />
             <Footer.LinkGroup col className="text-gray-400">
               <Footer.Link as={Link} to="/about" className="text-gray-400 hover:text-blue-500">About</Footer.Link>
-              <Footer.Link as={Link} to="/careers" className="text-gray-400 hover:text-blue-500">Careers</Footer.Link>
               <Footer.Link as={Link} to="/contact" className="text-gray-400 hover:text-blue-500">Contact</Footer.Link>
               <Footer.Link as={Link} to="/privacy" className="text-gray-400 hover:text-blue-500">Privacy Policy</Footer.Link>
             </Footer.LinkGroup>
@@ -109,7 +84,6 @@ const MainFooter = () => {
           <div className="mt-4 flex space-x-6 sm:mt-0 sm:justify-center">
             <Footer.Link as={Link} to="/privacy" className="text-gray-400 hover:text-blue-500">Privacy Policy</Footer.Link>
             <Footer.Link as={Link} to="/terms" className="text-gray-400 hover:text-blue-500">Terms of Service</Footer.Link>
-            <Footer.Link as={Link} to="/cookie" className="text-gray-400 hover:text-blue-500">Cookie Policy</Footer.Link>
           </div>
         </div>
       </div>

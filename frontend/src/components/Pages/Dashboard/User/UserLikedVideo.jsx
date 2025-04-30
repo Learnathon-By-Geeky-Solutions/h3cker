@@ -1,14 +1,13 @@
 import React, { useState, useEffect, useCallback, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from 'flowbite-react';
-import { History, ArrowLeft, Clock, Eye } from 'lucide-react';
-import VideoService from '../../../utils/VideoService';
-import { LoadingState, ErrorState, EmptyState } from '../../Shared/VideoLoadingStates/VideoLoadingStates';
-import AdRow from '../../Shared/AdRow/AdRow';
-import { AuthContext } from '../../../contexts/AuthProvider/AuthProvider';
+import { ThumbsUp, ArrowLeft } from 'lucide-react';
+import VideoService from '../../../../utils/VideoService';
+import { LoadingState, ErrorState, EmptyState } from '../../../Shared/VideoLoadingStates/VideoLoadingStates';
+import { AuthContext } from '../../../../contexts/AuthProvider/AuthProvider';
 
-const UserWatchHistory = () => {
-  const [watchHistory, setWatchHistory] = useState([]);
+const UserLikedVideo = () => {
+  const [likedVideos, setLikedVideos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
@@ -20,43 +19,43 @@ const UserWatchHistory = () => {
     }
   }, [user, navigate]);
   
-  const fetchWatchHistory = useCallback(async () => {
+  const fetchLikedVideos = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       
-      const historyData = await VideoService.getUserHistory();
-      const publicVideos = historyData.filter(video => video.visibility === 'public');
-      setWatchHistory(publicVideos);
+      const videos = await Promise.resolve(VideoService.getUserLikedVideos());
+      const publicVideos = videos.filter(video => video.visibility === 'public');
+      setLikedVideos(publicVideos);
     } catch (err) {
-      console.error('Error fetching watch history:', err);
-      setError('Failed to load your watch history. Please try again later.');
+      console.error('Error fetching liked videos:', err);
+      setError('Failed to load your liked videos. Please try again later.');
     } finally {
       setLoading(false);
     }
   }, []);
   
   useEffect(() => {
-    fetchWatchHistory();
-  }, [fetchWatchHistory]);
+    fetchLikedVideos();
+  }, [fetchLikedVideos]);
   
   const handleBack = () => {
     navigate('/dashboard');
   };
   
   if (loading) {
-    return <LoadingState message="Loading your watch history..." />;
+    return <LoadingState message="Loading your liked videos..." />;
   }
   
   if (error) {
-    return <ErrorState error={error} onRetry={fetchWatchHistory} />;
+    return <ErrorState error={error} onRetry={fetchLikedVideos} />;
   }
   
-  if (watchHistory.length === 0) {
+  if (likedVideos.length === 0) {
     return (
       <EmptyState 
-        title="No Watch History" 
-        message="You haven't watched any videos yet. Start watching videos to build your history!"
+        title="No Liked Videos" 
+        message="You haven't liked any videos yet. Start liking videos to build your collection!"
         actionLink="/videos"
         actionText="Browse Videos"
       />
@@ -68,11 +67,11 @@ const UserWatchHistory = () => {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-3xl font-bold text-white flex items-center">
-            <History className="mr-2 text-blue-400" size={30} />
-            Your Watch History
+            <ThumbsUp className="mr-2 text-blue-400" size={30} />
+            Your Liked Videos
           </h1>
           <p className="text-2xl font-semibold text-gray-300 mt-2">
-            Total: {watchHistory.length} videos
+            Total: {likedVideos.length} videos
           </p>
         </div>
         <Button color="gray" size="sm" onClick={handleBack}>
@@ -82,12 +81,18 @@ const UserWatchHistory = () => {
       </div>
       
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-        {watchHistory.map(video => (
+        {likedVideos.map(video => (
           <button 
             key={video.id} 
-            className="bg-gray-800 rounded-lg overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-700 hover:bg-gray-700/60 w-full text-left"
+            className="bg-gray-800 rounded-lg overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-700 hover:bg-gray-700/60 cursor-pointer w-full text-left"
             onClick={() => navigate(`/video/${video.id}`)}
-            onKeyDown={(e) => e.key === 'Enter' && navigate(`/video/${video.id}`)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                navigate(`/video/${video.id}`);
+              }
+            }}
+            aria-label={`Watch ${video.title}`}
           >
             <div className="aspect-video overflow-hidden">
               <img 
@@ -101,14 +106,15 @@ const UserWatchHistory = () => {
               <p className="text-gray-400 text-base mb-3 line-clamp-2">{video.description}</p>
               <div className="flex items-center text-gray-500 text-base gap-4">
                 <span className="flex items-center">
-                  <Eye size={18} className="mr-1 text-blue-400" /> 
+                  <ThumbsUp size={18} className="mr-1 text-blue-400" /> 
+                  {video.likes || 0}
+                </span>
+                <span>
                   {video.views || 0} views
                 </span>
-                <span className="flex items-center">
-                  <Clock size={18} className="mr-1" />
-                  {VideoService.formatRelativeTime(video.last_watched || video.upload_date)}
+                <span>
                 </span>
-            </div>
+              </div>
             </div>
           </button>
         ))}
@@ -117,4 +123,4 @@ const UserWatchHistory = () => {
   );
 };
 
-export default UserWatchHistory;
+export default UserLikedVideo;

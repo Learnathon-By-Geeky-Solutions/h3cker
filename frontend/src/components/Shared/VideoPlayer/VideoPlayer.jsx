@@ -278,7 +278,7 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded,
   // Handle video complete (end of playback or user navigating away)
   const handleVideoComplete = async () => {
     try {
-      if (webcamRecorderRef.current && webcamRecorderRef.current.stopAndUploadRecording) {
+      if (webcamRecorderRef.current?.stopAndUploadRecording) {
         // This will be called from the WebcamRecorder's ref
         await webcamRecorderRef.current.stopAndUploadRecording();
       }

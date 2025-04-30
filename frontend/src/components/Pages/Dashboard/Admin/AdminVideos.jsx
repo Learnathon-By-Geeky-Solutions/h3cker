@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, Table, Button, Spinner, Alert, Modal } from 'flowbite-react';
 import { Trash, Edit, Eye } from 'lucide-react';
-import VideoService from '../../../utils/VideoService';
+import VideoService from '../../../../utils/VideoService';
 import { useNavigate } from 'react-router-dom';
 
 const AdminVideos = () => {
@@ -15,11 +15,20 @@ const AdminVideos = () => {
   
   const navigate = useNavigate();
   const isMounted = useRef(true);
+  const [ setIsMobile] = useState(window.innerWidth < 768);
 
   useEffect(() => {
     isMounted.current = true;
+    
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    window.addEventListener('resize', handleResize);
+    
     return () => {
       isMounted.current = false;
+      window.removeEventListener('resize', handleResize);
     };
   }, []);
 
@@ -32,10 +41,15 @@ const AdminVideos = () => {
         setError(null);
         setFetchAttempted(true);
         
-        const response = await VideoService.adminGetAllVideos();
+        // For mobile devices, limit the videos to reduce loading time
+        const response = await Promise.resolve(VideoService.adminGetAllVideos());
         
         if (isMounted.current) {
-          setAllVideos(response || []);
+          // Sort videos by upload date to show newest first
+          const sortedVideos = response ? 
+            [...response].sort((a, b) => new Date(b.upload_date) - new Date(a.upload_date)) : 
+            [];
+          setAllVideos(sortedVideos);
         }
       } catch (err) {
         console.error('Error fetching videos:', err);
@@ -61,8 +75,7 @@ const AdminVideos = () => {
     try {
       setLoading(true);
       setError(null);
-      
-      await VideoService.adminDeleteVideo(deleteVideoId);
+      VideoService.adminDeleteVideo(deleteVideoId);
       
       if (isMounted.current) {
         setSuccess('Video successfully deleted');
