@@ -248,8 +248,8 @@ const UploadVideo = () => {
       return;
     }
     
-    if (!file.type.startsWith('video/')) {
-      setStatusMessage('Invalid file type. Please select a video file.');
+    if (!file.type.startsWith('video/') || file.size > 500 * 1024 * 1024) { // Limit size to 500MB
+      setStatusMessage('Invalid file type or size. Please select a valid video file under 500MB.');
       setUploadStatus('error');
       e.target.value = '';
       setVideoFile(null);
@@ -263,7 +263,8 @@ const UploadVideo = () => {
     try {
       const newPreviewUrl = URL.createObjectURL(file);
       if (validateUrl(newPreviewUrl)) {
-        setVideoPreviewUrl(newPreviewUrl);
+        const sanitizedUrl = newPreviewUrl.replace(/[^a-zA-Z0-9-_.:\/]/g, ''); // Basic sanitization
+        setVideoPreviewUrl(sanitizedUrl);
       } else {
         throw new Error('Invalid URL format');
       }
@@ -671,7 +672,7 @@ const UploadVideo = () => {
                 <Label value="Video Preview" className="text-sm font-medium text-gray-300 mb-2 block flex-shrink-0"/>
                 <div className="relative w-full aspect-video bg-black rounded overflow-hidden flex-grow">
                   <video
-                    src={videoPreviewUrl}
+                    src={videoPreviewUrl || ''}
                     controls
                     preload="metadata"
                     className="absolute top-0 left-0 w-full h-full object-contain" 
