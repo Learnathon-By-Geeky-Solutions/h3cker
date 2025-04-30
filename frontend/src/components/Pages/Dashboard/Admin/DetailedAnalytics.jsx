@@ -3,7 +3,7 @@ import PageUnderConstruction from '../../../common/PageUnderConstruction/PageUnd
 
 const DetailedAnalytics = () => {
   return (
-    <PageUnderConstruction pageName='About' />
+    <PageUnderConstruction pageName='Analytics' />
   )
 }
 
