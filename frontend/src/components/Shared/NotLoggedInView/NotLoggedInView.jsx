@@ -66,9 +66,7 @@ const NotLoggedInView = () => {
           ))}
         </div>
         
-        <div className="mt-10 text-sm text-gray-400">
-          <p>Note: Our facial emotion detection feature is currently under development and will be available soon.</p>
-        </div>
+        
       </div>
     </div>
   );

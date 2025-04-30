@@ -591,22 +591,7 @@ const UploadVideo = () => {
         </p>
       </div>
 
-      {/* Add expiry date option */}
-      <div>
-        <div className="mb-2 block">
-          <Label htmlFor="auto_private_after" value="Auto-Private Date (optional)" className="text-white" />
-        </div>
-        <TextInput
-          id="auto_private_after"
-          type="datetime-local"
-          value={formData.auto_private_after || ''}
-          onChange={handleInputChange}
-        />
-        <p className="mt-1 text-xs text-gray-300">
-          Set a date when this video will automatically become private.
-        </p>
-      </div>
-      
+           
       <div className="flex justify-end space-x-3 pt-5 border-t border-gray-600 mt-5">
         <Button
           type="button"

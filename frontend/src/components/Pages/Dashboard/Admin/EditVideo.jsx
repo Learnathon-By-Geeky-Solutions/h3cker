@@ -298,24 +298,7 @@ const EditVideo = () => {
               After reaching this limit, the video will become private.
             </p>
           </div>
-          
-          <div>
-            <div className="mb-2 block">
-              <label htmlFor="auto_private_after" className="text-white">
-                Auto-Private Date (optional)
-              </label>
-            </div>
-            <TextInput
-              id="auto_private_after"
-              type="datetime-local"
-              value={formData.auto_private_after}
-              onChange={handleInputChange}
-            />
-            <p className="text-xs text-gray-400 mt-1">
-              The video will automatically become private after this date and time.
-            </p>
-          </div>
-          
+             
           <div className="flex justify-between pt-4 border-t border-gray-700">
             <Button
               color="failure"
