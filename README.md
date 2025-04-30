@@ -65,6 +65,34 @@
 
 ---
 
+
+## 🔄 How It Works (Simplified Flow)
+
+1. **Company** uploads video, sets limits and privacy.
+2. **User** must select whether to watch with camera enabled or not. If no choice is made, the video will not start.
+3. **User** watches video and agrees to camera access for points.
+4. **Platform** records facial expressions during playback.
+5. **User** receives reward points.
+6. **Company** analyzes facial emotion data and timeline-based insights.
+7. **Company** refines ad before mass release.
+
+---
+
+## 🎯 Target Audience
+
+- Marketing Agencies  
+- Brands & Advertisers  
+- Market Research Firms  
+- Content Creators seeking pre-launch feedback  
+
+---
+
+## 🚀 Vision
+
+**EngageAnalytics** aims to revolutionize how video ad effectiveness is measured, moving **beyond views and clicks** to truly understand the **emotional connection** with audiences.
+
+---
+
 ## 💻 Technology Stack
 
 | Category         | Tools Used |
@@ -76,6 +104,7 @@
 | **Deployment**   | Render |
 
 ---
+
 ## 🧠 System Design 
 [![](https://mermaid.ink/img/pako:eNqVVF1vmzAU_SuWq0qJRLMQIHw8TCJhkSatWpe0e1iyBwcuCSvBmW3Wpk3--ww2jFaZtvIAtu-5x8eHe_2MY5oADvCGkf0W3UarAsnnjgPr9ao37_fR1dV7NGO0EFAkKq7evFyrtCa4nAOJRTv9rmB_y5qQ-L5Kin6QYkOb6T-SFoIysoFlRARpJjqlemYZgzXhsGwGKCzFtgO4oVxsGPBlT48WXz71O_HwqWSw7NUfNMnpun9e0OUlmlIJmdKigFhktOAq0By-du1Y7Y7m8LMELvixlXcWevOxg9RunAN-zRKg6G6fU5IcleCuMp2pscCy9IBuqVx6vf0LYGUlvJuDYBn8AlTZe2zNOkdci_i8B0bqw58RIi2KCLtH17LCpE85ZZoozgnnEaSorAoMpVmeBxeO4xhcMCk0uAjDUI-vHrJEbANz_2jEFUPwsM0EvKJJG3sU0yhyZl7YknmTiffBewvfWh9UC5vYljf8o833nGj8FjquqlTTuWPbtOyWLvJD07f-g65DWrenMq-72lZJ-qJXVbD5eetuXamQ7iKjqQ6j-e2G6gKtHxt4B2xHskReF88VwQqLLexghQM5TCAlZS5WeFWcJJSUgi4ORYwDwUowMKPlZouDlORyA1zuEyIgyohs6l27uifFN0p3TQokmdz5Wt1P9TVVQ3DwjB9xYPrewPVN3x17nmOZY9s28AEHvjmwTNcZD23P8q2RZZ0M_FSTDgeuPTId03bH_nDoub5jyFuvOo1WKG0BNqVlIXBgm87pNw9bp8Y?type=png)](https://mermaid.live/edit#pako:eNqVVF1vmzAU_SuWq0qJRLMQIHw8TCJhkSatWpe0e1iyBwcuCSvBmW3Wpk3--ww2jFaZtvIAtu-5x8eHe_2MY5oADvCGkf0W3UarAsnnjgPr9ao37_fR1dV7NGO0EFAkKq7evFyrtCa4nAOJRTv9rmB_y5qQ-L5Kin6QYkOb6T-SFoIysoFlRARpJjqlemYZgzXhsGwGKCzFtgO4oVxsGPBlT48WXz71O_HwqWSw7NUfNMnpun9e0OUlmlIJmdKigFhktOAq0By-du1Y7Y7m8LMELvixlXcWevOxg9RunAN-zRKg6G6fU5IcleCuMp2pscCy9IBuqVx6vf0LYGUlvJuDYBn8AlTZe2zNOkdci_i8B0bqw58RIi2KCLtH17LCpE85ZZoozgnnEaSorAoMpVmeBxeO4xhcMCk0uAjDUI-vHrJEbANz_2jEFUPwsM0EvKJJG3sU0yhyZl7YknmTiffBewvfWh9UC5vYljf8o833nGj8FjquqlTTuWPbtOyWLvJD07f-g65DWrenMq-72lZJ-qJXVbD5eetuXamQ7iKjqQ6j-e2G6gKtHxt4B2xHskReF88VwQqLLexghQM5TCAlZS5WeFWcJJSUgi4ORYwDwUowMKPlZouDlORyA1zuEyIgyohs6l27uifFN0p3TQokmdz5Wt1P9TVVQ3DwjB9xYPrewPVN3x17nmOZY9s28AEHvjmwTNcZD23P8q2RZZ0M_FSTDgeuPTId03bH_nDoub5jyFuvOo1WKG0BNqVlIXBgm87pNw9bp8Y)
 
