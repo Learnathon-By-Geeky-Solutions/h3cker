@@ -164,7 +164,11 @@ const AuthProvider = ({ children }) => {
         devices
       });
   
-      return processAuthenticatedUser(userCredential, deviceId);
+      // Sign out user immediately after account creation - they need to verify email first
+      await signOut(auth);
+      
+      // Return user data without processing authentication (no token set)
+      return userCredential.user;
     } catch (error) {
       console.error('Error creating user:', error);
   
