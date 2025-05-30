@@ -181,15 +181,14 @@ export const useSignupForm = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showVerificationMessage, setShowVerificationMessage] = useState(false);
-  const [touchedFields, setTouchedFields] = useState({});
-
-  useEffect(() => {
+  const [touchedFields, setTouchedFields] = useState({});  useEffect(() => {
     if (showVerificationMessage) {
       sessionStorage.setItem('verification_redirect', 'true');
       
       const timer = setTimeout(() => {
-        window.location.href = '/';
-      }, 2000);
+        window.location.href = '/login';
+      }, 3000);
+      
       return () => clearTimeout(timer);
     }
   }, [showVerificationMessage]);

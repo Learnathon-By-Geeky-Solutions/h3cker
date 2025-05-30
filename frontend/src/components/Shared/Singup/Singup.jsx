@@ -90,7 +90,7 @@ const Signup = () => {
       footerText="Already have an account?"
       footerLinkText="Login"
       footerLinkPath="/login"
-      successMessage={showVerificationMessage ? "A verification email has been sent to your email address." : null}
+      successMessage={showVerificationMessage ? "A verification email has been sent to your email address. Please verify your email then return to the login page." : null}
     >
       <form onSubmit={handleFormSubmit} className="space-y-5 sm:space-y-6">
         <div className="grid grid-cols-2 gap-4">
