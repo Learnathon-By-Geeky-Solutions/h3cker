@@ -139,6 +139,15 @@
 
 ---
 
+## 🔐 Admin Credentials
+
+For viewing the admin panel in the demo:
+
+- **Email:** jeyefe1819@idoidraw.com
+- **Password:** Sj6e!*sMA3D2*fAw&SGq
+
+---
+
 ## 📌 License
 
 This project is licensed under the [MIT License](LICENSE.md).
