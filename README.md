@@ -137,6 +137,8 @@
 
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-Online-brightgreen?style=for-the-badge&logo=rocket)](https://h3cker.onrender.com/)
 
+[![Video Demo](https://img.shields.io/badge/Video%20Demo-YouTube-red?style=for-the-badge&logo=youtube)](https://youtu.be/ZNKnVwU-DBI)
+
 ---
 
 ## 🔐 Admin Credentials
