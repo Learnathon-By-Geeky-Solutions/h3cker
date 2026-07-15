@@ -85,11 +85,11 @@ const UserLikedVideo = () => {
           <button 
             key={video.id} 
             className="bg-gray-800 rounded-lg overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-700 hover:bg-gray-700/60 cursor-pointer w-full text-left"
-            onClick={() => navigate(`/video/${video.id}`)}
+            onClick={() => navigate(`/video/${video.uuid || video.id}`)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
-                navigate(`/video/${video.id}`);
+                navigate(`/video/${video.uuid || video.id}`);
               }
             }}
             aria-label={`Watch ${video.title}`}
@@ -98,6 +98,7 @@ const UserLikedVideo = () => {
               <img 
                 src={video.thumbnail_url || '/api/placeholder/400/225'} 
                 alt={video.title}
+                loading="lazy"
                 className="w-full h-full object-cover transition-transform duration-300 hover:scale-110"
               />
             </div>

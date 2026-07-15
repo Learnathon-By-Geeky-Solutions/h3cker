@@ -148,6 +148,7 @@ const AdminVideos = () => {
                         <img 
                           src={video.thumbnail_url || '/api/placeholder/80/45'} 
                           alt={video.title}
+                          loading="lazy"
                           className="w-20 h-12 object-cover rounded"
                         />
                       </Table.Cell>

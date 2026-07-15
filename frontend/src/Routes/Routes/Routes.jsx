@@ -21,6 +21,7 @@ import AdminRoleManagement from "../../components/Pages/Dashboard/Admin/AdminRol
 import UserLikedVideo from "../../components/Pages/Dashboard/User/UserLikedVideo.jsx";
 import RecordedVideos from "../../components/Pages/Dashboard/Admin/RecordedVideos.jsx";
 import DetailedAnalytics from "../../components/Pages/Dashboard/Admin/DetailedAnalytics.jsx";
+import { Navigate } from "react-router-dom";
 
 
 const router = createBrowserRouter([
@@ -46,6 +47,18 @@ const router = createBrowserRouter([
       },
       {
         path: "/about",
+        element: <About />,
+      },
+      {
+        path: "/contact",
+        element: <About />,
+      },
+      {
+        path: "/privacy",
+        element: <About />,
+      },
+      {
+        path: "/terms",
         element: <About />,
       },
       {
@@ -99,7 +112,11 @@ const router = createBrowserRouter([
       },
       {
         path: "detailed-analytics",
-        element: <AdminRoute><DetailedAnalytics /></AdminRoute>
+        element: <PrivateRoute><DetailedAnalytics /></PrivateRoute>
+      },
+      {
+        path: "analytics",
+        element: <Navigate to="detailed-analytics" replace />
       },
       {
         path: "liked-videos",

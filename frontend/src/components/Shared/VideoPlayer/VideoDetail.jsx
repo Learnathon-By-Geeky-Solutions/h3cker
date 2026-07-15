@@ -23,6 +23,10 @@ import {
   EyeOff,
   BarChart2 as ChartBar
 } from 'lucide-react';
+import {
+  ResponsiveContainer,
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, Legend,
+} from 'recharts';
 import VideoService from '../../../utils/VideoService';
 import VideoPlayer from '../../Shared/VideoPlayer/VideoPlayer';
 import { LoadingState, ErrorState } from '../../Shared/VideoLoadingStates/VideoLoadingStates';
@@ -375,7 +379,7 @@ const RelatedVideos = ({ videos, navigate }) => (
           <RelatedVideoCard 
             key={relatedVideo.id}
             video={relatedVideo}
-            onClick={() => navigate(`/video/${relatedVideo.id}`)} 
+            onClick={() => navigate(`/video/${relatedVideo.uuid || relatedVideo.id}`)} 
           />
         ))}
       </div>
@@ -400,6 +404,8 @@ const VideoDetail = () => {
   const [viewRecorded, setViewRecorded] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [myEmotion, setMyEmotion] = useState(null);
+  const [myEmotionLoading, setMyEmotionLoading] = useState(false);
 
   useEffect(() => {
     const fetchVideoDetails = async () => {
@@ -415,7 +421,9 @@ const VideoDetail = () => {
         
         // Call fetchRelatedVideos without awaiting it
         fetchRelatedVideos(videoData);
-        
+
+        fetchMyEmotion(id);
+
         setLoading(false);
       } catch (error) {
         console.error('Error fetching video details:', error);
@@ -453,6 +461,19 @@ const VideoDetail = () => {
         }
       } catch (relatedError) {
         console.error('Error fetching related videos:', relatedError);
+      }
+    };
+
+    const fetchMyEmotion = async (videoId) => {
+      if (!videoId) return;
+      setMyEmotionLoading(true);
+      try {
+        const data = await VideoService.getMyEmotion(videoId);
+        setMyEmotion(data && (data.timeline?.length || data.distribution) ? data : null);
+      } catch (err) {
+        console.error('Error fetching my emotion data:', err);
+      } finally {
+        setMyEmotionLoading(false);
       }
     };
 
@@ -544,6 +565,51 @@ const VideoDetail = () => {
     }
   };
 
+  const renderMyEmotion = () => {
+    if (myEmotionLoading) return null;
+    if (!myEmotion || !myEmotion.timeline || myEmotion.timeline.length === 0) return null;
+
+    const emotionKeys = [
+      { key: 'happy', label: 'Happy', color: '#22c55e' },
+      { key: 'neutral', label: 'Neutral', color: '#64748b' },
+      { key: 'sad', label: 'Sad', color: '#3b82f6' },
+      { key: 'angry', label: 'Angry', color: '#ef4444' },
+      { key: 'surprise', label: 'Surprise', color: '#f59e0b' },
+      { key: 'fear', label: 'Fear', color: '#a855f7' },
+      { key: 'disgust', label: 'Disgust', color: '#8b5cf6' },
+    ];
+
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-gray-800/80 backdrop-blur-md rounded-[16px] border border-gray-700 shadow-md p-5 mb-6"
+      >
+        <h3 className="text-lg font-medium text-white mb-4">Your Reaction</h3>
+        <ResponsiveContainer width="100%" height={240}>
+          <LineChart data={myEmotion.timeline}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+            <XAxis dataKey="t" stroke="#9ca3af" tickFormatter={(t) => `${t}s`} />
+            <YAxis stroke="#9ca3af" domain={[0, 1]} />
+            <RTooltip formatter={(v) => `${(v * 100).toFixed(0)}%`} labelFormatter={(t) => `${t}s`} />
+            <Legend />
+            {emotionKeys.map((e) => (
+              <Line
+                key={e.key}
+                type="monotone"
+                dataKey={e.key}
+                name={e.label}
+                stroke={e.color}
+                dot={false}
+                isAnimationActive={false}
+              />
+            ))}
+          </LineChart>
+        </ResponsiveContainer>
+      </motion.div>
+    );
+  };
+
   const renderAdminControls = () => {
     // Only show for admin users
     if (!user || user.role !== 'admin') return null;
@@ -633,6 +699,8 @@ const VideoDetail = () => {
             
             <UploaderInfo video={video} />
             <VideoDescription description={video.description} />
+
+            {renderMyEmotion()}
           </motion.div>
         </div>
         <div className="lg:col-span-1">

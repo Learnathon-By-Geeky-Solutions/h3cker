@@ -291,7 +291,6 @@ class TestPromoteToAdminView:
         url = reverse('admin-promote-user')
         data = {
             'user_id': regular_user.id,
-            'admin_password': 'testpassword'
         }
         
         response = admin_client.post(url, data, format='json')
@@ -330,7 +329,6 @@ class TestPromoteToAdminView:
         url = reverse('admin-promote-user')
         data = {
             'user_id': company_user.id,
-            'admin_password': 'testpassword'
         }
         
         assert CompanyProfile.objects.filter(user=company_user).exists()
@@ -350,15 +348,10 @@ class TestPromoteToAdminView:
         """Test promotion API with missing data."""        
         url = reverse('admin-promote-user')
         
-        # Missing password
-        data1 = {'user_id': 1}
-        response1 = admin_client.post(url, data1, format='json')
-        assert response1.status_code == status.HTTP_400_BAD_REQUEST
-        
         # Missing user_id
-        data2 = {'admin_password': 'testpassword'}
-        response2 = admin_client.post(url, data2, format='json')
-        assert response2.status_code == status.HTTP_400_BAD_REQUEST
+        data = {}
+        response = admin_client.post(url, data, format='json')
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
     
     @patch('api.admin_views.firebase_auth.get_user')
     def test_promote_user_firebase_auth_failure(self, mock_get_user, admin_client, regular_user):
@@ -369,7 +362,6 @@ class TestPromoteToAdminView:
         url = reverse('admin-promote-user')
         data = {
             'user_id': regular_user.id,
-            'admin_password': 'testpassword'
         }
         
         response = admin_client.post(url, data, format='json')
@@ -400,7 +392,6 @@ class TestPromoteToAdminView:
         url = reverse('admin-promote-user')
         data = {
             'user_id': regular_user.id,
-            'admin_password': 'testpassword'
         }
 
         response = admin_client.post(url, data, format='json')
@@ -418,7 +409,6 @@ class TestPromoteToAdminView:
         url = reverse('admin-promote-user')
         data = {
             'user_id': regular_user.id,
-            'admin_password': 'wrongpassword'
         }
         
         response = user_client.post(url, data, format='json')

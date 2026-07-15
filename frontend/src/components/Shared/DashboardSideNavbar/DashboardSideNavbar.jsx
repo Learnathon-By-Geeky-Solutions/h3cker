@@ -14,7 +14,7 @@ import {
   User,
   Clock,
   ThumbsUp,
-
+  BarChart3,
   UserCog,
   VideoIcon
 } from 'lucide-react';
@@ -25,6 +25,8 @@ const getNavItems = (role) => {
   const baseItems = [
     { path: '/dashboard', name: 'Dashboard', icon: <Home size={20} /> },
   ];
+
+  const analyticsItem = { path: '/dashboard/detailed-analytics', name: 'Video Analytics', icon: <BarChart3 size={20} /> };
   
   // Admin section
   if (role === 'admin') {
@@ -33,6 +35,15 @@ const getNavItems = (role) => {
       { path: '/dashboard/videos', name: 'Manage Videos', icon: <Video size={20} /> },
       { path: '/dashboard/role-management', name: 'User Management', icon: <UserCog size={20} /> },
       { path: '/dashboard/recorded-videos', name: 'Webcam Recordings', icon: <VideoIcon size={20} /> },
+      analyticsItem,
+    );
+  }
+  // Company section
+  else if (role === 'company') {
+    baseItems.push(
+      { path: '/dashboard/upload', name: 'Upload Video', icon: <Upload size={20} /> },
+      { path: '/dashboard/videos', name: 'Manage Videos', icon: <Video size={20} /> },
+      analyticsItem,
     );
   }
   // Regular user section
@@ -40,6 +51,7 @@ const getNavItems = (role) => {
     baseItems.push(
       { path: '/dashboard/history', name: 'Watch History', icon: <Clock size={20} /> },
       { path: '/dashboard/liked-videos', name: 'Liked Videos', icon: <ThumbsUp size={20} /> },
+      analyticsItem,
     );
   } 
   return baseItems;

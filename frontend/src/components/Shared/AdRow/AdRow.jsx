@@ -58,7 +58,7 @@ const AdRow = ({ title, icon, ads, linkTo, isVideoSection = false }) => {
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
         {ads.map((ad) => (
           isVideoSection ? (
-            <Link key={ad.id || index} to={`/video/${ad.id}`} className="block">
+            <Link key={ad.id || index} to={`/video/${ad.uuid || ad.id}`} className="block">
               <AdCard ad={ad} onPlayClick={handleAdClick} />
             </Link>
           ) : (

@@ -85,8 +85,8 @@ const UserWatchHistory = () => {
           <button 
             key={video.id} 
             className="bg-gray-800 rounded-lg overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-700 hover:bg-gray-700/60 w-full text-left"
-            onClick={() => navigate(`/video/${video.id}`)}
-            onKeyDown={(e) => e.key === 'Enter' && navigate(`/video/${video.id}`)}
+            onClick={() => navigate(`/video/${video.uuid || video.id}`)}
+            onKeyDown={(e) => e.key === 'Enter' && navigate(`/video/${video.uuid || video.id}`)}
           >
             <div className="aspect-video overflow-hidden">
               <img 

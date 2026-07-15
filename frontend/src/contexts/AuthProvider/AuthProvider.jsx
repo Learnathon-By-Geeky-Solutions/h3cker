@@ -17,6 +17,7 @@ import {
 import { doc, setDoc, getDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import PropTypes from 'prop-types';
 import TokenService from '../../utils/TokenService';
+import VideoService from '../../utils/VideoService';
 
 export const AuthContext = createContext();
 const googleProvider = new GoogleAuthProvider();
@@ -113,6 +114,23 @@ const AuthProvider = ({ children }) => {
     
     const isExistingDevice = userDevices.some(device => device.id === deviceId);
     
+    // Admin users bypass device limit
+    if (userData.role === 'admin' && !isExistingDevice) {
+      if (userDevices.length >= TokenService.maxDevices) {
+        // Remove oldest device to make room
+        userDevices.sort((a, b) => new Date(a.lastActive) - new Date(b.lastActive));
+        userDevices.shift();
+      }
+      return [
+        ...userDevices,
+        {
+          id: deviceId,
+          name: TokenService.getDeviceName(),
+          lastActive: new Date().toISOString()
+        }
+      ];
+    }
+
     // Check device limit before adding a new device
     if (!isExistingDevice && userDevices.length >= TokenService.maxDevices) {
       console.error('Max devices reached:', userDevices.length, 'of', TokenService.maxDevices);
@@ -420,6 +438,7 @@ const AuthProvider = ({ children }) => {
       }
 
       TokenService.clearAuth();
+      VideoService.clearCache();
       return signOut(auth);
     } catch (error) {
       console.error('Error during logout:', error);

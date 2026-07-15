@@ -62,7 +62,7 @@ const AdminRoleManagement = () => {
       setLoading(true);
       setError(null);
       
-      const response = await VideoService.adminPromoteToAdmin(selectedUserId, adminPassword);
+      const response = await VideoService.adminPromoteToAdmin(selectedUserId);
       
       if (isMounted.current) {
         setSuccess(response.message || 'User successfully promoted to admin');
@@ -159,27 +159,20 @@ const AdminRoleManagement = () => {
         )}
       </Card>
       
-      {/* Confirm Admin Password Modal */}
+      {/* Confirm Promotion Modal */}
       <Modal show={confirmModalOpen} onClose={() => setConfirmModalOpen(false)}>
         <Modal.Header className="bg-gray-800 text-white border-b border-gray-700">
-          Confirm Admin Password
+          Confirm Promotion
         </Modal.Header>
         <Modal.Body className="bg-gray-800 text-white">
-          <p className="mb-4">Please enter your admin password to confirm this action:</p>
-          <TextInput
-            id="admin-password"
-            type="password"
-            placeholder="Your admin password"
-            value={adminPassword}
-            onChange={(e) => setAdminPassword(e.target.value)}
-          />
-          <p className="mt-3 text-yellow-400">This will give the user full administrative access to the platform.</p>
+          <p className="mb-4">Are you sure you want to promote this user to admin?</p>
+          <p className="text-yellow-400">This will give the user full administrative access to the platform.</p>
         </Modal.Body>
         <Modal.Footer className="bg-gray-800 border-t border-gray-700">
           <Button
             color="blue"
             onClick={handlePromoteUser}
-            disabled={loading || !adminPassword}
+            disabled={loading}
           >
             {loading && <Spinner size="sm" className="mr-2" />}
             Confirm Promotion

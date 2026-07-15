@@ -3,6 +3,7 @@ import VideoService from './VideoService';
 // Normalize video data to a consistent format
 export const normalizeVideoData = (video, index) => ({
   id: video.id || `fallback-video-${index}`,
+  uuid: video.uuid || null,
   title: video.title || 'Untitled Video',
   description: video.description || '',
   imageUrl: video.thumbnail_url || null,

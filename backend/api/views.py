@@ -1,13 +1,15 @@
 import uuid
 import logging
+import threading
 from django.conf import settings
-from django.db.models import F
+from django.db.models import F, Max
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 
 from rest_framework import generics, status
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.views import APIView
 from rest_framework.response import Response
 
 logger = logging.getLogger(__name__)
@@ -22,6 +24,10 @@ from api.models import (
     VideoLike,
     VideoShare,
     WebcamRecording,
+    EmotionFrame,
+    VideoEmotionSummary,
+    AnalysisRunLog,
+    EMOTION_CLASSES,
 )
 from api.serializers import (
     FilenameSerializer,
@@ -33,6 +39,9 @@ from api.serializers import (
     UserPointsSerializer,
     VideoSearchQuerySerializer,
     CategoryQuerySerializer,
+    VideoEmotionSummarySerializer,
+    AnalysisRunLogSerializer,
+    WebcamRecordingSerializer,
 )
 from api.services import (
     PointsService,
@@ -41,6 +50,7 @@ from api.services import (
     VideoViewService,
     VideoLikeService,
     VideoShareService,
+    EmotionAnalysisService,
 )
 from api.utils import (
     increment_video_views,
@@ -49,7 +59,8 @@ from api.utils import (
     make_video_private,
     safe_int_param,
 )
-from api.permissions import IsCompanyOrAdmin
+from api.permissions import IsAdmin, IsCompanyOrAdmin, IsCompanyOrAdminOrOwner
+from api.services.cache_service import CacheService
 
 
 class OnboardingAPIView(generics.UpdateAPIView):
@@ -113,9 +124,15 @@ class OnboardingAPIView(generics.UpdateAPIView):
 class VideoFeedView(generics.ListAPIView):
     """List all publicly available videos for feed."""
 
-    queryset = Video.objects.filter(visibility="public")
     serializer_class = VideoFeedSerializer
     permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        limit = safe_int_param(self.request, "limit", 0, 0, 100)
+        offset = safe_int_param(self.request, "offset", 0, 0)
+        if limit:
+            return CacheService.cached_feed(limit, offset, lambda: Video._public_available_qs())
+        return Video._public_available_qs()
 
 
 class VideoDetailView(generics.RetrieveAPIView):
@@ -162,13 +179,18 @@ class VideoDetailView(generics.RetrieveAPIView):
                 )
             return video
 
-        # Case 2: UUID share token
+        # Case 2: Video UUID or share token
         if self.is_valid_uuid(identifier):
+            try:
+                video = get_object_or_404(Video, uuid=identifier)
+                return video
+            except Http404:
+                pass
             try:
                 video = self.get_video_by_token(identifier)
                 return video
             except Http404:
-                raise Http404("Shared video not found or share link is inactive")
+                raise Http404("Video not found")
 
         # Case 3: Invalid format
         raise Http404("Invalid video identifier format")
@@ -322,15 +344,16 @@ class UserHistoryAPI(generics.ListAPIView):
 
         viewed_video_ids = (
             VideoView.objects.filter(viewer=user)
-            .order_by("-viewed_at")
+            .values("video_id")
+            .annotate(last_viewed=Max("viewed_at"))
+            .order_by("-last_viewed")
             .values_list("video_id", flat=True)
-            .distinct()
         )
 
         if offset > 0:
             viewed_video_ids = viewed_video_ids[offset:]
 
-        return Video.objects.filter(id__in=viewed_video_ids)[:limit]
+        return Video.objects.select_related("uploader").filter(id__in=viewed_video_ids)[:limit]
 
     def get_serializer_context(self):
         context = super().get_serializer_context()
@@ -366,7 +389,7 @@ class UserLikedVideosAPI(generics.ListAPIView):
         if offset > 0:
             liked_video_ids = liked_video_ids[offset:]
 
-        return Video.objects.filter(id__in=liked_video_ids)[:limit]
+        return Video.objects.select_related("uploader").filter(id__in=liked_video_ids)[:limit]
 
     def get_serializer_context(self):
         context = super().get_serializer_context()
@@ -399,6 +422,8 @@ class UploadVideoView(generics.CreateAPIView):
             VideoUploadService.save_video_metadata(
                 serializer, self.request.user, video_view_url, thumbnail_view_url
             )
+
+            CacheService.invalidate_feed()
 
             return Response(
                 {
@@ -468,10 +493,15 @@ class VideoSearchView(generics.ListAPIView):
 
         videos = Video.objects.filter(video_url__contains=base_filename)
 
-        if self.request.user.role == "admin":
+        if self.request.user.role != "admin":
+            videos = videos.filter(uploader=self.request.user)
+
+        if not videos:
             return videos
 
-        return videos.filter(uploader=self.request.user)
+        limit = safe_int_param(self.request, "limit", 50, 1, 100)
+        offset = safe_int_param(self.request, "offset", 0, 0)
+        return videos[offset:offset + limit]
 
 
 class UserPointsView(generics.RetrieveAPIView):
@@ -498,8 +528,11 @@ class VideoRecommendationsView(generics.ListAPIView):
     def get_queryset(self):
         limit = safe_int_param(self.request, "limit", 20, 1, 50)
         offset = safe_int_param(self.request, "offset", 0, 0)
-
-        return Video.get_recommendations_for_user(self.request.user, limit, offset)
+        user_id = self.request.user.pk
+        return CacheService.cached_recommendations(
+            user_id, limit, offset,
+            lambda: Video.get_recommendations_for_user(self.request.user, limit, offset),
+        )
 
 
 class FeaturedCarouselVideosView(generics.ListAPIView):
@@ -508,7 +541,10 @@ class FeaturedCarouselVideosView(generics.ListAPIView):
 
     def get_queryset(self):
         limit = safe_int_param(self.request, "limit", 5, 1, 10)
-        return Video.get_featured_carousel_videos(limit)
+        return CacheService.cached_featured(
+            limit,
+            lambda: Video.get_featured_carousel_videos(limit),
+        )
 
 
 class CategoryVideosView(generics.ListAPIView):
@@ -533,8 +569,10 @@ class TrendingVideosView(generics.ListAPIView):
     def get_queryset(self):
         limit = safe_int_param(self.request, "limit", 20, 1, 50)
         offset = safe_int_param(self.request, "offset", 0, 0)
-
-        return Video.get_trending_videos(limit, offset)
+        return CacheService.cached_trending(
+            limit, offset,
+            lambda: Video.get_trending_videos(limit, offset),
+        )
 
 
 class RecentVideosView(generics.ListAPIView):
@@ -546,3 +584,198 @@ class RecentVideosView(generics.ListAPIView):
         offset = safe_int_param(self.request, "offset", 0, 0)
 
         return Video.get_recently_uploaded_videos(limit, offset)
+
+
+def _frame_to_dict(frame):
+    return {
+        "t": frame.t_seconds,
+        "angry": frame.angry,
+        "disgust": frame.disgust,
+        "fear": frame.fear,
+        "happy": frame.happy,
+        "neutral": frame.neutral,
+        "sad": frame.sad,
+        "surprise": frame.surprise,
+        "dominant": frame.dominant,
+        "confidence": frame.confidence,
+    }
+
+
+class WebcamUploadCompleteView(generics.GenericAPIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, video_id, recording_id):
+        try:
+            Video.objects.get(id=video_id)
+        except Video.DoesNotExist:
+            return Response(
+                {"error": "Video not found"}, status=status.HTTP_404_NOT_FOUND
+            )
+
+        recording = WebcamUploadService.mark_upload_complete(recording_id, request.user)
+        if not recording:
+            return Response(
+                {"error": "Recording not found"}, status=status.HTTP_404_NOT_FOUND
+            )
+
+        return Response(
+            {"status": "completed", "upload_status": recording.upload_status}
+        )
+
+
+class RunEmotionAnalysisView(generics.GenericAPIView):
+    permission_classes = [IsAuthenticated, IsAdmin]
+
+    def post(self, request):
+        def _run():
+            try:
+                EmotionAnalysisService.run(trigger="manual")
+            except Exception:
+                logger.exception("Manual emotion analysis run failed")
+            finally:
+                from django.db import close_old_connections
+
+                close_old_connections()
+
+        thread = threading.Thread(target=_run, daemon=True)
+        thread.start()
+        return Response({"status": "started"}, status=status.HTTP_202_ACCEPTED)
+
+
+class EmotionAnalysisStatusView(generics.GenericAPIView):
+    permission_classes = [IsAuthenticated, IsAdmin]
+
+    def get(self, request):
+        run = AnalysisRunLog.objects.first()
+        if not run:
+            return Response(
+                {"status": "idle", "processed": 0, "total": 0, "trigger": None}
+            )
+        return Response(AnalysisRunLogSerializer(run).data)
+
+
+class VideoEmotionSummaryView(generics.GenericAPIView):
+    permission_classes = [IsAuthenticated, IsCompanyOrAdminOrOwner]
+    serializer_class = VideoEmotionSummarySerializer
+
+    def get(self, request, video_id):
+        video = get_object_or_404(Video, id=video_id)
+        self.check_object_permissions(request, video)
+
+        summary = getattr(video, "emotion_summary", None)
+        if not summary:
+            return Response(
+                {
+                    "distribution": {e: 0.0 for e in EMOTION_CLASSES},
+                    "timeline": [],
+                    "total_frames": 0,
+                    "analyzed_recordings": 0,
+                }
+            )
+        return Response(VideoEmotionSummarySerializer(summary).data)
+
+
+class VideoEmotionRecordingsView(generics.GenericAPIView):
+    permission_classes = [IsAuthenticated, IsCompanyOrAdminOrOwner]
+
+    def get(self, request, video_id):
+        video = get_object_or_404(Video, id=video_id)
+        self.check_object_permissions(request, video)
+
+        reveal_viewer = request.user.role == "admin"
+
+        recordings = WebcamRecording.objects.filter(
+            video=video, analysis_status="completed"
+        ).prefetch_related("emotion_frames").order_by("-recording_date")
+
+        data = []
+        for recording in recordings:
+            frames = list(recording.emotion_frames.all().order_by("t_seconds"))
+            if not frames:
+                continue
+
+            distribution = {e: 0.0 for e in EMOTION_CLASSES}
+            for frame in frames:
+                for e in EMOTION_CLASSES:
+                    distribution[e] += getattr(frame, e)
+            distribution = {
+                e: round(distribution[e] / len(frames), 4) for e in EMOTION_CLASSES
+            }
+
+            timeline = [_frame_to_dict(f) for f in frames]
+            duration = max((f.t_seconds for f in frames), default=0)
+
+            entry = {
+                "recording_id": recording.id,
+                "filename": recording.filename,
+                "recording_url": recording.recording_url,
+                "thumbnail_url": recording.thumbnail_url,
+                "distribution": distribution,
+                "timeline": timeline,
+                "duration": round(duration, 2),
+            }
+            if reveal_viewer:
+                entry["viewer_id"] = recording.recorder_id
+            data.append(entry)
+
+        return Response(data)
+
+
+class MyEmotionView(generics.GenericAPIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, video_id):
+        video = get_object_or_404(Video, id=video_id)
+
+        frames = EmotionFrame.objects.filter(
+            video=video, viewer=request.user
+        ).order_by("t_seconds")
+
+        timeline = [_frame_to_dict(f) for f in frames]
+        distribution = {e: 0.0 for e in EMOTION_CLASSES}
+        for frame in frames:
+            for e in EMOTION_CLASSES:
+                distribution[e] += getattr(frame, e)
+        if frames:
+            distribution = {
+                e: round(distribution[e] / len(frames), 4) for e in EMOTION_CLASSES
+            }
+
+        return Response({"distribution": distribution, "timeline": timeline})
+
+
+class UserWebcamRecordingsView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = WebcamRecordingSerializer
+
+    def get_queryset(self):
+        return WebcamRecording.objects.filter(
+            recorder=self.request.user
+        ).select_related("video", "recorder", "video__uploader").order_by("-recording_date")
+
+
+class HealthCheckView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        from django.db import connection
+
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+                db_ok = cursor.fetchone() is not None
+        except Exception:
+            db_ok = False
+
+        try:
+            firebase_admin = __import__("firebase_admin", fromlist=["credential"])
+            firebase_ok = bool(firebase_admin._apps)
+        except Exception:
+            firebase_ok = False
+
+        status_code = status.HTTP_200_OK if (db_ok and firebase_ok) else status.HTTP_503_SERVICE_UNAVAILABLE
+        return Response({
+            "status": "healthy" if (db_ok and firebase_ok) else "degraded",
+            "db": "ok" if db_ok else "error",
+            "firebase": "ok" if firebase_ok else "error",
+        }, status=status_code)

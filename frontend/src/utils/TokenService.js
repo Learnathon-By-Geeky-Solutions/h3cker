@@ -10,7 +10,7 @@ const TokenService = {
   sessionDuration: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds 
   tokenRateLimitMs: 1000, //1sec
 
-  maxDevices: 3,
+  maxDevices: 5,
 
   _storage: {
     getItem(key) {

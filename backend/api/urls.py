@@ -17,6 +17,14 @@ from api.views import (
     CategoryVideosView,
     TrendingVideosView,
     RecentVideosView,
+    WebcamUploadCompleteView,
+    RunEmotionAnalysisView,
+    EmotionAnalysisStatusView,
+    VideoEmotionSummaryView,
+    VideoEmotionRecordingsView,
+    MyEmotionView,
+    UserWebcamRecordingsView,
+    HealthCheckView,
 )
 from api.admin_views import (
     UserSearchView,
@@ -24,6 +32,7 @@ from api.admin_views import (
     VideoManagementView,
     VideoStatsView,
     WebcamRecordingsView,
+    DeleteWebcamRecordingView,
 )
 
 urlpatterns = [
@@ -56,6 +65,11 @@ urlpatterns = [
         WebcamUploadView.as_view(),
         name="webcam-upload",
     ),
+    path(
+        "videos/<int:video_id>/webcam-upload/<int:recording_id>/complete/",
+        WebcamUploadCompleteView.as_view(),
+        name="webcam-upload-complete",
+    ),
     # User endpoints
     path("user/history/", UserHistoryAPI.as_view(), name="user-history"),
     path("user/liked/", UserLikedVideosAPI.as_view(), name="user-liked-videos"),
@@ -74,6 +88,12 @@ urlpatterns = [
     path("category-videos/", CategoryVideosView.as_view(), name="category-videos"),
     path("trending-videos/", TrendingVideosView.as_view(), name="trending-videos"),
     path("recent-videos/", RecentVideosView.as_view(), name="recent-videos"),
+    # User-facing webcam recordings
+    path(
+        "webcam-recordings/",
+        UserWebcamRecordingsView.as_view(),
+        name="user-webcam-recordings",
+    ),
     # Admin endpoints
     path("admin/users/search/", UserSearchView.as_view(), name="admin-user-search"),
     path(
@@ -91,4 +111,38 @@ urlpatterns = [
         WebcamRecordingsView.as_view(),
         name="admin-webcam-recordings",
     ),
+    path(
+        "admin/webcam-recordings/<int:recording_id>/",
+        DeleteWebcamRecordingView.as_view(),
+        name="admin-delete-webcam-recording",
+    ),
+    # Emotion analysis admin endpoints
+    path(
+        "admin/run-emotion-analysis/",
+        RunEmotionAnalysisView.as_view(),
+        name="admin-run-emotion-analysis",
+    ),
+    path(
+        "admin/emotion-analysis-status/",
+        EmotionAnalysisStatusView.as_view(),
+        name="admin-emotion-analysis-status",
+    ),
+    # Per-video emotion analytics
+    path(
+        "video/<int:video_id>/emotion-summary/",
+        VideoEmotionSummaryView.as_view(),
+        name="video-emotion-summary",
+    ),
+    path(
+        "video/<int:video_id>/emotion/recordings/",
+        VideoEmotionRecordingsView.as_view(),
+        name="video-emotion-recordings",
+    ),
+    path(
+        "video/<int:video_id>/my-emotion/",
+        MyEmotionView.as_view(),
+        name="video-my-emotion",
+    ),
+    # Health check
+    path("health/", HealthCheckView.as_view(), name="health-check"),
 ]

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { Link } from 'react-router-dom';
 import { Button } from 'flowbite-react';
-import { TrendingUp, Upload as UploadIcon, Users, Video, Settings } from 'lucide-react';
+import { TrendingUp, Upload as UploadIcon, Users, Video, VideoIcon, BarChart2 } from 'lucide-react';
 import AdRow from '../../Shared/AdRow/AdRow';
 import { 
   StatsOverview, 
@@ -81,19 +81,37 @@ const DashboardHome = ({ user, stats }) => {
         <div className="bg-blue-900/30 border border-blue-800 rounded-lg p-4 mb-6">
           <h2 className="text-lg font-semibold text-white mb-2">Admin Tools</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            <Button as={Link} to="/dashboard/admin/users" color="light" className="text-sm">
+            <Button as={Link} to="/dashboard/role-management" color="light" className="text-sm">
               <Users className="mr-2 h-4 w-4" />
               Manage Users
             </Button>
-            <Button as={Link} to="/dashboard/admin/videos" color="light" className="text-sm">
+            <Button as={Link} to="/dashboard/videos" color="light" className="text-sm">
               <Video className="mr-2 h-4 w-4" />
               Manage Videos
             </Button>
-            <Button as={Link} to="/dashboard/admin/settings" color="light" className="text-sm">
-              <Settings className="mr-2 h-4 w-4" />
-              Platform Settings
+            <Button as={Link} to="/dashboard/recorded-videos" color="light" className="text-sm">
+              <VideoIcon className="mr-2 h-4 w-4" />
+              Webcam Recordings
             </Button>
           </div>
+        </div>
+      )}
+
+      {/* Emotion Analytics — Company Users */}
+      {isCompany && (
+        <div className="bg-indigo-900/30 border border-indigo-800 rounded-lg p-4 mb-6">
+          <h2 className="text-lg font-semibold text-white mb-2 flex items-center">
+            <BarChart2 className="mr-2 h-5 w-5 text-indigo-400" />
+            Emotion Analytics
+          </h2>
+          <p className="text-gray-300 text-sm mb-3">
+            View audience emotional reactions to your video ads — engagement over time,
+            emotion distribution, and per-viewer breakdowns.
+          </p>
+          <Button as={Link} to="/dashboard/detailed-analytics" color="light" size="sm">
+            <BarChart2 className="mr-2 h-4 w-4" />
+            View Emotion Analytics
+          </Button>
         </div>
       )}
 

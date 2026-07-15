@@ -21,6 +21,10 @@ from api.serializers import (
     WebcamRecordingSerializer,
 )
 from api.permissions import IsAdmin
+from api.services.azure_storage_service import AzureStorageService
+from api.services.cache_service import CacheService
+from api.services.emotion_analysis_service import EmotionAnalysisService
+from api.utils import safe_int_param
 
 logger = logging.getLogger(__name__)
 db = firestore.client()
@@ -116,17 +120,17 @@ class PromoteToAdminView(generics.CreateAPIView):
 class VideoManagementView(generics.GenericAPIView):
     permission_classes = [IsAuthenticated, IsAdmin]
     serializer_class = VideoSerializer
-    queryset = Video.objects.all().order_by("-upload_date")
+    queryset = Video.objects.select_related("uploader").all().order_by("-upload_date")
 
     def get(self, request, video_id=None):
         if video_id:
-            # Handle retrieving a single video
             video = self.get_object_by_id(video_id)
             serializer = self.get_serializer(video)
             return Response(serializer.data)
         else:
-            # Handle retrieving all videos
-            videos = self.get_queryset()
+            limit = safe_int_param(request, "limit", 50, 1, 200)
+            offset = safe_int_param(request, "offset", 0, 0)
+            videos = self.get_queryset()[offset:offset + limit]
             serializer = self.get_serializer(videos, many=True)
             return Response(serializer.data)
 
@@ -136,6 +140,7 @@ class VideoManagementView(generics.GenericAPIView):
 
         if serializer.is_valid():
             serializer.save()
+            CacheService.invalidate_feed()
             return Response(serializer.data)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -143,6 +148,7 @@ class VideoManagementView(generics.GenericAPIView):
     def delete(self, request, video_id):
         video = self.get_object_by_id(video_id)
         video.delete()
+        CacheService.invalidate_feed()
         return Response(
             {"message": "Video successfully deleted"}, status=status.HTTP_204_NO_CONTENT
         )
@@ -167,13 +173,13 @@ class VideoStatsView(generics.RetrieveAPIView):
             .annotate(count=Count("id"))
         )
 
-        most_viewed = Video.objects.order_by("-views")[:5]
+        most_viewed = Video.objects.select_related("uploader").order_by("-views")[:5]
         most_viewed_serializer = VideoFeedSerializer(most_viewed, many=True)
 
-        most_liked = Video.objects.order_by("-likes")[:5]
+        most_liked = Video.objects.select_related("uploader").order_by("-likes")[:5]
         most_liked_serializer = VideoFeedSerializer(most_liked, many=True)
 
-        recent_videos = Video.objects.order_by("-upload_date")[:5]
+        recent_videos = Video.objects.select_related("uploader").order_by("-upload_date")[:5]
         recent_serializer = VideoFeedSerializer(recent_videos, many=True)
 
         return Response(
@@ -197,14 +203,13 @@ class WebcamRecordingsView(generics.ListAPIView):
     serializer_class = WebcamRecordingSerializer
     queryset = (
         WebcamRecording.objects.all()
-        .select_related("video", "recorder")
+        .select_related("video", "recorder", "video__uploader")
         .order_by("-recording_date")
     )
 
     def get_queryset(self):
         queryset = super().get_queryset()
 
-        # Optional filters
         user_id = self.request.query_params.get("user_id")
         video_id = self.request.query_params.get("video_id")
         status = self.request.query_params.get("status")
@@ -218,4 +223,30 @@ class WebcamRecordingsView(generics.ListAPIView):
         if status:
             queryset = queryset.filter(upload_status=status)
 
-        return queryset
+        limit = safe_int_param(self.request, "limit", 50, 1, 200)
+        offset = safe_int_param(self.request, "offset", 0, 0)
+        return queryset[offset:offset + limit]
+
+
+class DeleteWebcamRecordingView(generics.DestroyAPIView):
+    permission_classes = [IsAuthenticated, IsAdmin]
+    queryset = WebcamRecording.objects.all()
+    lookup_url_kwarg = "recording_id"
+
+    def destroy(self, request, *args, **kwargs):
+        recording = self.get_object()
+        recording_id = recording.id
+        video_id = recording.video_id
+
+        AzureStorageService.delete_blob_from_url(recording.recording_url)
+        if recording.thumbnail_url:
+            AzureStorageService.delete_blob_from_url(recording.thumbnail_url)
+
+        recording.delete()
+
+        EmotionAnalysisService._aggregate_video(video_id)
+
+        return Response(
+            {"message": f"Recording {recording_id} deleted successfully"},
+            status=status.HTTP_200_OK,
+        )

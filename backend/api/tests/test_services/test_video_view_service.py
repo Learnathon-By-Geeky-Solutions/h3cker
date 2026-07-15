@@ -40,7 +40,7 @@ def test_video(db, video_uploader):
         video_url="https://example.com/test_video.mp4",
         thumbnail_url="https://example.com/thumbnail.jpg",
         uploader=video_uploader,
-        duration="00:05:30"
+        duration_seconds=330
     )
 
 
@@ -55,7 +55,7 @@ def private_video(db, video_uploader):
         video_url="https://example.com/private_video.mp4",
         thumbnail_url="https://example.com/private_thumbnail.jpg",
         uploader=video_uploader,
-        duration="00:03:45"
+        duration_seconds=225
     )
 
 
@@ -70,7 +70,7 @@ def limited_video(db, video_uploader):
         video_url="https://example.com/limited_video.mp4",
         thumbnail_url="https://example.com/limited_thumbnail.jpg",
         uploader=video_uploader,
-        duration="00:02:15",
+        duration_seconds=135,
         view_limit=5,
         views=4  # Just below the limit
     )
@@ -87,7 +87,7 @@ def expiring_video(db, video_uploader):
         video_url="https://example.com/expiring_video.mp4",
         thumbnail_url="https://example.com/expiring_thumbnail.jpg",
         uploader=video_uploader,
-        duration="00:04:20",
+        duration_seconds=260,
         auto_private_after=timezone.now() - timedelta(hours=1)  # Already expired
     )
 
@@ -305,7 +305,7 @@ class TestVideoViewService:
             video_url="https://example.com/dual_limited.mp4",
             thumbnail_url="https://example.com/dual_thumbnail.jpg",
             uploader=video_uploader,
-            duration="00:01:30",
+            duration_seconds=90,
             view_limit=10,
             views=9,  # One view away from limit
             auto_private_after=timezone.now() - timedelta(minutes=5)  # Already expired
