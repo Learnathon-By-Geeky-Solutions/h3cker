@@ -122,6 +122,15 @@ const Video = () => {
     if (node) observer.current.observe(node);
   }, [loading, loadingMore, hasMore]);
   
+  useEffect(() => {
+    return () => {
+      if (observer.current) {
+        observer.current.disconnect();
+        observer.current = null;
+      }
+    };
+  }, []);
+  
   const fetchVideoData = useCallback(async () => {
     try {
       setLoading(true);
@@ -270,9 +279,10 @@ const Video = () => {
     }
   };
   
-  const handleVideoInteraction = (videoId, event) => {
+  const handleVideoInteraction = (video, event) => {
     if (!event.type || event.type === 'click' || (event.type === 'keydown' && event.key === 'Enter')) {
-      navigate(`/video/${videoId}`);
+      const navId = video.uuid || video.id;
+      navigate(`/video/${navId}`);
     }
   };
   
@@ -441,8 +451,8 @@ const Video = () => {
                     <button
                       key={video.id}
                       ref={isLastElement ? lastVideoElementRef : null}
-                      onClick={(e) => handleVideoInteraction(video.id, e)}
-                      onKeyDown={(e) => handleVideoInteraction(video.id, e)}
+                      onClick={(e) => handleVideoInteraction(video, e)}
+                      onKeyDown={(e) => handleVideoInteraction(video, e)}
                       className="block w-full text-left bg-transparent border-none p-0"
                       aria-label={`Watch video: ${video.title}`}
                     >
@@ -456,8 +466,8 @@ const Video = () => {
                     <button
                       key={video.id}
                       ref={isLastElement ? lastVideoElementRef : null}
-                      onClick={(e) => handleVideoInteraction(video.id, e)}
-                      onKeyDown={(e) => handleVideoInteraction(video.id, e)}
+                      onClick={(e) => handleVideoInteraction(video, e)}
+                      onKeyDown={(e) => handleVideoInteraction(video, e)}
                       className="block w-full text-left bg-gray-800 rounded-lg overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-700 hover:bg-gray-700/60 p-0"
                       aria-label={`Watch video: ${video.title}`}
                     >

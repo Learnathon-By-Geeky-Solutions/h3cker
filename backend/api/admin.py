@@ -78,7 +78,7 @@ class VideoAdmin(admin.ModelAdmin):
             None,
             {"fields": ("title", "description", "category", "visibility", "uploader")},
         ),
-        ("Media", {"fields": ("video_url", "thumbnail_url", "duration")}),
+        ("Media", {"fields": ("video_url", "thumbnail_url", "duration_seconds")}),
         ("Stats", {"fields": ("views", "likes")}),
         ("Limits", {"fields": ("view_limit", "auto_private_after")}),
     )
@@ -165,7 +165,7 @@ class VideoAdmin(admin.ModelAdmin):
                     video.views,
                     video.likes,
                     video.upload_date.strftime("%Y-%m-%d %H:%M"),
-                    video.duration,
+                    video.duration_seconds,
                     video.view_limit or "No limit",
                 ]
             )

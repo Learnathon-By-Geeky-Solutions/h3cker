@@ -40,7 +40,7 @@ def test_video(db, video_uploader):
         video_url="https://example.com/test_video.mp4",
         thumbnail_url="https://example.com/thumbnail.jpg",
         uploader=video_uploader,
-        duration="00:05:30",
+        duration_seconds=330,
         likes=0
     )
 

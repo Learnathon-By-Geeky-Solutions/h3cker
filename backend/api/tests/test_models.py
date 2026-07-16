@@ -219,7 +219,7 @@ class TestVideoModel:
             video_url="https://example.com/video",
             thumbnail_url="https://example.com/thumbnail",
             uploader=user,
-            duration="10:30"
+            duration_seconds=630
         )
         
         assert video.title == "Test Video"
@@ -231,7 +231,7 @@ class TestVideoModel:
         assert video.uploader == user
         assert video.views == 0
         assert video.likes == 0
-        assert video.duration == "10:30"
+        assert video.duration_seconds == 630
     
     def test_video_str(self):
         # Test the string representation
@@ -263,7 +263,7 @@ class TestVideoModel:
         assert video.visibility == "private" # Default visibility
         assert video.views == 0
         assert video.likes == 0
-        assert video.duration == "0:00" # Check default value
+        assert video.duration_seconds == 0 # Check default value
         assert video.auto_private_after is None
         assert video.view_limit is None
     

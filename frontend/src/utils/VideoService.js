@@ -6,40 +6,63 @@ import ApiService from './ApiService';
 class VideoService {
   static _cache = {
     videoFeed: null,
+    videoFeedTime: 0,
     videoDetails: {},
+    videoDetailsOrder: [],
+    videoDetailsMax: 50,
+    adminVideos: null,
+    adminVideosTime: 0,
     inProgress: {}
   };
+
+  static CACHE_TTL_FEED = 60_000;
+  static CACHE_TTL_DETAIL = 120_000;
+  static CACHE_TTL_ADMIN = 30_000;
+
+  static _isFresh(timestamp, ttl) {
+    return timestamp > 0 && (Date.now() - timestamp) < ttl;
+  }
+
+  static _touchVideoDetail(videoId) {
+    const idx = this._cache.videoDetailsOrder.indexOf(videoId);
+    if (idx >= 0) this._cache.videoDetailsOrder.splice(idx, 1);
+    this._cache.videoDetailsOrder.push(videoId);
+    if (this._cache.videoDetailsOrder.length > this._cache.videoDetailsMax) {
+      const oldest = this._cache.videoDetailsOrder.shift();
+      delete this._cache.videoDetails[oldest];
+    }
+  }
 
   /**
    * Fetch public videos for the feed
    * @returns {Array} Array of videos
    */
   static async getVideoFeed() {
+    if (this._isFresh(this._cache.videoFeedTime, this.CACHE_TTL_FEED)) {
+      return this._cache.videoFeed;
+    }
+    
+    if (this._cache.inProgress.videoFeed) {
+      return await this._cache.inProgress.videoFeed;
+    }
+    
+    console.log('Fetching public video feed...');
+    
+    this._cache.inProgress.videoFeed = ApiService.get('video-feed/');
     try {
-      if (this._cache.videoFeed) {
-        return this._cache.videoFeed;
-      }
-      
-      if (this._cache.inProgress.videoFeed) {
-        return await this._cache.inProgress.videoFeed;
-      }
-      
-      console.log('Fetching public video feed...');
-      
-      this._cache.inProgress.videoFeed = ApiService.get('video-feed/');
       const response = await this._cache.inProgress.videoFeed;
-      delete this._cache.inProgress.videoFeed;
-      
-      console.log(`Fetched ${response?.length || 0} videos for feed.`);
-      
       const videos = Array.isArray(response) ? response : [];
       this._cache.videoFeed = videos;
-      
+      this._cache.videoFeedTime = Date.now();
       return videos;
     } catch (error) {
       console.error('Error fetching video feed:', error);
+      if (this._cache.videoFeed) {
+        return this._cache.videoFeed;
+      }
+      throw error;
+    } finally {
       delete this._cache.inProgress.videoFeed;
-      return [];
     }
   }
 
@@ -87,26 +110,31 @@ class VideoService {
       throw new Error("Video ID is required.");
     }
     
+    const cached = this._cache.videoDetails[videoId];
+    if (cached && this._isFresh(cached._fetchedAt, this.CACHE_TTL_DETAIL)) {
+      return cached;
+    }
+    
+    if (this._cache.inProgress[`videoDetails_${videoId}`]) {
+      return await this._cache.inProgress[`videoDetails_${videoId}`];
+    }
+    
+    console.log(`Fetching details for video ID: ${videoId}`);
+    
+    this._cache.inProgress[`videoDetails_${videoId}`] = ApiService.get(`video/${videoId}/`);
     try {
-      if (this._cache.videoDetails[videoId]) {
-        return this._cache.videoDetails[videoId];
-      }
-      
-      if (this._cache.inProgress[`videoDetails_${videoId}`]) {
-        return await this._cache.inProgress[`videoDetails_${videoId}`];
-      }
-      
-      console.log(`Fetching details for video ID: ${videoId}`);
-      
-      this._cache.inProgress[`videoDetails_${videoId}`] = ApiService.get(`video/${videoId}/`);
       const response = await this._cache.inProgress[`videoDetails_${videoId}`];
-      delete this._cache.inProgress[`videoDetails_${videoId}`];
-  
+      response._fetchedAt = Date.now();
       this._cache.videoDetails[videoId] = response;
+      this._touchVideoDetail(videoId);
+      this._cache.videoFeed = null;
+      this._cache.videoFeedTime = 0;
       return response;
     } catch (error) {
-      delete this._cache.inProgress[`videoDetails_${videoId}`];
+      if (cached) return cached;
       throw error;
+    } finally {
+      delete this._cache.inProgress[`videoDetails_${videoId}`];
     }
   }
 
@@ -233,6 +261,8 @@ class VideoService {
     }
     console.log(`Recording view for video ID: ${videoId}`);
     const response = await ApiService.post(`videos/${videoId}/view/`);
+    this._cache.videoFeed = null;
+    this._cache.videoFeedTime = 0;
     return response;
   }
   
@@ -247,6 +277,8 @@ class VideoService {
     }
     console.log(`Toggling like status for video ID: ${videoId}`);
     const response = await ApiService.post(`videos/${videoId}/like/`);
+    this._cache.videoFeed = null;
+    this._cache.videoFeedTime = 0;
     return response;
   }
   
@@ -396,31 +428,29 @@ class VideoService {
    * @returns {Array} All videos
    */
   static async adminGetAllVideos() {
+    if (this._isFresh(this._cache.adminVideosTime, this.CACHE_TTL_ADMIN)) {
+      return this._cache.adminVideos;
+    }
+    
+    if (this._cache.inProgress.adminVideos) {
+      return await this._cache.inProgress.adminVideos;
+    }
+    
+    console.log('Fetching all videos (admin)');
+    
+    this._cache.inProgress.adminVideos = ApiService.get('admin/videos/');
     try {
-      if (this._cache.adminVideos) {
-        return this._cache.adminVideos;
-      }
-      
-      if (this._cache.inProgress.adminVideos) {
-        return await this._cache.inProgress.adminVideos;
-      }
-      
-      console.log('Fetching all videos (admin)');
-      
-      this._cache.inProgress.adminVideos = ApiService.get('admin/videos/');
       const response = await this._cache.inProgress.adminVideos;
-      delete this._cache.inProgress.adminVideos;
-      
-      console.log(`Fetched ${response?.length || 0} videos (admin).`);
-      
       const videos = Array.isArray(response) ? response : [];
       this._cache.adminVideos = videos;
-      
+      this._cache.adminVideosTime = Date.now();
       return videos;
     } catch (error) {
       console.error('Error fetching admin videos:', error);
-      delete this._cache.inProgress.adminVideos;
+      if (this._cache.adminVideos) return this._cache.adminVideos;
       throw error;
+    } finally {
+      delete this._cache.inProgress.adminVideos;
     }
   }
   
@@ -470,10 +500,13 @@ class VideoService {
     console.log(`Deleting video ID: ${videoId} (admin)`);
     const result = await ApiService.delete(`admin/videos/${videoId}/`);
     
-    // Clear caches after deletion
     delete this._cache.videoDetails[videoId];
+    const idx = this._cache.videoDetailsOrder.indexOf(videoId);
+    if (idx >= 0) this._cache.videoDetailsOrder.splice(idx, 1);
     this._cache.videoFeed = null;
+    this._cache.videoFeedTime = 0;
     this._cache.adminVideos = null;
+    this._cache.adminVideosTime = 0;
     
     return result;
   }
@@ -507,7 +540,9 @@ class VideoService {
     }
 
     this._cache.videoFeed = null;
+    this._cache.videoFeedTime = 0;
     this._cache.adminVideos = null;
+    this._cache.adminVideosTime = 0;
     
     return result;
   }
@@ -533,9 +568,10 @@ class VideoService {
       };
     }
     
-    // Force refresh of list caches on next fetch
     this._cache.videoFeed = null;
+    this._cache.videoFeedTime = 0;
     this._cache.adminVideos = null;
+    this._cache.adminVideosTime = 0;
     
     return result;
   }
@@ -546,6 +582,94 @@ class VideoService {
    */
   static async adminGetVideoStats() {
     return await ApiService.get('admin/video-stats/');
+  }
+
+  /**
+   * Delete a webcam recording (admin only)
+   * @param {string|number} recordingId - ID of the recording to delete
+   * @returns {Object} Deletion result
+   */
+  static async adminDeleteWebcamRecording(recordingId) {
+    if (!recordingId) {
+      throw new Error('Recording ID is required for deletion');
+    }
+    return await ApiService.delete(`admin/webcam-recordings/${recordingId}/`);
+  }
+
+  /**
+   * Mark a webcam recording's blob upload as completed on the backend
+   * @param {string|number} videoId - ID of the video
+   * @param {string|number} recordingId - ID of the webcam recording
+   * @returns {Object} Completion result
+   */
+  static async markWebcamUploadComplete(videoId, recordingId) {
+    if (!videoId || !recordingId) {
+      throw new Error('Video ID and recording ID are required to mark upload complete');
+    }
+
+    try {
+      console.log(`Marking webcam upload complete for recording ${recordingId} (video ${videoId})`);
+      return await ApiService.patch(
+        `videos/${videoId}/webcam-upload/${recordingId}/complete/`,
+        {}
+      );
+    } catch (error) {
+      console.error('Error marking webcam upload complete:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Trigger a manual emotion analysis run (admin only)
+   * @returns {Object} Run start result
+   */
+  static async runEmotionAnalysis() {
+    return await ApiService.post('admin/run-emotion-analysis/', {});
+  }
+
+  /**
+   * Get the latest emotion analysis run status (admin only)
+   * @returns {Object} Analysis run status
+   */
+  static async getEmotionAnalysisStatus() {
+    return await ApiService.get('admin/emotion-analysis-status/');
+  }
+
+  /**
+   * Get the aggregated emotion summary for a video (owner/admin)
+   * @param {string|number} videoId - ID of the video
+   * @returns {Object} Emotion summary
+   */
+  static async getVideoEmotionSummary(videoId) {
+    if (!videoId) {
+      throw new Error('Video ID is required to fetch emotion summary');
+    }
+    return await ApiService.get(`video/${videoId}/emotion-summary/`);
+  }
+
+  /**
+   * Get per-recording emotion breakdowns for a video (owner/admin drill-down)
+   * @param {string|number} videoId - ID of the video
+   * @returns {Array} Per-recording emotion data
+   */
+  static async getVideoEmotionRecordings(videoId) {
+    if (!videoId) {
+      throw new Error('Video ID is required to fetch emotion recordings');
+    }
+    const response = await ApiService.get(`video/${videoId}/emotion/recordings/`);
+    return Array.isArray(response) ? response : [];
+  }
+
+  /**
+   * Get the current viewer's own emotion timeline for a video
+   * @param {string|number} videoId - ID of the video
+   * @returns {Object} My emotion data
+   */
+  static async getMyEmotion(videoId) {
+    if (!videoId) {
+      throw new Error('Video ID is required to fetch my emotion data');
+    }
+    return await ApiService.get(`video/${videoId}/my-emotion/`);
   }
   
   /**
@@ -565,22 +689,16 @@ class VideoService {
   /**
    * Promote a user to admin (admin only)
    * @param {string|number} userId - ID of the user
-   * @param {string} adminPassword - Admin password for verification
    * @returns {Object} Promotion result
    */
-  static async adminPromoteToAdmin(userId, adminPassword) {
+  static async adminPromoteToAdmin(userId) {
     if (!userId) {
       throw new Error("User ID is required");
-    }
-    
-    if (!adminPassword) {
-      throw new Error("Admin password is required for security verification");
     }
     
     console.log(`Promoting user ID: ${userId} to admin (admin)`);
     return await ApiService.post('admin/users/promote/', {
       user_id: userId,
-      admin_password: adminPassword
     });
   }
 

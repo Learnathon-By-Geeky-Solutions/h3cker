@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import { Button, Spinner } from 'flowbite-react';
-import { Play, Pause, Volume2, VolumeX, Maximize } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, Maximize, CameraOff } from 'lucide-react';
 import WebcamRecorder from './WebcamRecorder';
 
 const BUFFER_AHEAD = 30; 
@@ -17,13 +17,15 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded,
   const [showControls, setShowControls] = useState(true);
   const [playbackStarted, setPlaybackStarted] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [showRecordingPausedIndicator, setShowRecordingPausedIndicator] = useState(false);
-  const [webcamPermissionState, setWebcamPermissionState] = useState(null);
+  const [faceBlocked, setFaceBlocked] = useState(false);
 
   const videoRef = useRef(null);
   const videoContainerRef = useRef(null);
   const controlsTimerRef = useRef(null);
   const webcamRecorderRef = useRef(null);
+  const isPlayingRef = useRef(false);
+  const webcamPermissionRef = useRef(null);
+  const faceBlockedRef = useRef(false);
   
   const bufferCache = useRef({});
   const segmentsLoaded = useRef(new Set());
@@ -99,6 +101,7 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded,
 
     const handleEnded = () => {
       setIsPlaying(false);
+      isPlayingRef.current = false;
       if (onEnded) onEnded();
       
       // Handle webcam recording completion when video ends
@@ -107,22 +110,16 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded,
 
     const handlePlay = () => {
       setIsPlaying(true);
+      isPlayingRef.current = true;
       if (!playbackStarted && onPlay) {
         setPlaybackStarted(true);
         onPlay();
       }
-      
-      // Hide paused indicator when video plays
-      setShowRecordingPausedIndicator(false);
     };
 
     const handlePause = () => {
       setIsPlaying(false);
-      
-      // Show paused indicator when video is paused
-      if (webcamPermissionState === 'granted') {
-        setShowRecordingPausedIndicator(true);
-      }
+      isPlayingRef.current = false;
     };
 
     const handleVolumeChange = () => {
@@ -153,18 +150,6 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded,
       videoContainerRef.current.addEventListener('mousemove', handleMouseMove);
     }
 
-    // Handle page unload to ensure recording is saved
-    const handleBeforeUnload = (e) => {
-      if (webcamPermissionState === 'granted' && isPlaying) {
-        // Notify the user that navigating away might lose their recording
-        e.preventDefault();
-        e.returnValue = 'Recording in progress - are you sure you want to leave?';
-        return e.returnValue;
-      }
-    };
-    
-    window.addEventListener('beforeunload', handleBeforeUnload);
-
     return () => {
       videoElement.removeEventListener('canplay', handleCanPlay);
       videoElement.removeEventListener('error', handleError);
@@ -175,7 +160,6 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded,
       videoElement.removeEventListener('volumechange', handleVolumeChange);
       videoElement.removeEventListener('progress', handleProgress);
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
-      window.removeEventListener('beforeunload', handleBeforeUnload);
       
       if (videoContainerRef.current) {
         videoContainerRef.current.removeEventListener('mousemove', handleMouseMove);
@@ -190,7 +174,21 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded,
         delete bufferCache.current[key];
       });
     };
-  }, [videoUrl, autoPlay, onEnded, onPlay, playbackStarted, currentTime, webcamPermissionState, isPlaying]);
+  }, [videoUrl, autoPlay, onEnded, onPlay, playbackStarted]);
+
+  // Separate effect for beforeunload (uses refs to avoid stale closure)
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (webcamPermissionRef.current === 'granted' && isPlayingRef.current) {
+        e.preventDefault();
+        e.returnValue = 'Recording in progress - are you sure you want to leave?';
+        return e.returnValue;
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
 
   useEffect(() => {
     setIsLoading(true);
@@ -220,6 +218,7 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded,
 
   const togglePlay = () => {
     if (!videoRef.current) return;
+    if (faceBlockedRef.current) return;
     
     if (isPlaying) {
       videoRef.current.pause();
@@ -265,7 +264,7 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded,
   
   // Handle webcam permission change
   const handleWebcamPermissionChange = (state) => {
-    setWebcamPermissionState(state);
+    webcamPermissionRef.current = state;
   };
   
   // Handle recording error
@@ -275,6 +274,24 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded,
     // just log the error and allow the video to continue playing
   };
   
+  // Pause video instantly when face-blocked
+  useEffect(() => {
+    if (faceBlocked && isPlaying && videoRef.current) {
+      videoRef.current.pause();
+      // Don't set isPlaying here — the pause event handler will do that
+    }
+  }, [faceBlocked, isPlaying]);
+
+  // Handle face-block change from WebcamRecorder — auto-play when unblocked
+  const handleFaceBlockedChange = (blocked) => {
+    const prev = faceBlockedRef.current;
+    faceBlockedRef.current = blocked;
+    setFaceBlocked(blocked);
+    if (prev && !blocked && videoRef.current && !videoRef.current.ended) {
+      videoRef.current.play().catch(() => {});
+    }
+  };
+
   // Handle video complete (end of playback or user navigating away)
   const handleVideoComplete = async () => {
     try {
@@ -290,7 +307,7 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded,
   return (
     <div 
       ref={videoContainerRef}
-      className={`relative w-full ${isFullscreen ? 'h-full' : 'aspect-video'} bg-black rounded-lg overflow-hidden group`}
+      className={`relative w-full ${isFullscreen ? 'h-full' : 'aspect-video'} bg-black ${isFullscreen ? '' : 'rounded-lg'} overflow-hidden group`}
       role="application"
       aria-label="Video Player"
     >
@@ -342,15 +359,12 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded,
           videoId={videoId}
           onPermissionChange={handleWebcamPermissionChange}
           onError={handleRecordingError}
+          showControls={showControls}
+          onFaceBlockedChange={handleFaceBlockedChange}
         />
       )}
 
-      {showRecordingPausedIndicator && (
-        <div className="absolute top-4 left-4 z-20 flex items-center bg-black/50 backdrop-blur-sm px-3 py-1.5 rounded-full">
-          <div className="h-3 w-3 bg-yellow-500 rounded-full mr-2" />
-          <span className="text-white text-sm font-medium">Recording paused</span>
-        </div>
-      )}
+      {/* Recording paused indicator now rendered inside WebcamRecorder */}
 
       <button 
         className="absolute inset-0 w-full h-full bg-transparent border-0 cursor-default focus:outline-none"
@@ -387,9 +401,10 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded,
    
             <button 
               onClick={togglePlay}
-              className="text-white focus:outline-none hover:text-blue-400"
-              aria-label={isPlaying ? "Pause" : "Play"}
+              className={`focus:outline-none ${faceBlocked && !isPlaying ? 'text-gray-500 cursor-not-allowed' : 'text-white hover:text-blue-400'}`}
+              aria-label={isPlaying ? 'Pause' : faceBlocked ? 'Face required to play' : 'Play'}
               type="button"
+              disabled={faceBlocked && !isPlaying}
             >
               {isPlaying ? <Pause size={24} /> : <Play size={24} />}
             </button>
@@ -442,7 +457,7 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded,
         </div>
       </div>
       
-      {!isPlaying && !isLoading && !error && (
+      {!isPlaying && !isLoading && !error && !faceBlocked && (
         <button 
           onClick={togglePlay}
           className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-white bg-blue-600 bg-opacity-70 hover:bg-opacity-90 rounded-full p-4 transition-all duration-150"
@@ -451,6 +466,13 @@ const VideoPlayer = ({ videoUrl, thumbnailUrl, title, autoPlay = false, onEnded,
         >
           <Play size={32} />
         </button>
+      )}
+
+      {!isPlaying && !isLoading && !error && faceBlocked && (
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center text-white bg-gray-900/80 backdrop-blur-sm rounded-lg px-6 py-4">
+          <CameraOff size={36} className="mb-2 text-yellow-400" />
+          <p className="text-sm font-medium text-center">Face the camera to continue watching</p>
+        </div>
       )}
     </div>
   );

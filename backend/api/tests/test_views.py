@@ -45,7 +45,7 @@ def test_video(db, test_user):
         video_url="https://example.com/feed_video",
         thumbnail_url="https://example.com/feed_thumb",
         uploader=test_user,
-        duration="05:00"
+        duration_seconds=300
     )
     return video
 
@@ -60,7 +60,7 @@ def test_video_private(db, test_user):
         video_url="https://example.com/private_video",
         thumbnail_url="https://example.com/private_thumb",
         uploader=test_user,
-        duration="03:00"
+        duration_seconds=180
     )
     return video
 
@@ -146,7 +146,7 @@ def company_video(db, company_user):
         video_url="https://example.com/company_video",
         thumbnail_url="https://example.com/company_thumb",
         uploader=company_user,
-        duration="04:30"
+        duration_seconds=270
     )
     return video
 
@@ -242,6 +242,8 @@ class TestVideoFeedView:
 
     def test_video_feed_empty(self, api_client):
         """Test retrieving the feed when there are no videos."""
+        from django.core.cache import cache
+        cache.clear()
         url = reverse('video-feed')
         response = api_client.get(url)
         assert response.status_code == status.HTTP_200_OK

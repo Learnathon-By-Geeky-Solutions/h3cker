@@ -1,15 +1,27 @@
-import React, { useRef, useState, useEffect, forwardRef, useImperativeHandle } from 'react';
+import React, { useRef, useState, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
 import PropTypes from 'prop-types';
 import { Modal, Button, Alert, Select } from 'flowbite-react';
-import { Camera, CameraOff, Info, RefreshCw, SwitchCamera } from 'lucide-react';
+import { Camera, CameraOff, Info, RefreshCw, SwitchCamera, Eye, EyeOff, ArrowLeft } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import VideoService from '../../../utils/VideoService';
+import { FaceTracker } from '../../../utils/FaceTracker';
+import { useToast } from '../../../utils/ToastService';
+
+const STORAGE_KEY = 'wc_recording_indicator_visible';
+const CONSENT_KEY = 'wc_webcam_consent';
+const FACE_PRE_CHECK_MS = 5000;
+const FACE_MISSED_THRESHOLD = 3;
 
 const WebcamRecorder = forwardRef(({ 
   isVideoPlaying, 
   videoId,
   onPermissionChange,
-  onError
+  onError,
+  showControls,
+  onFaceBlockedChange,
 }, ref) => {
+  const navigate = useNavigate();
+  const { toasts, addToast, dismissToast, clearToasts } = useToast();
   const [webcamPermission, setWebcamPermission] = useState('pending'); 
   const [showPermissionModal, setShowPermissionModal] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -23,12 +35,37 @@ const WebcamRecorder = forwardRef(({
   const [videoDevices, setVideoDevices] = useState([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState('');
   const [showDeviceSelector, setShowDeviceSelector] = useState(false);
+  const [showRecordingIndicator, setShowRecordingIndicator] = useState(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      return stored !== null ? stored === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
+
+  const [faceTrackerReady, setFaceTrackerReady] = useState(false);
+  const [faceTrackerFailed, setFaceTrackerFailed] = useState(false);
+  const [facePreCheckDone, setFacePreCheckDone] = useState(false);
+  const [faceAway, setFaceAway] = useState(false);
+  const [hasExistingRecording, setHasExistingRecording] = useState(false);
   
   const webcamRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
   const streamRef = useRef(null);
   const recordingTimeoutRef = useRef(null);
+  const mountedRef = useRef(true);
+  const recordingCompletedRef = useRef(false);
+  const faceTrackerRef = useRef(null);
+  const facePreCheckTimerRef = useRef(null);
+  const faceWasMetRef = useRef(true);
+  const facePreCheckDoneRef = useRef(false);
+  const handleFaceResultRef = useRef(null);
+  const faceAwayRef = useRef(false);
+  const awayToastIdRef = useRef(null);
+  const preCheckToastIdRef = useRef(null);
+  const missedFramesRef = useRef(0);
   
 
   useImperativeHandle(ref, () => ({
@@ -38,35 +75,98 @@ const WebcamRecorder = forwardRef(({
     }
   }));
   
+  const getStoredConsent = () => {
+    try { return localStorage.getItem(CONSENT_KEY); } catch { return null; }
+  };
+
+  const setStoredConsent = (value) => {
+    try { localStorage.setItem(CONSENT_KEY, value); } catch {}
+  };
+
+  const checkExistingRecording = useCallback(async (vid) => {
+    try {
+      const list = await VideoService.getUserWebcamRecordings();
+      const exists = Array.isArray(list) && list.some(r => Number(r.video_id) === Number(vid));
+      recordingCompletedRef.current = exists;
+      setHasExistingRecording(exists);
+      if (exists) {
+        addToast('You already recorded for this video — rewards still active', 'info', 4000);
+      }
+    } catch {
+      recordingCompletedRef.current = false;
+      setHasExistingRecording(false);
+    }
+  }, [addToast]);
+
   useEffect(() => {
-    checkWebcamPermission();
-    
+    mountedRef.current = true;
+    checkExistingRecording(videoId);
+
+    const stored = getStoredConsent();
+    if (stored === 'denied') {
+      setShowPermissionModal(true);
+    } else if (stored === 'granted') {
+      setWebcamPermission('granted');
+      initWebcamAfterPermission();
+    } else {
+      checkWebcamPermission();
+    }
+
     return () => {
+      mountedRef.current = false;
       if (recordingTimeoutRef.current) {
         clearTimeout(recordingTimeoutRef.current);
       }
+      if (facePreCheckTimerRef.current) {
+        clearTimeout(facePreCheckTimerRef.current);
+      }
+      if (faceTrackerRef.current) {
+        faceTrackerRef.current.destroy();
+        faceTrackerRef.current = null;
+      }
     };
   }, []);
-  
+
+  useEffect(() => {
+    checkExistingRecording(videoId);
+  }, [videoId, checkExistingRecording]);
+
+  const initWebcamAfterPermission = async (existingStream = null) => {
+    const devices = await getVideoDevices(existingStream);
+    if (selectedDeviceId || devices.length >= 1) {
+      try {
+        await setupWebcam(selectedDeviceId || devices[0]?.deviceId);
+      } catch (deviceErr) {
+        handleDeviceError(deviceErr);
+      }
+    }
+  };
 
   useEffect(() => {
     return () => {
       stopAndCleanupWebcam();
     };
   }, []);
-  
+
+  const shouldRecord = isVideoPlaying && (
+    !faceTrackerReady ||
+    faceTrackerFailed ||
+    !facePreCheckDone ||
+    !faceAway
+  );
 
   useEffect(() => {
-    if (webcamPermission === 'granted') {
-      if (isVideoPlaying && !isRecording) {
-        startRecording();
-      } else if (isVideoPlaying && isRecording && isPaused) {
-        resumeRecording();
-      } else if (!isVideoPlaying && isRecording && !isPaused) {
-        pauseRecording();
-      }
+    if (webcamPermission !== 'granted') return;
+
+    if (shouldRecord && !isRecording) {
+      startRecording();
+    } else if (shouldRecord && isRecording && isPaused) {
+      resumeRecording();
+    } else if (!shouldRecord && isRecording && !isPaused) {
+      pauseRecording();
     }
-  }, [isVideoPlaying, webcamPermission, isRecording, isPaused]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shouldRecord, webcamPermission, isRecording, isPaused]);
   
   // This function gets a single label for a device
   const getDeviceLabel = async (deviceId) => {
@@ -89,30 +189,24 @@ const WebcamRecorder = forwardRef(({
   };
   
  
-  const getVideoDevices = async () => {
+  const getVideoDevices = async (existingStream = null) => {
     try {
-      console.log('Enumerating video devices...');
-      
-  
-      let initialStream;
-      try {
-        initialStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      } catch (err) {
-        console.error('Error getting initial media stream:', err);
-     
+      let stream = existingStream;
+      if (!stream) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        } catch {
+          stream = null;
+        }
       }
-      
-      // enumerate all devices
+
       const devices = await navigator.mediaDevices.enumerateDevices();
       const videoInputs = devices.filter(device => device.kind === 'videoinput');
-      
-      console.log('Available video devices:', videoInputs);
-      
-      if (initialStream) {
-        initialStream.getTracks().forEach(track => track.stop());
+
+      if (stream && !existingStream) {
+        stream.getTracks().forEach(track => track.stop());
       }
-      
-   
+
       const enhancedDevices = await Promise.all(
         videoInputs.map(async (device) => {
           if (!device.label) {
@@ -122,24 +216,19 @@ const WebcamRecorder = forwardRef(({
           return device;
         })
       );
-      
-      console.log('Enhanced video devices with labels:', enhancedDevices);
+
       setVideoDevices(enhancedDevices);
 
       if (enhancedDevices.length === 1) {
         setSelectedDeviceId(enhancedDevices[0].deviceId);
         return enhancedDevices;
-      } 
-    
-      else if (enhancedDevices.length > 1) {
-       
+      } else if (enhancedDevices.length > 1) {
         if (!selectedDeviceId) {
           setSelectedDeviceId(enhancedDevices[0].deviceId);
         }
-        setShowDeviceSelector(true);
         return enhancedDevices;
       }
-      
+
       return enhancedDevices;
     } catch (error) {
       console.error('Error enumerating devices:', error);
@@ -148,102 +237,197 @@ const WebcamRecorder = forwardRef(({
   };
   
   const checkWebcamPermission = async () => {
-    try {
-      console.log('Checking webcam permission...');
-      
-      let permissionState;
-      try {
+    const stored = getStoredConsent();
+    if (stored === 'denied') {
+      setWebcamPermission('denied');
+      if (onPermissionChange) onPermissionChange('denied');
+      return;
+    }
+    if (stored === 'granted') {
+      setWebcamPermission('granted');
+      await initWebcamAfterPermission();
+      if (onPermissionChange) onPermissionChange('granted');
+      return;
+    }
 
+    try {
+      let permissionState = 'prompt';
+      try {
         const result = await navigator.permissions.query({ name: 'camera' });
         permissionState = result.state;
-        console.log('Camera permission state:', permissionState);
-      } catch (err) {
-        console.warn('Could not query camera permission:', err);
-        setShowPermissionModal(true);
-        return;
+      } catch {
+        // Permissions API unsupported — fall through to modal
       }
-      
+
       if (permissionState === 'granted') {
         setWebcamPermission('granted');
- 
-        const devices = await getVideoDevices();
-        
-      
-        if (devices.length > 1) {
-          setShowDeviceSelector(true);
-        }
-       
-        else if (selectedDeviceId || devices.length === 1) {
-          try {
-            await setupWebcam(selectedDeviceId || devices[0]?.deviceId);
-          } catch (deviceErr) {
-            handleDeviceError(deviceErr);
-          }
-        }
-        
+        setStoredConsent('granted');
+        await initWebcamAfterPermission();
         if (onPermissionChange) onPermissionChange('granted');
       } else if (permissionState === 'prompt') {
-        // Show permission modal if we need to ask
         setShowPermissionModal(true);
       } else {
         setWebcamPermission('denied');
+        setStoredConsent('denied');
         if (onPermissionChange) onPermissionChange('denied');
       }
     } catch (error) {
       console.error('Error in checkWebcamPermission:', error);
-      // Fallback to showing the permission modal
       setShowPermissionModal(true);
     }
   };
   
   const requestWebcamPermission = async () => {
     try {
-      console.log('Requesting webcam permission...');
-      
-      // First just try to get access to any camera to get permission
-      const initialStream = await navigator.mediaDevices.getUserMedia({ 
-        video: true, 
-        audio: true 
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: false
       });
-      
-      initialStream.getTracks().forEach(track => track.stop());
-      
-      console.log('Initial permission granted, retrieving devices');
-      
- 
-      const devices = await getVideoDevices();
-      
+
+      setStoredConsent('granted');
+      const devices = await getVideoDevices(stream);
+      stream.getTracks().forEach(track => track.stop());
+
       if (devices.length > 0) {
         setWebcamPermission('granted');
         setShowPermissionModal(false);
-        
-        if (devices.length === 1) {
-          // Only one camera, use it
-          console.log('Only one camera detected, using it automatically');
+
+        if (devices.length >= 1) {
           setSelectedDeviceId(devices[0].deviceId);
           await setupWebcam(devices[0].deviceId);
-          if (onPermissionChange) onPermissionChange('granted');
-        } else {
-          // Multiple cameras, show selector
-          console.log('Multiple cameras detected, showing selection dialog');
-          setShowDeviceSelector(true);
           if (onPermissionChange) onPermissionChange('granted');
         }
       } else {
         throw new Error('No camera devices found');
       }
     } catch (error) {
-      console.error('Error requesting webcam:', error);
-      
       if (error.name === 'NotAllowedError') {
         setWebcamPermission('denied');
+        setStoredConsent('denied');
         if (onPermissionChange) onPermissionChange('denied');
       } else {
         handleDeviceError(error);
       }
     }
   };
-  
+
+  function handleFaceResult(result) {
+    if (!mountedRef.current) return;
+
+    const criteria = result.faceCriteriaMet !== undefined ? result.faceCriteriaMet : true;
+    const isCurrentlyAway = faceAwayRef.current;
+    const preCheckDone = facePreCheckDoneRef.current;
+
+    if (!preCheckDone) {
+      if (criteria) {
+        if (preCheckToastIdRef.current !== null) {
+          dismissToast(preCheckToastIdRef.current);
+          preCheckToastIdRef.current = null;
+        }
+        setFacePreCheckDone(true);
+        facePreCheckDoneRef.current = true;
+        if (facePreCheckTimerRef.current) {
+          clearTimeout(facePreCheckTimerRef.current);
+          facePreCheckTimerRef.current = null;
+        }
+      }
+      return;
+    }
+
+    if (criteria) {
+      missedFramesRef.current = 0;
+      if (isCurrentlyAway) {
+        setFaceAway(false);
+        faceAwayRef.current = false;
+        if (awayToastIdRef.current !== null) {
+          dismissToast(awayToastIdRef.current);
+          awayToastIdRef.current = null;
+        }
+        addToast('Resumed', 'success', 2000);
+        if (onFaceBlockedChange) onFaceBlockedChange(false);
+      }
+      faceWasMetRef.current = true;
+    } else {
+      missedFramesRef.current++;
+      if (missedFramesRef.current >= FACE_MISSED_THRESHOLD && !isCurrentlyAway) {
+        setFaceAway(true);
+        faceAwayRef.current = true;
+        awayToastIdRef.current = addToast(
+          'Face not detected — video paused',
+          'warning',
+          0
+        );
+        if (onFaceBlockedChange) onFaceBlockedChange(true);
+      }
+    }
+  }
+
+  useEffect(() => {
+    handleFaceResultRef.current = handleFaceResult;
+  });
+
+  const initFaceTracker = async () => {
+    try {
+      if (faceTrackerRef.current) {
+        faceTrackerRef.current.destroy();
+        faceTrackerRef.current = null;
+      }
+
+      if (!webcamRef.current) {
+        console.warn('[FaceTracker] No video element available');
+        setFaceTrackerFailed(true);
+        return;
+      }
+
+      const tracker = new FaceTracker({
+        preCheckTimeoutMs: FACE_PRE_CHECK_MS,
+      });
+
+      const ok = await tracker.init();
+      if (!ok) {
+        console.warn('[FaceTracker] Model failed to load — running without face verification');
+        setFaceTrackerFailed(true);
+        setFacePreCheckDone(true);
+        addToast('Face verification unavailable — rewards still active', 'info', 4000);
+        return;
+      }
+
+      faceTrackerRef.current = tracker;
+      setFaceTrackerReady(true);
+
+      faceWasMetRef.current = true;
+      faceAwayRef.current = false;
+
+      preCheckToastIdRef.current = addToast(
+        'Please position your face in the center of the camera',
+        'info',
+        0
+      );
+
+      tracker.start(webcamRef.current, (result) => {
+        if (handleFaceResultRef.current) {
+          handleFaceResultRef.current(result);
+        }
+      });
+
+      facePreCheckTimerRef.current = setTimeout(() => {
+        if (mountedRef.current && !facePreCheckDoneRef.current) {
+          if (preCheckToastIdRef.current !== null) {
+            dismissToast(preCheckToastIdRef.current);
+            preCheckToastIdRef.current = null;
+          }
+          setFacePreCheckDone(true);
+          facePreCheckDoneRef.current = true;
+          addToast('Face not detected — verification skipped', 'warning', 5000);
+        }
+      }, FACE_PRE_CHECK_MS);
+    } catch (err) {
+      console.warn('[FaceTracker] Init error:', err);
+      setFaceTrackerFailed(true);
+      setFacePreCheckDone(true);
+    }
+  };
+
   const handleDeviceError = (error) => {
     console.error('Device error:', error);
     let errorMessage = 'Unknown error accessing webcam.';
@@ -338,7 +522,7 @@ const WebcamRecorder = forwardRef(({
     
         constraints = { 
           video: { deviceId: { exact: deviceId } },
-          audio: true 
+          audio: false 
         };
       } else {
         constraints = {
@@ -347,7 +531,7 @@ const WebcamRecorder = forwardRef(({
             width: { ideal: 640 },
             height: { ideal: 480 },
           },
-          audio: true
+          audio: false
         };
       }
       
@@ -356,10 +540,33 @@ const WebcamRecorder = forwardRef(({
       
       streamRef.current = stream;
       
+      // Detect manual permission revocation (browser UI, right-click → disable)
+      stream.getVideoTracks().forEach(track => {
+        track.onended = () => {
+          if (!mountedRef.current) return;
+          stopAndCleanupWebcam();
+          setShowDeviceSelector(true);
+        };
+      });
+      
       if (webcamRef.current) {
         webcamRef.current.srcObject = stream;
       }
       
+      setFaceTrackerReady(false);
+      setFaceTrackerFailed(false);
+      setFacePreCheckDone(false);
+      setFaceAway(false);
+      faceAwayRef.current = false;
+      missedFramesRef.current = 0;
+      faceWasMetRef.current = true;
+
+      initFaceTracker();
+
+      if (isVideoPlaying && !recordingCompletedRef.current && !isRecording) {
+        startRecording();
+      }
+
       return stream;
     } catch (error) {
       console.error('Error accessing webcam:', error);
@@ -372,6 +579,7 @@ const WebcamRecorder = forwardRef(({
       console.error('Cannot start recording: No active stream');
       return;
     }
+    if (recordingCompletedRef.current) return;
     
     try {
   
@@ -389,10 +597,10 @@ const WebcamRecorder = forwardRef(({
       const options = { videoBitsPerSecond: 2500000 }; // 2.5 Mbps
   
       try {
-        if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) {
-          options.mimeType = 'video/webm;codecs=vp9,opus';
-        } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
-          options.mimeType = 'video/webm;codecs=vp8,opus';
+        if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9')) {
+          options.mimeType = 'video/webm;codecs=vp9';
+        } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8')) {
+          options.mimeType = 'video/webm;codecs=vp8';
         } else if (MediaRecorder.isTypeSupported('video/webm')) {
           options.mimeType = 'video/webm';
         }
@@ -427,6 +635,7 @@ const WebcamRecorder = forwardRef(({
       }
       
       recordingTimeoutRef.current = setTimeout(() => {
+        if (!mountedRef.current) return;
         if (isRecording && !isPaused && mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
           console.log('Restarting recording to prevent browser issues...');
           
@@ -434,7 +643,7 @@ const WebcamRecorder = forwardRef(({
           
           // Start a new recorder after a short delay
           setTimeout(() => {
-            if (streamRef.current && isVideoPlaying) {
+            if (mountedRef.current && streamRef.current && isVideoPlaying) {
               startRecording();
             }
           }, 500);
@@ -477,6 +686,7 @@ const WebcamRecorder = forwardRef(({
         }
         
         recordingTimeoutRef.current = setTimeout(() => {
+          if (!mountedRef.current) return;
           if (isRecording && !isPaused && mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
             console.log('Restarting recording to prevent browser issues...');
             
@@ -485,7 +695,7 @@ const WebcamRecorder = forwardRef(({
             
             // Start a new recorder after a short delay
             setTimeout(() => {
-              if (streamRef.current && isVideoPlaying) {
+              if (mountedRef.current && streamRef.current && isVideoPlaying) {
                 startRecording();
               }
             }, 500);
@@ -592,19 +802,21 @@ const WebcamRecorder = forwardRef(({
       
       // Request upload URL from backend
       const response = await VideoService.initiateWebcamUpload(videoId, filename);
-      
+
       if (!response?.upload_url) {
         throw new Error('Failed to get webcam upload URL from server');
       }
-      
+
+      const recordingId = response?.recording_id;
+
       console.log('Received upload URL, starting upload to Azure...');
-      
+
       // Create File object with explicit MIME type
       const fileToUpload = new File([recordingBlob], filename, { 
         type: recordingBlob.type || 'video/webm',
         lastModified: new Date().getTime()
       });
-      
+
       // Upload the recording with chunked upload for better reliability
       await VideoService.uploadFileToBlob(
         response.upload_url,
@@ -614,8 +826,20 @@ const WebcamRecorder = forwardRef(({
           setUploadProgress(progress);
         }
       );
-      
+
       console.log('Webcam recording uploaded successfully');
+      recordingCompletedRef.current = true;
+
+      // Signal the backend that the blob upload finished so the analysis
+      // cron can pick this recording up. Best-effort; do not block the UI.
+      if (recordingId) {
+        try {
+          await VideoService.markWebcamUploadComplete(videoId, recordingId);
+        } catch (completeErr) {
+          console.error('Failed to mark webcam upload complete:', completeErr);
+        }
+      }
+
       setIsUploading(false);
     } catch (error) {
       console.error('Error uploading recording:', error);
@@ -625,6 +849,19 @@ const WebcamRecorder = forwardRef(({
     }
   };
   
+  // Global MediaRecorder error handler — registered once at component mount
+  const mediaRecorderErrorRef = useRef(null);
+  useEffect(() => {
+    const handler = (event) => {
+      if (event.error && event.error.message && event.error.message.includes('MediaRecorder')) {
+        console.error('Global MediaRecorder error:', event.error);
+      }
+    };
+    mediaRecorderErrorRef.current = handler;
+    window.addEventListener('error', handler);
+    return () => window.removeEventListener('error', handler);
+  }, []);
+
   const stopAndCleanupWebcam = () => {
     // Clear recording timeout
     if (recordingTimeoutRef.current) {
@@ -669,61 +906,159 @@ const WebcamRecorder = forwardRef(({
     
     // Clear chunks
     chunksRef.current = [];
+    
+    // Clean up face tracker
+    if (faceTrackerRef.current) {
+      faceTrackerRef.current.destroy();
+      faceTrackerRef.current = null;
+    }
+    setFaceTrackerReady(false);
+    setFacePreCheckDone(false);
+    facePreCheckDoneRef.current = false;
+    faceAwayRef.current = false;
+    missedFramesRef.current = 0;
+    faceWasMetRef.current = true;
+    if (facePreCheckTimerRef.current) {
+      clearTimeout(facePreCheckTimerRef.current);
+      facePreCheckTimerRef.current = null;
+    }
+    if (preCheckToastIdRef.current !== null) {
+      dismissToast(preCheckToastIdRef.current);
+      preCheckToastIdRef.current = null;
+    }
+    if (awayToastIdRef.current !== null) {
+      dismissToast(awayToastIdRef.current);
+      awayToastIdRef.current = null;
+    }
+    if (faceAwayRef.current) {
+      faceAwayRef.current = false;
+      if (onFaceBlockedChange) onFaceBlockedChange(false);
+    }
+    clearToasts();
   };
   
-  const handleDenyPermission = () => {
-    setWebcamPermission('denied');
-    setShowPermissionModal(false);
-    if (onPermissionChange) onPermissionChange('denied');
+  // Toggle recording indicator visibility — if camera isn't working, show selector popup instead
+  const toggleRecordingIndicator = () => {
+    if (webcamPermission !== 'granted' || deviceError || videoDevices.length === 0) {
+      setShowDeviceSelector(true);
+      return;
+    }
+    setShowRecordingIndicator(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem(STORAGE_KEY, String(next));
+      } catch {}
+      return next;
+    });
   };
-  
+
+  // Detect fullscreen for repositioning
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  useEffect(() => {
+    const handleChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener('fullscreenchange', handleChange);
+    return () => document.removeEventListener('fullscreenchange', handleChange);
+  }, []);
+
   // Handle the toggle camera button click
   const toggleCameraSelector = () => {
     setShowDeviceSelector(true);
   };
 
+  const pipVisible = webcamPermission === 'granted' && !deviceError && videoDevices.length > 0;
+
   return (
     <>
-      {/* Webcam video element (hidden) */}
-      <video 
-        ref={webcamRef}
-        autoPlay
-        playsInline
-        muted
-        style={{ display: 'none' }}
-      />
-      
-      {/* Recording indicator and camera switch button */}
-      {webcamPermission === 'granted' && !deviceError && (
-        <div className="absolute top-4 right-4 z-20 flex items-center space-x-2">
-          {videoDevices.length > 1 && (
-            <button 
-              onClick={toggleCameraSelector}
-              className="flex items-center bg-gray-900/70 backdrop-blur-sm px-3 py-1.5 rounded-full text-white hover:bg-gray-800/80 transition-colors"
-              title="Change camera"
-              type="button"
-            >
-              <SwitchCamera size={16} className="mr-2" />
-              <span className="text-sm">Switch camera</span>
-            </button>
-          )}
-          
-          {isRecording && !isPaused && (
-            <div className="flex items-center bg-black/70 backdrop-blur-sm px-3 py-1.5 rounded-full">
-              <div className="h-3 w-3 bg-red-500 rounded-full mr-2 animate-pulse" />
-              <span className="text-white text-sm font-medium">Recording</span>
+      {/* Webcam PiP preview — top-left, below navbar in normal mode */}
+      {webcamPermission === 'granted' && !deviceError && videoDevices.length > 0 && (
+        <div className={`${isFullscreen ? 'absolute' : 'fixed'} z-50 ${isFullscreen ? 'top-4' : 'top-[72px]'} left-4 flex flex-col items-center`}>
+          <div className={`transition-all duration-300 ${showRecordingIndicator ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+            <div className="relative rounded-lg overflow-hidden border-2 border-gray-600 shadow-lg bg-black" style={{ width: '160px', height: '120px' }}>
+              <video
+                ref={webcamRef}
+                autoPlay
+                playsInline
+                muted
+                className="w-full h-full object-cover"
+              />
+              {hasExistingRecording && (
+                <div className="absolute top-1 left-1 right-1 flex items-center bg-blue-600/80 px-1.5 py-0.5 rounded text-xs text-white">
+                  <CameraOff size={10} className="mr-1 shrink-0" />
+                  <span className="truncate">Already recorded</span>
+                </div>
+              )}
+              {!hasExistingRecording && isRecording && !isPaused && (
+                <div className="absolute top-1 left-1 flex items-center bg-red-600/80 px-1.5 py-0.5 rounded text-xs text-white">
+                  <div className="h-2 w-2 bg-red-500 rounded-full mr-1 animate-pulse" />
+                  REC
+                </div>
+              )}
+              {!hasExistingRecording && isRecording && isPaused && (
+                <div className="absolute top-1 left-1 flex items-center bg-yellow-600/80 px-1.5 py-0.5 rounded text-xs text-white">
+                  <div className="h-2 w-2 bg-yellow-400 rounded-full mr-1" />
+                  PAUSED
+                </div>
+              )}
+              {videoDevices.length > 1 && showRecordingIndicator && (
+                <button 
+                  onClick={toggleCameraSelector}
+                  className="absolute bottom-1 right-1 bg-gray-900/70 backdrop-blur-sm p-1 rounded-full text-white hover:bg-gray-800/80 transition-colors"
+                  title="Change camera"
+                  type="button"
+                >
+                  <SwitchCamera size={14} />
+                </button>
+              )}
             </div>
-          )}
-          
-          {isRecording && isPaused && (
-            <div className="flex items-center bg-black/70 backdrop-blur-sm px-3 py-1.5 rounded-full">
-              <div className="h-3 w-3 bg-yellow-500 rounded-full mr-2" />
-              <span className="text-white text-sm font-medium">Paused</span>
-            </div>
-          )}
+          </div>
         </div>
       )}
+
+      {/* Eye toggle — in the controls bar area (bottom-right), opacity matches controls visibility */}
+      <button
+        onClick={toggleRecordingIndicator}
+        className={`absolute bottom-4 right-20 z-30 flex items-center bg-gray-900/80 backdrop-blur-sm p-2 rounded-full text-white hover:bg-gray-800/80 transition-all duration-300 ${showControls || pipVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        title={showRecordingIndicator ? 'Hide camera preview' : 'Show camera preview'}
+        type="button"
+      >
+        {showRecordingIndicator ? <EyeOff size={14} /> : <Eye size={14} />}
+      </button>
       
+      {/* Info banner — click to open permission modal */}
+      {webcamPermission === 'denied' && isVideoPlaying && (
+        <button
+          onClick={() => setShowPermissionModal(true)}
+          className="absolute bottom-0 left-0 right-0 z-20 px-4 py-2 bg-gray-900/80 backdrop-blur-sm border-t border-gray-700 hover:bg-gray-800/80 transition-colors cursor-pointer text-left"
+          type="button"
+        >
+          <p className="text-gray-300 text-xs text-center">
+            <CameraOff size={12} className="inline mr-1" />
+            Webcam off — enable camera access to get your rewards
+          </p>
+        </button>
+      )}
+
+      {/* Toast notifications overlay */}
+      {toasts.length > 0 && (
+        <div className="absolute bottom-16 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 items-center pointer-events-none">
+          {toasts.map(t => (
+            <div
+              key={t.id}
+              className={`px-4 py-2 rounded-lg shadow-lg text-sm font-medium text-white whitespace-nowrap ${
+                t.type === 'success' ? 'bg-green-600' :
+                t.type === 'warning' ? 'bg-yellow-600' :
+                t.type === 'error' ? 'bg-red-600' :
+                'bg-blue-600'
+              }`}
+              onClick={() => dismissToast(t.id)}
+              role="alert"
+            >
+              {t.message}
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Upload progress overlay */}
       {isUploading && (
         <div className="fixed inset-0 bg-black/80 flex flex-col items-center justify-center z-50">
@@ -748,115 +1083,115 @@ const WebcamRecorder = forwardRef(({
         </div>
       )}
       
-      {/* Permission request modal */}
+      {/* Permission request modal — close navigates to home + persists deny */}
       <Modal
         show={showPermissionModal}
-        onClose={() => setShowPermissionModal(false)}
+        onClose={() => {
+          setStoredConsent('denied');
+          setShowPermissionModal(false);
+          navigate('/');
+        }}
         size="md"
-        dismissible={false}
+        dismissible
       >
         <Modal.Header className="bg-gray-800 text-white border-b border-gray-700">
           <p className="text-white">
-          Webcam Permission Required
+          Webcam Recording
           </p>
         </Modal.Header>
         <Modal.Body className="bg-gray-800 text-gray-300">
           <div className="flex flex-col items-center">
             <Camera size={48} className="text-blue-400 mb-4" />
             <p className="mb-4 text-center">
-              This video requires webcam recording during playback. 
-              Your recording will be uploaded after the video completes.
+              Enable your webcam to earn rewards while watching. Your reactions help creators 
+              understand what works.
             </p>
-            <Alert color="info" className="mb-4">
-              <p>You can still watch the video if you choose not to allow webcam access.</p>
+            <Alert color="warning" className="mb-4 w-full">
+              <p>Without your webcam, you won't earn any rewards during playback.</p>
             </Alert>
           </div>
         </Modal.Body>
-        <Modal.Footer className="bg-gray-800 border-t border-gray-700 flex justify-between">
-          <Button
-            color="gray"
-            onClick={handleDenyPermission}
-          >
-            <CameraOff className="mr-2 h-5 w-5" />
-            Don't Allow
-          </Button>
-          <Button
-            color="blue"
-            onClick={requestWebcamPermission}
-          >
-            <Camera className="mr-2 h-5 w-5" />
-            Allow Webcam
-          </Button>
+        <Modal.Footer className="bg-gray-800 border-t border-gray-700">
+          <div className="flex justify-center w-full">
+            <Button
+              color="blue"
+              onClick={requestWebcamPermission}
+              className="min-w-[180px]"
+            >
+              <Camera className="mr-2 h-4 w-4" />
+              Allow Webcam
+            </Button>
+          </div>
         </Modal.Footer>
       </Modal>
       
       {/* Camera device selector modal */}
       <Modal
         show={showDeviceSelector}
-        onClose={() => {
-          // Only allow closing if a camera is already selected and working
-          if (streamRef.current) {
-            setShowDeviceSelector(false);
-          }
-        }}
+        onClose={() => setShowDeviceSelector(false)}
         size="md"
-        dismissible={!!streamRef.current}
+        dismissible={videoDevices.length === 0}
       >
-        <Modal.Header className="bg-gray-800 text-white border-b border-gray-700">
-          Select Camera
-        </Modal.Header>
+        {videoDevices.length > 0 && (
+          <div className="bg-gray-800 text-white border-b border-gray-700 px-6 py-4 text-lg font-semibold">
+            Select Camera
+          </div>
+        )}
         <Modal.Body className="bg-gray-800 text-gray-300">
           <div className="flex flex-col">
-            <p className="mb-4">
-              Multiple cameras detected. Please select which camera you want to use for recording:
-            </p>
-            
             {videoDevices.length > 0 ? (
-              <div className="mb-4">
-                <Select
-                  id="camera-selector"
-                  value={selectedDeviceId}
-                  onChange={(e) => setSelectedDeviceId(e.target.value)}
-                  className="bg-gray-700 text-white border-gray-600"
-                >
-                  {videoDevices.map((device, index) => (
-                    <option key={device.deviceId} value={device.deviceId}>
-                      {device.label || `Camera ${index + 1}`}
-                    </option>
-                  ))}
-                </Select>
-              </div>
+              <>
+                <p className="mb-4">
+                  Multiple cameras detected. Please select which camera you want to use for recording:
+                </p>
+                <div className="mb-4">
+                  <Select
+                    id="camera-selector"
+                    value={selectedDeviceId}
+                    onChange={(e) => setSelectedDeviceId(e.target.value)}
+                    className="bg-gray-700 text-white border-gray-600"
+                  >
+                    {videoDevices.map((device, index) => (
+                      <option key={device.deviceId} value={device.deviceId}>
+                        {device.label || `Camera ${index + 1}`}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+              </>
             ) : (
-              <Alert color="warning">
-                <p>No cameras detected. Please check your device connections.</p>
-              </Alert>
+              <div className="text-center py-4">
+                <CameraOff size={48} className="mx-auto text-gray-500 mb-4" />
+                <p className="text-gray-300 mb-2">
+                  No cameras detected. Without a webcam, your emotional reactions won't be recorded.
+                </p>
+                <Button
+                  color="dark"
+                  onClick={() => navigate('/')}
+                  className="mt-4"
+                >
+                  <ArrowLeft className="mr-2 h-5 w-5" />
+                  Go to Home
+                </Button>
+              </div>
             )}
           </div>
         </Modal.Body>
-        <Modal.Footer className="bg-gray-800 border-t border-gray-700 flex justify-between">
-          <Button
-            color="gray"
-            onClick={() => {
-              if (streamRef.current) {
-                setShowDeviceSelector(false);
-              } else {
-                setWebcamPermission('denied');
-                if (onPermissionChange) onPermissionChange('denied');
-                setShowDeviceSelector(false);
-              }
-            }}
-          >
-            {streamRef.current ? 'Cancel' : 'Continue Without Camera'}
-          </Button>
-          <Button
-            color="blue"
-            onClick={() => handleDeviceSelection(selectedDeviceId)}
-            disabled={!selectedDeviceId}
-          >
-            <Camera className="mr-2 h-5 w-5" />
-            Use Selected Camera
-          </Button>
-        </Modal.Footer>
+        {videoDevices.length > 0 && (
+          <Modal.Footer className="bg-gray-800 border-t border-gray-700">
+            <div className="flex justify-center w-full">
+              <Button
+                color="blue"
+                onClick={() => handleDeviceSelection(selectedDeviceId)}
+                disabled={!selectedDeviceId}
+                className="min-w-[200px]"
+              >
+                <Camera className="mr-2 h-4 w-4" />
+                Use Selected Camera
+              </Button>
+            </div>
+          </Modal.Footer>
+        )}
       </Modal>
       
       <Modal
@@ -884,19 +1219,21 @@ const WebcamRecorder = forwardRef(({
             </ul>
           </div>
         </Modal.Body>
-        <Modal.Footer className="bg-gray-800 border-t border-gray-700 flex justify-between">
-          <Button
-            color="gray"
-            onClick={() => {
-              setShowTroubleshootModal(false);
-              setWebcamPermission('denied');
-              if (onPermissionChange) onPermissionChange('denied');
-            }}
-          >
-            <CameraOff className="mr-2 h-5 w-5" />
-            Continue Without Camera
-          </Button>
-          <div className="flex gap-2">
+        <Modal.Footer className="bg-gray-800 border-t border-gray-700">
+          <div className="flex justify-center gap-3 w-full">
+            <Button
+              color="gray"
+              onClick={() => {
+                setShowTroubleshootModal(false);
+                setWebcamPermission('denied');
+                setStoredConsent('denied');
+                if (onPermissionChange) onPermissionChange('denied');
+              }}
+              className="flex-1 min-w-[120px]"
+            >
+              <CameraOff className="mr-2 h-4 w-4" />
+              Skip Camera
+            </Button>
             {videoDevices.length > 1 && (
               <Button
                 color="light"
@@ -904,16 +1241,18 @@ const WebcamRecorder = forwardRef(({
                   setShowTroubleshootModal(false);
                   setShowDeviceSelector(true);
                 }}
+                className="flex-1 min-w-[120px]"
               >
-                <SwitchCamera className="mr-2 h-5 w-5" />
-                Switch Camera
+                <SwitchCamera className="mr-2 h-4 w-4" />
+                Switch
               </Button>
             )}
             <Button
               color="blue"
               onClick={retryWebcamSetup}
+              className="flex-1 min-w-[120px]"
             >
-              <RefreshCw className="mr-2 h-5 w-5" />
+              <RefreshCw className="mr-2 h-4 w-4" />
               Retry
             </Button>
           </div>
@@ -929,20 +1268,15 @@ const WebcamRecorder = forwardRef(({
   );
 });
 
-//global error handler to catch any issues with MediaRecorder
-window.addEventListener('error', (event) => {
-  if (event.error && event.error.message && event.error.message.includes('MediaRecorder')) {
-    console.error('Global MediaRecorder error:', event.error);
-  }
-});
-
 WebcamRecorder.displayName = 'WebcamRecorder';
 
 WebcamRecorder.propTypes = {
   isVideoPlaying: PropTypes.bool.isRequired,
   videoId: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
   onPermissionChange: PropTypes.func,
-  onError: PropTypes.func
+  onError: PropTypes.func,
+  showControls: PropTypes.bool,
+  onFaceBlockedChange: PropTypes.func,
 };
 
 export default WebcamRecorder;

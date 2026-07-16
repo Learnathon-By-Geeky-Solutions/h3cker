@@ -48,7 +48,7 @@ def video_data(test_user_data):
         video_url="https://example.com/ser_video",
         thumbnail_url="https://example.com/ser_thumb",
         uploader=test_user_data,
-        duration="02:30",
+        duration_seconds=150,
         views=100,
         likes=10
     )

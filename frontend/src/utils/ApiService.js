@@ -11,14 +11,44 @@ const ApiService = {
   /**
    * Basic HTTP request methods that share common implementation
    */
+  _activeControllers: new Map(),
+
+  _getSignal(endpoint) {
+    const existing = this._activeControllers.get(endpoint);
+    if (existing) existing.abort();
+    const controller = new AbortController();
+    this._activeControllers.set(endpoint, controller);
+    return controller.signal;
+  },
+
+  _clearSignal(endpoint) {
+    this._activeControllers.delete(endpoint);
+  },
+
+  cancelRequest(endpoint) {
+    const controller = this._activeControllers.get(endpoint);
+    if (controller) {
+      controller.abort();
+      this._activeControllers.delete(endpoint);
+    }
+  },
+
+  cancelAll() {
+    for (const [endpoint, controller] of this._activeControllers) {
+      controller.abort();
+    }
+    this._activeControllers.clear();
+  },
+
   get(endpoint, adminCredentials = null) {
-    return this.request(endpoint, { method: 'GET' }, adminCredentials);
+    return this.request(endpoint, { method: 'GET', signal: this._getSignal(endpoint) }, adminCredentials);
   },
 
   post(endpoint, data, adminCredentials = null) {
     return this.request(endpoint, {
       method: 'POST',
       body: JSON.stringify(data),
+      signal: this._getSignal(endpoint),
     }, adminCredentials);
   },
 
@@ -26,6 +56,7 @@ const ApiService = {
     return this.request(endpoint, {
       method: 'PUT',
       body: JSON.stringify(data),
+      signal: this._getSignal(endpoint),
     }, adminCredentials);
   },
 
@@ -33,11 +64,12 @@ const ApiService = {
     return this.request(endpoint, {
       method: 'PATCH',
       body: JSON.stringify(data),
+      signal: this._getSignal(endpoint),
     }, adminCredentials);
   },
 
   delete(endpoint, adminCredentials = null) {
-    return this.request(endpoint, { method: 'DELETE' }, adminCredentials);
+    return this.request(endpoint, { method: 'DELETE', signal: this._getSignal(endpoint) }, adminCredentials);
   },
 
   /**

@@ -159,10 +159,22 @@ else:
     CORS_ALLOW_CREDENTIALS = True
 
 
+# Cache configuration (swap LocMemCache for RedisCache in production with REDIS_URL)
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'engageanalytics-cache',
+        'TIMEOUT': 60,
+        'OPTIONS': {
+            'MAX_ENTRIES': 1000,
+            'CULL_FREQUENCY': 3,
+        },
+    }
+}
+
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'backend.authentication.FirebaseAuthentication', # Updated path
-        'rest_framework.authentication.SessionAuthentication',
+        'backend.authentication.FirebaseAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
@@ -172,7 +184,8 @@ REST_FRAMEWORK = {
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
 
 CRONJOBS = [
-    ('0 * * * *', 'django.core.management.call_command', ['check_video_privacy']),  
+    ('0 * * * *', 'django.core.management.call_command', ['check_video_privacy']),
+    ('0 6 * * *', 'django.core.management.call_command', ['run_emotion_analysis']),
 ]
 
 AUTH_USER_MODEL = 'api.User'
@@ -196,6 +209,12 @@ AZURE_STORAGE_ACCOUNT_KEY = os.getenv('AZURE_STORAGE_ACCOUNT_KEY')
 AZURE_VIDEO_CONTAINER_NAME = os.getenv('AZURE_VIDEO_CONTAINER_NAME')
 AZURE_THUMBNAIL_CONTAINER_NAME = os.getenv('AZURE_THUMBNAIL_CONTAINER_NAME')
 AZURE_WEBCAM_CONTAINER_NAME = os.getenv('AZURE_WEBCAM_CONTAINER_NAME')
+
+# Emotion analysis (Hugging Face serverless inference)
+HF_API_TOKEN = os.getenv('HF_API_TOKEN')
+HF_EMOTION_MODEL = os.getenv('HF_EMOTION_MODEL', 'mo-thecreator/vit-Facial-Expression-Recognition')
+ANALYSIS_FRAME_RATE = int(os.getenv('ANALYSIS_FRAME_RATE', '1'))
+ANALYSIS_MAX_FRAMES = int(os.getenv('ANALYSIS_MAX_FRAMES', '600'))
 
 
 # Logging configuration

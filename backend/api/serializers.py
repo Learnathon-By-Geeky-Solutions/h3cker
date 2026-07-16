@@ -9,6 +9,9 @@ from api.models import (
     VideoLike,
     VideoShare,
     WebcamRecording,
+    EmotionFrame,
+    VideoEmotionSummary,
+    AnalysisRunLog,
 )
 
 class FilenameSerializer(serializers.Serializer):
@@ -67,7 +70,6 @@ class UserSerializer(serializers.ModelSerializer):
 
 class AdminActionSerializer(serializers.Serializer):
     user_id = serializers.IntegerField(required=True)
-    admin_password = serializers.CharField(required=True, write_only=True)
 
 
 class VideoSerializer(serializers.ModelSerializer):
@@ -110,6 +112,7 @@ class VideoFeedSerializer(serializers.ModelSerializer):
         model = Video
         fields = [
             "id",
+            "uuid",
             "title",
             "thumbnail_url",
             "upload_date",
@@ -130,6 +133,7 @@ class VideoDetailSerializer(serializers.ModelSerializer):
         model = Video
         fields = [
             "id",
+            "uuid",
             "title",
             "description",
             "category",
@@ -156,7 +160,7 @@ class VideoDetailSerializer(serializers.ModelSerializer):
 
     def get_frontend_url(self, obj):
         frontend_url = self.context.get("frontend_url") or settings.FRONTEND_URL
-        return f"{frontend_url}/video/{obj.id}"
+        return f"{frontend_url}/video/{obj.uuid}"
 
 
 class VideoViewSerializer(serializers.ModelSerializer):
@@ -220,17 +224,65 @@ class UserPointsSerializer(serializers.ModelSerializer):
 class WebcamRecordingSerializer(serializers.ModelSerializer):
     recorder = UserBasicSerializer(read_only=True)
     video = VideoFeedSerializer(read_only=True)
+    video_id = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = WebcamRecording
         fields = [
             "id",
             "video",
+            "video_id",
             "recorder",
             "filename",
             "recording_date",
             "upload_status",
             "upload_completed_at",
             "recording_url",
+            "thumbnail_url",
+            "analysis_status",
+            "analysis_error",
+        ]
+        read_only_fields = fields
+
+
+class VideoEmotionSummarySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = VideoEmotionSummary
+        fields = [
+            "distribution",
+            "timeline",
+            "total_frames",
+            "analyzed_recordings",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+
+class EmotionRecordingSerializer(serializers.ModelSerializer):
+    recording_id = serializers.IntegerField(source="id")
+
+    class Meta:
+        model = WebcamRecording
+        fields = [
+            "recording_id",
+            "filename",
+            "recording_date",
+            "analysis_status",
+        ]
+        read_only_fields = fields
+
+
+class AnalysisRunLogSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AnalysisRunLog
+        fields = [
+            "id",
+            "trigger",
+            "status",
+            "processed",
+            "total",
+            "error",
+            "started_at",
+            "finished_at",
         ]
         read_only_fields = fields

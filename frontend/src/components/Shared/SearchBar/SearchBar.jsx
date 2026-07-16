@@ -6,7 +6,6 @@ import {
   HiX, 
   HiOutlineClock, 
   HiTrendingUp, 
-  HiMicrophone, 
   HiOutlineArrowUp,
   HiTag
 } from "react-icons/hi";
@@ -23,7 +22,6 @@ const SearchBar = ({
   onSearch,
   initialValue = "",
   showTrending = true,
-  showMic = true,
   autoFocus = false,
   showCategoryTiles = true
 }) => {
@@ -301,33 +299,6 @@ const SearchBar = ({
     }
   };
   
-  const handleVoiceSearch = () => {
-    if (!('webkitSpeechRecognition' in window)) {
-      alert("Speech recognition is not available in your browser.");
-      return;
-    }
-    
-    try {
-      const SpeechRecognitionConstructor = window.SpeechRecognition || window.webkitSpeechRecognition;
-      const recognition = new SpeechRecognitionConstructor();
-      
-      recognition.lang = 'en-US';
-      recognition.interimResults = false;
-      recognition.maxAlternatives = 1;
-      
-      recognition.onresult = (event) => {
-        const speechResult = event.results[0][0].transcript;
-        setSearchQuery(speechResult);
-        performSearch(speechResult);
-      };
-      
-      recognition.start();
-    } catch (e) {
-      console.error("Speech recognition error:", e);
-      alert("Could not start voice search. Please try again.");
-    }
-  };
-  
   const performSearch = (query) => {
     if (searchHistory[0] !== query) {
       setSearchHistory(prev => [
@@ -510,29 +481,6 @@ const SearchBar = ({
                 <HiX className="w-5 h-5" />
               </button>
               
-              {showMic && (
-                <button
-                  type="button"
-                  onClick={handleVoiceSearch}
-                  className="text-gray-400 hover:text-blue-500 transition-colors ml-1"
-                  aria-label="Voice search"
-                >
-                  <HiMicrophone className="w-5 h-5" />
-                </button>
-              )}
-            </div>
-          )}
-          
-          {!searchQuery && showMic && (
-            <div className="absolute inset-y-0 right-0 flex items-center pr-3">
-              <button
-                type="button"
-                onClick={handleVoiceSearch}
-                className="text-gray-400 hover:text-blue-500 transition-colors"
-                aria-label="Voice search"
-              >
-                <HiMicrophone className="w-5 h-5" />
-              </button>
             </div>
           )}
         </div>
@@ -552,7 +500,6 @@ SearchBar.propTypes = {
   onSearch: PropTypes.func,
   initialValue: PropTypes.string,
   showTrending: PropTypes.bool,
-  showMic: PropTypes.bool,
   autoFocus: PropTypes.bool,
   showCategoryTiles: PropTypes.bool
 };

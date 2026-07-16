@@ -27,3 +27,13 @@ class IsCompanyOrAdmin(permissions.BasePermission):
         return request.user.is_authenticated and (
             request.user.role == "admin" or request.user.role == "company"
         )
+
+
+class IsCompanyOrAdminOrOwner(permissions.BasePermission):
+    def has_object_permission(self, request, view, obj):
+        if request.user.role == "admin":
+            return True
+        return obj.uploader == request.user
+
+    def has_permission(self, request, view):
+        return request.user.is_authenticated

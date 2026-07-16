@@ -17,6 +17,12 @@ class FirebaseAuthentication(authentication.BaseAuthentication):
             firebase_uid = self._verify_token(token)
             user = self._get_or_create_user(firebase_uid)
             return (user, None)
+        except auth.ExpiredIdTokenError:
+            raise exceptions.AuthenticationFailed("Token expired.")
+        except auth.RevokedIdTokenError:
+            raise exceptions.AuthenticationFailed("Token revoked.")
+        except auth.UserDisabledError:
+            raise exceptions.AuthenticationFailed("User disabled.")
         except Exception as e:
             logger.error(f"Authentication failed due to an exception:{str(e)}", exc_info=True)
             raise exceptions.AuthenticationFailed("Invalid token.")
@@ -33,7 +39,7 @@ class FirebaseAuthentication(authentication.BaseAuthentication):
         return token_parts[1]
     
     def _verify_token(self, token):
-        decoded_token = auth.verify_id_token(token)
+        decoded_token = auth.verify_id_token(token, check_revoked=True)
         return decoded_token["uid"]
     
     def _get_user_data(self, uid):

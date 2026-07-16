@@ -105,3 +105,94 @@ class AzureStorageService:
             24 * 60,
         )
         return emotion_upload_url, emotion_view_url
+
+    @classmethod
+    def upload_bytes_to_sas_url(cls, sas_url: str, data: bytes, content_type: str = "application/octet-stream") -> bool:
+        """Upload raw bytes to a SAS URL via PUT."""
+        import requests
+
+        try:
+            resp = requests.put(
+                sas_url,
+                data=data,
+                headers={"x-ms-blob-type": "BlockBlob", "Content-Type": content_type},
+                timeout=120,
+            )
+            resp.raise_for_status()
+            return True
+        except Exception as exc:
+            logger.error(f"Failed to upload bytes to SAS URL: {exc}", exc_info=True)
+            return False
+
+    @classmethod
+    def delete_blob_from_url(cls, blob_url: str) -> bool:
+        from urllib.parse import urlparse
+        from azure.storage.blob import BlobClient
+
+        if not blob_url:
+            return False
+
+        parsed = urlparse(blob_url)
+        parts = [p for p in parsed.path.lstrip("/").split("/") if p]
+        if len(parts) < 2:
+            return False
+
+        container_name = parts[0]
+        blob_name = "/".join(parts[1:])
+
+        creds = cls.get_storage_credentials()
+        if not creds["account_key"]:
+            return False
+
+        client = BlobClient(
+            account_url=f"https://{creds['account_name']}.blob.core.windows.net",
+            container_name=container_name,
+            blob_name=blob_name,
+            credential=creds["account_key"],
+        )
+
+        try:
+            client.delete_blob()
+            logger.info(f"Deleted blob {container_name}/{blob_name}")
+            return True
+        except Exception as exc:
+            logger.warning(f"Failed to delete blob {container_name}/{blob_name}: {exc}")
+            return False
+
+    @classmethod
+    def download_blob_from_url(cls, blob_url: str):
+        """Download blob bytes from any container SAS URL using the account key.
+
+        The SAS on `recording_url` may be expired, so we re-derive the blob
+        client from the account key instead of reusing the SAS.
+        """
+        from urllib.parse import urlparse
+        from azure.storage.blob import BlobClient
+
+        if not blob_url:
+            return None
+
+        parsed = urlparse(blob_url)
+        parts = [p for p in parsed.path.lstrip("/").split("/") if p]
+        if len(parts) < 2:
+            return None
+
+        container_name = parts[0]
+        blob_name = "/".join(parts[1:])
+
+        creds = cls.get_storage_credentials()
+        if not creds["account_key"]:
+            return None
+
+        client = BlobClient(
+            account_url=f"https://{creds['account_name']}.blob.core.windows.net",
+            container_name=container_name,
+            blob_name=blob_name,
+            credential=creds["account_key"],
+        )
+
+        properties = client.get_blob_properties()
+        if properties.size == 0:
+            return None
+
+        return client.download_blob().readall()

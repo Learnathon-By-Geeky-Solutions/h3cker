@@ -50,7 +50,7 @@ const HeroBillboard = ({ videos }) => {
     if (currentVideo.video_url) {
       setShowVideo(true);
     } else {
-      window.location.href = `/video/${currentVideo.id}`;
+      window.location.href = `/video/${currentVideo.uuid || currentVideo.id}`;
     }
   };
   
@@ -116,7 +116,7 @@ const HeroBillboard = ({ videos }) => {
             {currentVideo.video_url ? "Watch Now" : "Go to Video"}
           </Button>
           
-          <Link to={`/video/${currentVideo.id}`}>
+          <Link to={`/video/${currentVideo.uuid || currentVideo.id}`}>
             <Button
               color="gray"
               className="bg-gray-800 hover:bg-gray-700 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-full text-sm sm:text-base font-semibold transition-all duration-300"

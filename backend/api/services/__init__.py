@@ -5,3 +5,4 @@ from api.services.points_service import PointsService
 from api.services.azure_storage_service import AzureStorageService
 from api.services.video_upload_service import VideoUploadService
 from api.services.webcam_upload_service import WebcamUploadService
+from api.services.emotion_analysis_service import EmotionAnalysisService

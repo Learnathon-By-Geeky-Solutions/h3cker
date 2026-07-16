@@ -15,3 +15,7 @@ python-dotenv==1.0.1
 pytest==8.3.5
 pytest-cov==6.1.1
 pytest-django==4.11.1
+huggingface_hub==1.23.0
+mediapipe==0.10.14
+opencv-python-headless==4.10.0.84
+numpy==2.1.3

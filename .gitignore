@@ -6,3 +6,5 @@ firebase-credentials.json
 coverage.xml
 pytest-*.xml
 example.md
+backend/venv/
+node_modules/
